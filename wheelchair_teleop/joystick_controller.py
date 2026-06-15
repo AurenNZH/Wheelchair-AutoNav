@@ -70,6 +70,7 @@ class JoystickController:
             self._send_thread.join(timeout=2)
         
         # Send centering frame
+        self.can_interface.set_teleop_active(False)
         self.can_interface.send_joystick_frame(0, 0)
         self._is_running = False
         logger.info("Joystick controller stopped")
@@ -117,6 +118,7 @@ class JoystickController:
         self._current_y = 0
         
         # Send centering frame immediately
+        self.can_interface.set_teleop_active(False)
         self.can_interface.send_joystick_frame(0, 0)
     
     def _control_loop(self):
@@ -150,6 +152,10 @@ class JoystickController:
                     
                     scaled_x = int(self._desired_x * speed_factor)
                     scaled_y = int(self._desired_y * speed_factor)
+
+                    self.can_interface.set_teleop_active(
+                        scaled_x != 0 or scaled_y != 0
+                    )
                     
                     # Send CAN frame
                     if self.can_interface.send_joystick_frame(scaled_x, scaled_y):
@@ -190,4 +196,6 @@ class JoystickController:
             "speed_percent": self.safety_manager.get_current_speed(),
             "is_moving": (self._current_x != 0 or self._current_y != 0),
             "can_connected": self.can_interface.is_connected,
+            "gateway_running": self.can_interface.is_gateway_running,
+            "gateway_stats": self.can_interface.get_gateway_stats(),
         }

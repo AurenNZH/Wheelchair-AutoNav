@@ -2,7 +2,7 @@
 # Copy this to config.yaml and customize as needed
 
 wheelchair:
-  # CAN interface name (e.g., can0, can1)
+  # CAN interface used for injected teleop frames (usually the controller side)
   can_interface: can0
   
   # RNET device slot for joystick (usually 1 for JSM - Joystick Module)
@@ -11,6 +11,16 @@ wheelchair:
   # Maximum allowed speed percentage (0-100)
   # Recommended: Start with 50% for testing, increase gradually
   max_speed: 100
+
+gateway:
+  # Forward traffic between can_interface and this second CAN interface.
+  # This replaces:
+  #   cangw -A -s can0 -d can1
+  #   cangw -A -s can1 -d can0
+  enabled: true
+
+  # Physical joystick-side CAN interface in the default Pi CAN DUO setup.
+  interface: can1
 
 safety:
   # Acceleration rate: how quickly to ramp up to target speed (%/second)

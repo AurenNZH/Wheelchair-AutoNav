@@ -97,6 +97,12 @@ def print_telemetry(controller: JoystickController):
     print(f"│ Actual Position:     X={telemetry['actual_position']['x']:4d}  Y={telemetry['actual_position']['y']:4d}")
     print(f"│ Current Speed:       {telemetry['speed_percent']:3d}%")
     print(f"│ Moving:              {telemetry['is_moving']}")
+    print(f"│ CAN Gateway:         {telemetry['gateway_running']}")
+    if telemetry["gateway_running"]:
+        stats = telemetry["gateway_stats"]
+        print(f"│ Gateway Fwd Ctl:     {stats['forwarded_to_controller']:8d}")
+        print(f"│ Gateway Fwd JSM:     {stats['forwarded_to_joystick']:8d}")
+        print(f"│ Gateway Suppressed:  {stats['suppressed_joystick']:8d}")
     print("└───────────────────────────────────────────────────────┘\n", end="")
 
 
@@ -115,7 +121,18 @@ def main():
         "--can-interface",
         type=str,
         default=None,
-        help="CAN interface name (default: can0)"
+        help="CAN interface used for injected teleop frames (default: can0)"
+    )
+    parser.add_argument(
+        "--gateway-interface",
+        type=str,
+        default=None,
+        help="Second CAN interface for physical joystick passthrough (default: can1)"
+    )
+    parser.add_argument(
+        "--no-gateway",
+        action="store_true",
+        help="Disable bidirectional CAN passthrough gateway"
     )
     parser.add_argument(
         "--max-speed",
@@ -158,6 +175,11 @@ def main():
         # Override with command-line arguments
         if args.can_interface:
             config.data["wheelchair"]["can_interface"] = args.can_interface
+        if args.gateway_interface:
+            config.data["gateway"]["interface"] = args.gateway_interface
+            config.data["gateway"]["enabled"] = True
+        if args.no_gateway:
+            config.data["gateway"]["enabled"] = False
         if args.max_speed is not None:
             config.data["wheelchair"]["max_speed"] = args.max_speed
         
@@ -167,7 +189,9 @@ def main():
         # CAN Interface
         can_interface = CANInterface(
             can_interface=config.get("wheelchair.can_interface"),
-            device_slot=config.get("wheelchair.device_slot")
+            device_slot=config.get("wheelchair.device_slot"),
+            gateway_interface=config.get("gateway.interface"),
+            gateway_enabled=config.get("gateway.enabled", True)
         )
         
         if not can_interface.connect():
@@ -175,6 +199,9 @@ def main():
             print("ERROR: Could not connect to CAN interface")
             print(f"Make sure {config.get('wheelchair.can_interface')} is up:")
             print(f"  sudo ip link set {config.get('wheelchair.can_interface')} up type can bitrate 125000")
+            if config.get("gateway.enabled", True):
+                print(f"And make sure {config.get('gateway.interface')} is up:")
+                print(f"  sudo ip link set {config.get('gateway.interface')} up type can bitrate 125000")
             return 1
         
         # Safety Manager

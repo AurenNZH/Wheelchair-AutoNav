@@ -6,6 +6,7 @@ Load and manage teleoperation settings
 import yaml
 import logging
 import os
+import copy
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,10 @@ class Config:
             "can_interface": "can0",
             "device_slot": 1,
             "max_speed": 100,
+        },
+        "gateway": {
+            "enabled": True,
+            "interface": "can1",
         },
         "safety": {
             "acceleration_rate": 50.0,
@@ -42,7 +47,7 @@ class Config:
         Args:
             config_file: Path to YAML config file (optional)
         """
-        self.data = self.DEFAULTS.copy()
+        self.data = copy.deepcopy(self.DEFAULTS)
         
         # Load from file if provided
         if config_file and os.path.exists(config_file):
