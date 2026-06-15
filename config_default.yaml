@@ -1,0 +1,45 @@
+# Wheelchair Teleoperation Configuration File
+# Copy this to config.yaml and customize as needed
+
+wheelchair:
+  # CAN interface name (e.g., can0, can1)
+  can_interface: can0
+  
+  # RNET device slot for joystick (usually 1 for JSM - Joystick Module)
+  device_slot: 1
+  
+  # Maximum allowed speed percentage (0-100)
+  # Recommended: Start with 50% for testing, increase gradually
+  max_speed: 100
+
+safety:
+  # Acceleration rate: how quickly to ramp up to target speed (%/second)
+  # Higher = faster acceleration (50 = moderate, 200 = aggressive)
+  acceleration_rate: 50.0
+  
+  # Inactivity timeout in seconds (0 to disable)
+  # If no keyboard input for this many seconds, wheelchair stops
+  inactivity_timeout: 5.0
+  
+  # Minimum time between CAN frames in milliseconds
+  # RNET protocol requires 10ms minimum for joystick position updates
+  min_frame_interval_ms: 10.0
+
+control:
+  # CAN frame send interval in milliseconds
+  # RNET joystick frames sent every 10ms by JSM
+  send_interval_ms: 10.0
+
+logging:
+  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  
+  # Optional log file path (set to null to disable file logging)
+  file: null
+
+# KEYBOARD CONTROL LAYOUT
+# Movement: W/A/S/D or Arrow Keys
+# Speed 1-5: Sets 20/40/60/80/100%
+# H: Horn
+# Space: Emergency Stop
+# Q: Quit
