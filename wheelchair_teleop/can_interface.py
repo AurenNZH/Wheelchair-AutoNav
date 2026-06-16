@@ -132,7 +132,7 @@ class CANInterface:
             
             self._tx_socket = self._open_can_socket(self.can_interface, loopback=False)
             self.is_connected = True
-            logger.info(f"Connected to CAN interface: {self.can_interface}")
+            logger.info(f"Connected to CAN: {self.can_interface}")
 
             if self.gateway_enabled:
                 self.start_gateway()
@@ -140,7 +140,7 @@ class CANInterface:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to connect to CAN interface: {e}")
+            logger.error(f"Failed to connect to CAN: {e}")
             return False
 
     def _open_can_socket(self, interface_name: str, loopback: bool = True):
@@ -358,7 +358,7 @@ class CANInterface:
         self._gateway_thread.start()
         self.is_gateway_running = True
         logger.info(
-            f"CAN gateway started: {self.gateway_interface} <-> {self.can_interface}"
+            f"Gateway started: {self.gateway_interface} <-> {self.can_interface}"
         )
 
     def stop_gateway(self):

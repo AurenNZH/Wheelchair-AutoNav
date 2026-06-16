@@ -45,7 +45,7 @@ class JoystickController:
         self._stop_sending = False
         self._is_running = False
         
-        logger.info(f"JoystickController initialized with {send_interval_ms}ms send interval")
+        logger.info(f"Controller send interval: {send_interval_ms}ms")
     
     def start(self):
         """Start the teleoperation control loop."""
