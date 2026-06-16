@@ -44,6 +44,7 @@ class SafetyManager:
         self._target_speed = 0
         self._last_input_time = time.time()
         self._last_frame_time = 0
+        self._last_inactivity_warning_time = 0
         self._is_stopped = True
         
         logger.info(f"Safety Manager initialized: max_speed={self.max_speed}%, "
@@ -90,6 +91,7 @@ class SafetyManager:
     def record_input(self):
         """Record that user input was received (for inactivity timeout)."""
         self._last_input_time = time.time()
+        self._last_inactivity_warning_time = 0
     
     def check_inactivity(self) -> bool:
         """
@@ -104,7 +106,10 @@ class SafetyManager:
         time_since_input = time.time() - self._last_input_time
         
         if time_since_input > self.inactivity_timeout:
-            logger.warning(f"Inactivity timeout exceeded ({time_since_input:.1f}s)")
+            current_time = time.time()
+            if current_time - self._last_inactivity_warning_time >= 1.0:
+                logger.warning(f"Inactivity timeout exceeded ({time_since_input:.1f}s)")
+                self._last_inactivity_warning_time = current_time
             return True
         
         return False

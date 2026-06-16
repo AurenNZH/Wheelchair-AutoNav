@@ -57,6 +57,8 @@ class KeyboardHandler:
         self._last_x = 0
         self._last_y = 0
         self._current_speed = 50
+        self._stdin_is_tty = sys.stdin.isatty()
+        self._escape_sequence = ""
         
         # Try to import tty/termios for Unix-like systems (Linux, Mac)
         try:
@@ -72,6 +74,12 @@ class KeyboardHandler:
         if self._monitor_thread and self._monitor_thread.is_alive():
             logger.warning("Keyboard monitoring already active")
             return
+
+        if not self._stdin_is_tty:
+            logger.warning(
+                "stdin is not a TTY; keyboard input may not work. "
+                "Run from an interactive terminal or SSH with -t."
+            )
         
         self._stop_monitoring = False
         self._monitor_thread = threading.Thread(
@@ -79,7 +87,7 @@ class KeyboardHandler:
             daemon=True
         )
         self._monitor_thread.start()
-        logger.info("Keyboard monitoring started")
+        logger.info(f"Keyboard monitoring started (stdin_tty={self._stdin_is_tty})")
     
     def stop(self):
         """Stop keyboard monitoring."""
@@ -105,9 +113,10 @@ class KeyboardHandler:
         old_settings = termios.tcgetattr(fd)
         
         try:
-            # Set terminal to raw mode
-            tty.setraw(fd)
-            logger.info("Terminal set to raw mode for keyboard input")
+            # Cbreak gives character-at-a-time input without disturbing normal
+            # terminal output formatting as much as raw mode does.
+            tty.setcbreak(fd)
+            logger.info("Terminal set to cbreak mode for keyboard input")
             
             while not self._stop_monitoring:
                 try:
@@ -153,6 +162,30 @@ class KeyboardHandler:
             key: Single character from keyboard
         """
         key_lower = key.lower()
+        logger.debug(f"Keyboard byte received: {repr(key)}")
+
+        if self._escape_sequence:
+            self._escape_sequence += key
+            if len(self._escape_sequence) >= 3:
+                sequence = self._escape_sequence
+                self._escape_sequence = ""
+                arrow_actions = {
+                    "\x1b[A": "forward",
+                    "\x1b[B": "backward",
+                    "\x1b[C": "right",
+                    "\x1b[D": "left",
+                }
+                action = arrow_actions.get(sequence)
+                if action:
+                    self._keys_pressed.add(action)
+                    self._update_joystick_position(force_callback=True)
+                else:
+                    logger.debug(f"Unhandled escape sequence: {repr(sequence)}")
+            return
+
+        if key == "\x1b":
+            self._escape_sequence = key
+            return
         
         # Check for quit command
         if key_lower == 'q':
@@ -171,14 +204,19 @@ class KeyboardHandler:
             return
         
         # Drive controls: WASD or Arrow keys
+        drive_key_received = False
         if key_lower == 'w':
             self._keys_pressed.add('forward')
+            drive_key_received = True
         elif key_lower == 's':
             self._keys_pressed.add('backward')
+            drive_key_received = True
         elif key_lower == 'a':
             self._keys_pressed.add('left')
+            drive_key_received = True
         elif key_lower == 'd':
             self._keys_pressed.add('right')
+            drive_key_received = True
         
         # Speed presets
         elif key in self.SPEED_PRESETS:
@@ -193,11 +231,13 @@ class KeyboardHandler:
             logger.info("Horn activated")
             if self.on_horn:
                 self.on_horn()
+        elif key != "[":
+            logger.debug(f"Unhandled keyboard input: {repr(key)}")
         
         # Update joystick position based on pressed keys
-        self._update_joystick_position()
+        self._update_joystick_position(force_callback=drive_key_received)
     
-    def _update_joystick_position(self):
+    def _update_joystick_position(self, force_callback: bool = False):
         """Update joystick position based on currently pressed keys."""
         x_pos = 0
         y_pos = 0
@@ -222,16 +262,15 @@ class KeyboardHandler:
         if y_pos > 0 and y_pos < 0:
             y_pos = 0
         
-        # Only update if changed
-        if x_pos != self._last_x or y_pos != self._last_y:
+        position_changed = x_pos != self._last_x or y_pos != self._last_y
+
+        if position_changed:
             self._last_x = x_pos
             self._last_y = y_pos
-            
-            if self.on_joystick_update:
-                self.on_joystick_update(x_pos, y_pos)
-            
-            if x_pos != 0 or y_pos != 0:
-                logger.debug(f"Joystick: X={x_pos}, Y={y_pos}")
+            logger.info(f"Keyboard movement command: X={x_pos}, Y={y_pos}")
+
+        if self.on_joystick_update and (position_changed or force_callback):
+            self.on_joystick_update(x_pos, y_pos)
     
     def get_current_position(self) -> tuple:
         """

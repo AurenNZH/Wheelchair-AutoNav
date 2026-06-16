@@ -56,35 +56,26 @@ def print_banner():
 
 def print_controls():
     """Print control information."""
-    print("""
-KEYBOARD CONTROLS:
-─────────────────────────────────────────────────────────────────
-Movement:
-  W / ↑              - Move Forward
-  S / ↓              - Move Backward  
-  A / ←              - Turn Left
-  D / →              - Turn Right
-  Space              - EMERGENCY STOP (center joystick immediately)
-
-Speed Control (0-100%):
-  1                  - 20% speed
-  2                  - 40% speed
-  3                  - 60% speed
-  4                  - 80% speed
-  5                  - 100% speed
-
-Other:
-  H                  - Sound Horn
-  Q                  - Quit Program
-
-IMPORTANT SAFETY:
-─────────────────────────────────────────────────────────────────
-• Always test in a CONTROLLED ENVIRONMENT first
-• Have the wheelchair elevated (wheels off ground) during testing
-• Keep a physical emergency stop button available
-• Ensure a spotter is present during operations
-• Start with SPEED PRESET 1 (20%) for initial testing
-    """)
+    print(
+        "\nKEYBOARD CONTROLS\n"
+        "Movement:\n"
+        "  W / Up      Move forward\n"
+        "  S / Down    Move backward\n"
+        "  A / Left    Turn left\n"
+        "  D / Right   Turn right\n"
+        "  Space       Emergency stop / center joystick\n"
+        "\n"
+        "Speed:\n"
+        "  1=20%  2=40%  3=60%  4=80%  5=100%\n"
+        "\n"
+        "Other:\n"
+        "  H           Sound horn\n"
+        "  Q           Quit program\n"
+        "\n"
+        "Safety:\n"
+        "  Test in a controlled environment, preferably with wheels elevated.\n"
+        "  Keep a physical emergency stop available and start at low speed.\n"
+    )
 
 
 def print_telemetry(controller: JoystickController):
@@ -224,23 +215,29 @@ def main():
             safety_manager=safety_manager,
             send_interval_ms=config.get("control.send_interval_ms", 10.0)
         )
+
+        stop_requested = False
+
+        def request_stop():
+            nonlocal stop_requested
+            stop_requested = True
         
         # Keyboard Handler
         keyboard = KeyboardHandler(
             on_joystick_update=controller.set_joystick_position,
             on_speed_change=controller.set_speed,
             on_horn=controller.sound_horn,
-            on_stop=lambda: None  # Will handle in signal handler
+            on_stop=request_stop
         )
         
-        # Start systems
-        logger.info("Starting teleoperation systems...")
-        keyboard.start()
-        controller.start()
-        
-        # Print controls
+        # Print controls before entering cbreak keyboard mode.
         print_controls()
         print("System ready. Press Q to quit.\n")
+
+        # Start systems
+        logger.info("Starting teleoperation systems...")
+        controller.start()
+        keyboard.start()
         
         # Main loop with telemetry updates
         print_telemetry(controller)
@@ -249,7 +246,7 @@ def main():
         telemetry_update_interval = 2.0  # Update every 2 seconds
         
         try:
-            while True:
+            while not stop_requested:
                 current_time = time.time()
                 
                 # Update telemetry every N seconds
