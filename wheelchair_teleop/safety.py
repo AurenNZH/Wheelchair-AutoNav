@@ -47,8 +47,10 @@ class SafetyManager:
         self._last_inactivity_warning_time = 0
         self._is_stopped = True
         
-        logger.info(f"Safety Manager initialized: max_speed={self.max_speed}%, "
-                   f"accel={acceleration_rate}%/s, timeout={inactivity_timeout}s")
+        logger.info("Safety manager init success")
+        logger.info(f"  max_speed: {self.max_speed}%")
+        logger.info(f"  accel: {acceleration_rate}%/s")
+        logger.info(f"  timeout: {inactivity_timeout}s")
     
     def set_target_speed(self, speed_percent: int) -> int:
         """
@@ -107,7 +109,7 @@ class SafetyManager:
         
         if time_since_input > self.inactivity_timeout:
             current_time = time.time()
-            if current_time - self._last_inactivity_warning_time >= 1.0:
+            if current_time - self._last_inactivity_warning_time >= 2.0:
                 logger.warning(f"Inactivity timeout exceeded ({time_since_input:.1f}s)")
                 self._last_inactivity_warning_time = current_time
             return True

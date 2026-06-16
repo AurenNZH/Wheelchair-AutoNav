@@ -243,7 +243,7 @@ def main():
         print_telemetry(controller)
         
         last_telemetry_time = time.time()
-        telemetry_update_interval = 2.0  # Update every 2 seconds
+        telemetry_update_interval = 1.0  # Update once per second
         
         try:
             while not stop_requested:

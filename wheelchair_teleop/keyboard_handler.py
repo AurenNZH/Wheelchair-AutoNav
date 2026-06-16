@@ -6,7 +6,7 @@ Non-blocking keyboard input handling for teleoperation over SSH
 import sys
 import threading
 import logging
-from typing import Callable, Optional, Set
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,10 @@ class KeyboardHandler:
         self.on_horn = on_horn
         self.on_stop = on_stop
         
-        self._keys_pressed: Set[str] = set()
         self._monitor_thread = None
         self._stop_monitoring = False
+        self._x_axis = 0
+        self._y_axis = 0
         self._last_x = 0
         self._last_y = 0
         self._current_speed = 50
@@ -94,7 +95,8 @@ class KeyboardHandler:
         self._stop_monitoring = True
         if self._monitor_thread:
             self._monitor_thread.join(timeout=2)
-        self._keys_pressed.clear()
+        self._x_axis = 0
+        self._y_axis = 0
         logger.info("Keyboard monitoring stopped")
     
     def _monitor_loop(self):
@@ -177,8 +179,7 @@ class KeyboardHandler:
                 }
                 action = arrow_actions.get(sequence)
                 if action:
-                    self._keys_pressed.add(action)
-                    self._update_joystick_position(force_callback=True)
+                    self._apply_movement(action)
                 else:
                     logger.debug(f"Unhandled escape sequence: {repr(sequence)}")
             return
@@ -198,25 +199,22 @@ class KeyboardHandler:
         # Check for emergency stop (Space)
         if key == ' ':
             logger.info("Emergency stop - centering joystick")
-            self._keys_pressed.clear()
-            if self.on_joystick_update:
-                self.on_joystick_update(0, 0)
+            self._set_position(0, 0, force_callback=True)
             return
         
         # Drive controls: WASD or Arrow keys
-        drive_key_received = False
         if key_lower == 'w':
-            self._keys_pressed.add('forward')
-            drive_key_received = True
+            self._apply_movement('forward')
+            return
         elif key_lower == 's':
-            self._keys_pressed.add('backward')
-            drive_key_received = True
+            self._apply_movement('backward')
+            return
         elif key_lower == 'a':
-            self._keys_pressed.add('left')
-            drive_key_received = True
+            self._apply_movement('left')
+            return
         elif key_lower == 'd':
-            self._keys_pressed.add('right')
-            drive_key_received = True
+            self._apply_movement('right')
+            return
         
         # Speed presets
         elif key in self.SPEED_PRESETS:
@@ -233,35 +231,33 @@ class KeyboardHandler:
                 self.on_horn()
         elif key != "[":
             logger.debug(f"Unhandled keyboard input: {repr(key)}")
-        
-        # Update joystick position based on pressed keys
-        self._update_joystick_position(force_callback=drive_key_received)
     
-    def _update_joystick_position(self, force_callback: bool = False):
-        """Update joystick position based on currently pressed keys."""
-        x_pos = 0
-        y_pos = 0
-        
-        # Calculate X-axis (left-right)
-        if 'left' in self._keys_pressed:
-            x_pos -= 100
-        if 'right' in self._keys_pressed:
-            x_pos += 100
-        
-        # Handle both pressed simultaneously -> cancel out
-        if x_pos < 0 and x_pos > 0:
-            x_pos = 0
-        
-        # Calculate Y-axis (forward-backward)
-        if 'forward' in self._keys_pressed:
-            y_pos += 100
-        if 'backward' in self._keys_pressed:
-            y_pos -= 100
-        
-        # Handle both pressed simultaneously -> cancel out
-        if y_pos > 0 and y_pos < 0:
-            y_pos = 0
-        
+    def _apply_movement(self, direction: str):
+        """Apply one movement keypress to the current command state."""
+        if direction == 'forward':
+            self._y_axis = self._next_axis_value(self._y_axis, 100)
+        elif direction == 'backward':
+            self._y_axis = self._next_axis_value(self._y_axis, -100)
+        elif direction == 'right':
+            self._x_axis = self._next_axis_value(self._x_axis, 100)
+        elif direction == 'left':
+            self._x_axis = self._next_axis_value(self._x_axis, -100)
+
+        self._set_position(self._x_axis, self._y_axis, force_callback=True)
+
+    def _next_axis_value(self, current_value: int, requested_value: int) -> int:
+        """
+        Pressing the opposite direction first centers that axis.
+        Pressing the same direction refreshes the command.
+        """
+        if current_value and current_value != requested_value:
+            return 0
+        return requested_value
+
+    def _set_position(self, x_pos: int, y_pos: int, force_callback: bool = False):
+        """Publish a joystick position update if it changed or needs refreshing."""
+        self._x_axis = x_pos
+        self._y_axis = y_pos
         position_changed = x_pos != self._last_x or y_pos != self._last_y
 
         if position_changed:
