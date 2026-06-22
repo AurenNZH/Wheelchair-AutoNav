@@ -11,8 +11,8 @@ import time
 import signal
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add the component source directory to path for direct script execution.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wheelchair_teleop import (
     CANInterface,
