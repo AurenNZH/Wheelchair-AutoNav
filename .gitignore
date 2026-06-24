@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs and runtime output
+*.log
+experiments/logs/*
+!experiments/logs/.gitkeep
+
+# ROS2 build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Large robotics / ML artifacts
+*.bag
+*.db3
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+*.mp4
+*.avi
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

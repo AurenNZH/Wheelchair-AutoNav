@@ -1,0 +1,20 @@
+{
+  "include": [
+    "components",
+    "tests"
+  ],
+  "extraPaths": [
+    "components/can_controller/src",
+    "components/communication/src",
+    "components/human_avoidance/src",
+    "components/perception_yolo/src",
+    "components/shared_control/src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "ros2_ws/build",
+    "ros2_ws/install",
+    "ros2_ws/log",
+    "experiments/logs"
+  ]
+}
