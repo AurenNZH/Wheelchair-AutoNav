@@ -95,23 +95,19 @@ python scripts/velocity_overlay.py --source path/to/video.mp4 --save outputs/vel
 ## Bring Up RoboSense AIRY LiDAR
 
 This project uses RoboSense's ROS2 driver for the AIRY LiDAR. Build the
-RoboSense `rslidar_sdk` workspace separately on the Jetson, then run:
+RoboSense `rslidar_sdk` workspace separately on the Jetson, then source ROS2
+and the SDK workspace before launching the RoboSense driver:
 
 ```bash
-bash scripts/bringup_lidar.sh
+source /opt/ros/foxy/setup.bash
+source /home/jetson-xavier-wheelchair/lidar_workspace/install/setup.bash
+ros2 launch rslidar_sdk start.py
 ```
 
-By default, the script sources:
+If your RoboSense workspace is somewhere else, source that workspace instead:
 
 ```bash
-/opt/ros/foxy/setup.bash
-~/rslidar_ws/install/setup.bash
-```
-
-If your RoboSense workspace is somewhere else:
-
-```bash
-RSLIDAR_WS=/path/to/rslidar_ws bash scripts/bringup_lidar.sh
+source /path/to/rslidar_ws/install/setup.bash
 ```
 
 The RoboSense SDK config should match the AIRY online LiDAR setup:
