@@ -92,6 +92,45 @@ python scripts/velocity_overlay.py --source path/to/video.mp4 --save outputs/vel
 - `--arrow-scale` controls visual arrow length without changing the numeric velocity.
 - The latency measurement does not include camera sensor exposure time, camera driver buffering, display refresh, or motor command transmission.
 
+## Bring Up RoboSense AIRY LiDAR
+
+This project uses RoboSense's ROS2 driver for the AIRY LiDAR. Build the
+RoboSense `rslidar_sdk` workspace separately on the Jetson, then run:
+
+```bash
+bash scripts/bringup_lidar.sh
+```
+
+By default, the script sources:
+
+```bash
+/opt/ros/foxy/setup.bash
+~/rslidar_ws/install/setup.bash
+```
+
+If your RoboSense workspace is somewhere else:
+
+```bash
+RSLIDAR_WS=/path/to/rslidar_ws bash scripts/bringup_lidar.sh
+```
+
+The RoboSense SDK config should match the AIRY online LiDAR setup:
+
+- `lidar_type: RSAIRY`
+- `msg_source: 1`
+- `send_point_cloud_ros: true`
+- MSOP port `6699`
+- DIFOP port `7788`
+
+Check that the point cloud is publishing:
+
+```bash
+ros2 topic list
+ros2 topic echo /rslidar_points --once
+```
+
+In RViz, add a `PointCloud2` display and select `/rslidar_points`.
+
 ## Tests
 
 ```bash
