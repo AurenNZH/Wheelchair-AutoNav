@@ -1,4 +1,4 @@
-"""Reusable ROS PointCloud2 parsing and rigid-transform utilities."""
+"""PointCloud2 parsing and rigid-transform utilities for navigation."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Local obstacle mapping and conservative command proposal utilities."""
+"""Local costmap and conservative command-proposal algorithms."""
 
 from __future__ import annotations
 

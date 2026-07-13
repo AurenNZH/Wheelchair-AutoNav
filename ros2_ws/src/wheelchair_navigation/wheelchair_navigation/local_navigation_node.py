@@ -13,13 +13,13 @@ from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformException, TransformListener
 
-from perception.local_navigation import (
+from wheelchair_navigation.local_navigation import (
     LocalCostmapConfig,
     TrajectoryConfig,
     choose_command,
     make_local_costmap,
 )
-from perception.point_cloud import read_xyz_points, transform_points
+from wheelchair_navigation.point_cloud import read_xyz_points, transform_points
 
 
 class LocalNavigationNode(Node):

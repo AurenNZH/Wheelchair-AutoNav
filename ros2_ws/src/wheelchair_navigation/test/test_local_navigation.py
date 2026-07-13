@@ -1,12 +1,8 @@
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
-from perception.local_navigation import (  # noqa: E402
+from wheelchair_navigation.local_navigation import (
     LocalCostmapConfig,
     SocialZone,
     TrajectoryConfig,
@@ -14,7 +10,7 @@ from perception.local_navigation import (  # noqa: E402
     make_local_costmap,
     world_to_cell,
 )
-from perception.local_navigation_node import cloud_timestamp_error  # noqa: E402
+from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
 
 
 class LocalNavigationTests(unittest.TestCase):

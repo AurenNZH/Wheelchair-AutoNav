@@ -88,7 +88,8 @@ remote-wheelchair/
 │       ├── wheelchair_msgs/        # custom ROS2 msg/srv/action definitions
 │       ├── wheelchair_bringup/     # top-level launch files
 │       ├── sensor_bridge/          # RGBD/LiDAR subscriptions/adapters
-│       └── wheelchair_description/ # optional URDF/static transforms
+│       ├── wheelchair_description/ # optional URDF/static transforms
+│       └── wheelchair_navigation/  # local costmap and navigation planning
 │
 ├── launch/
 │   ├── pi/

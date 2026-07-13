@@ -1,11 +1,10 @@
 # Perception Component
 
-Host-PC component for object perception, human velocity estimation, and local mapping utilities.
+Host-PC component for object perception and human velocity estimation.
 
 Current responsibilities:
 
 - Estimate per-person image-plane velocity from YOLO pose keypoints.
-- Provide a simple hemispherical LiDAR local occupancy mapper.
 
 Planned responsibilities:
 
@@ -151,44 +150,6 @@ ros2 run tf2_ros static_transform_publisher \
 
 The RealSense driver owns the transforms below `camera_link`. Never publish a
 second parent directly to `camera_color_optical_frame`.
-
-## Local Navigation Debug Output
-
-Before running navigation, define `base_link` at the ground projection of the
-wheelchair centre/rear-axle midpoint with X forward, Y left, and Z up. Measure
-the rigid LiDAR pose and publish `base_link -> rslidar` using the measured XYZ,
-yaw, pitch, and roll values:
-
-```bash
-ros2 run tf2_ros static_transform_publisher \
-  X Y Z YAW PITCH ROLL base_link rslidar
-```
-
-Do not use a zero transform for clearance or trajectory validation. After the
-measured transform and LiDAR points are available, run the prototype:
-
-```bash
-cd components/perception
-source /opt/ros/foxy/setup.bash
-python3 scripts/local_navigation.py
-```
-
-Default inputs and outputs:
-
-- LiDAR input: `/rslidar_points`
-- Target frame: `base_link`
-- Costmap output: `/local_costmap`
-- Proposed command output: `/proposed_cmd_vel`
-- Selected path output: `/local_planner/selected_path`
-
-This node does not command the wheelchair. It publishes debug/proposed motion
-only. The command is zero if LiDAR data is empty, stale, future-dated, missing
-a timestamped TF, or if every sampled trajectory collides with the costmap.
-
-In RViz, set the fixed frame to `base_link`, then add:
-
-- `Map`: `/local_costmap`
-- `Path`: `/local_planner/selected_path`
 
 ## Tests
 

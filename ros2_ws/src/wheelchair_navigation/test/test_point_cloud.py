@@ -1,15 +1,11 @@
 import struct
-import sys
 import unittest
-from pathlib import Path
 
 import numpy as np
 from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import PointCloud2, PointField
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
-from perception.point_cloud import (  # noqa: E402
+from wheelchair_navigation.point_cloud import (
     quaternion_to_matrix,
     read_xyz_points,
     transform_points,
