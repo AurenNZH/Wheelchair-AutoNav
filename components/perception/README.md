@@ -127,94 +127,50 @@ timeout 5 ros2 topic echo /rslidar_points
 
 In RViz, add a `PointCloud2` display and select `/rslidar_points`.
 
-## Colorize LiDAR With RealSense RGB
+## RealSense RGB-D Geometry
 
-The RGB camera is exposed by the Intel RealSense ROS2 wrapper. Install and
-source `realsense2_camera`, then launch the camera:
+The RealSense ROS2 wrapper publishes different representations with different
+purposes:
 
-```bash
-sudo apt-get install ros-foxy-realsense2-camera
-source /opt/ros/foxy/setup.bash
-ros2 launch realsense2_camera rs_launch.py \
-  enable_sync:=true \
-  align_depth.enable:=true \
-  depth_module.profile:=640x480x30 \
-  rgb_camera.profile:=640x480x30
-```
+- `/camera/depth/image_rect_raw` is the depth image published by the installed
+  L515 wrapper (some wrapper versions call it `/camera/depth/image_raw`).
+- `/camera/depth/color/points` is the camera-derived colored `PointCloud2`.
+- `/rslidar_points` is the independent AIRY `PointCloud2` with wider coverage.
 
-The color fusion node approximately synchronizes `/rslidar_points`, RealSense
-RGB, and depth aligned to RGB. It publishes a colored point cloud while
-retaining points that cannot be safely associated in neutral grey:
+Recoloring AIRY points with the camera does not add navigation geometry, so the
+former `/rslidar_points_colored` prototype has been retired. Navigation starts
+with `/rslidar_points`; after the LiDAR-only baseline passes, the RealSense
+cloud can contribute independent obstacle evidence to the same local costmap.
 
-```bash
-cd components/perception
-python scripts/colorize_lidar_cloud.py --ros-args \
-  --params-file ../../configs/ros2/lidar_camera_fusion.yaml
-```
-
-Default topics:
-
-- LiDAR input: `/rslidar_points`
-- RGB image: `/camera/color/image_raw`
-- Aligned depth: `/camera/aligned_depth_to_color/image_raw`
-- RGB intrinsics: `/camera/color/camera_info`
-- Colored output: `/rslidar_points_colored`
-
-The marked, rigid sensor mounts currently use this initial transform from the
-LiDAR frame (`rslidar`) to the RealSense root frame (`camera_link`):
+The marked sensor mounts currently use this initial relative transform:
 
 ```bash
 ros2 run tf2_ros static_transform_publisher \
   0.42 0.65 1.03 -0.78540 0 0 rslidar camera_link
 ```
 
-The translation is in metres and the angles are yaw, pitch, and roll in
-radians. Refine these initial values against a board visible to both sensors.
-
-Do not publish a manual static transform directly to
-`camera_color_optical_frame` while the RealSense node is running. The RealSense
-driver already publishes `camera_link -> camera_color_frame ->
-camera_color_optical_frame`; adding a second parent for
-`camera_color_optical_frame` creates a conflicting TF tree.
-
-In RViz, add a `PointCloud2` display for `/rslidar_points_colored` and set the
-color transformer to `RGB8`.
-
-The node colors a projected LiDAR point only when its camera-frame depth agrees
-with the aligned RealSense depth. Multiple LiDAR returns at one image pixel are
-z-buffered. Its throttled log reports colored, depth-mismatched, invalid-depth,
-out-of-image, behind-camera, and z-buffered point counts.
-
-`/rslidar_points_colored` is diagnostic output. Navigation and collision
-avoidance must continue to consume the original `/rslidar_points`; RGB-D
-association must not create, remove, or relocate safety-critical geometry.
-
-Initial association settings are:
-
-- synchronization slop: `0.08` seconds
-- depth tolerance: `max(0.08 m, 0.03 * range)`
-- unassociated color: neutral grey `(128, 128, 128)`
-
-Record a repeatable validation bag with the static scene, a board at several
-ranges, and a hand occluding the camera while LiDAR sees the background:
-
-```bash
-ros2 bag record \
-  /rslidar_points \
-  /camera/color/image_raw \
-  /camera/color/camera_info \
-  /camera/aligned_depth_to_color/image_raw \
-  /tf /tf_static
-```
+The RealSense driver owns the transforms below `camera_link`. Never publish a
+second parent directly to `camera_color_optical_frame`.
 
 ## Local Navigation Debug Output
 
-After LiDAR points are available in TF, run the local navigation prototype:
+Before running navigation, define `base_link` at the ground projection of the
+wheelchair centre/rear-axle midpoint with X forward, Y left, and Z up. Measure
+the rigid LiDAR pose and publish `base_link -> rslidar` using the measured XYZ,
+yaw, pitch, and roll values:
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  X Y Z YAW PITCH ROLL base_link rslidar
+```
+
+Do not use a zero transform for clearance or trajectory validation. After the
+measured transform and LiDAR points are available, run the prototype:
 
 ```bash
 cd components/perception
 source /opt/ros/foxy/setup.bash
-python scripts/local_navigation.py
+python3 scripts/local_navigation.py
 ```
 
 Default inputs and outputs:
@@ -226,15 +182,8 @@ Default inputs and outputs:
 - Selected path output: `/local_planner/selected_path`
 
 This node does not command the wheelchair. It publishes debug/proposed motion
-only. The command is zero if LiDAR data is stale, the TF lookup fails, or every
-sampled trajectory collides with the local costmap.
-
-For early testing without a finalized mount, publish a temporary static TF from
-`base_link` to `rslidar` first:
-
-```bash
-ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_link rslidar
-```
+only. The command is zero if LiDAR data is empty, stale, future-dated, missing
+a timestamped TF, or if every sampled trajectory collides with the costmap.
 
 In RViz, set the fixed frame to `base_link`, then add:
 
@@ -244,5 +193,5 @@ In RViz, set the fixed frame to `base_link`, then add:
 ## Tests
 
 ```bash
-python -m unittest discover tests
+python3 -m unittest discover tests
 ```

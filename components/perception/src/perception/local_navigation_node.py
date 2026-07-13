@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Twist
@@ -15,13 +13,13 @@ from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformException, TransformListener
 
-from perception.lidar_camera_color_fusion import read_xyz_points, transform_points
 from perception.local_navigation import (
     LocalCostmapConfig,
     TrajectoryConfig,
     choose_command,
     make_local_costmap,
 )
+from perception.point_cloud import read_xyz_points, transform_points
 
 
 class LocalNavigationNode(Node):
@@ -43,6 +41,7 @@ class LocalNavigationNode(Node):
         self.declare_parameter("linear_speed_mps", 0.25)
         self.declare_parameter("footprint_radius_m", 0.45)
         self.declare_parameter("max_cloud_age_s", 1.0)
+        self.declare_parameter("max_future_offset_s", 0.1)
 
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -72,12 +71,28 @@ class LocalNavigationNode(Node):
         self.get_logger().info("Local navigation debug node started.")
 
     def _on_lidar(self, msg: PointCloud2) -> None:
-        if self._is_stale(msg):
-            self._publish_stop("stale_lidar")
+        timestamp_error = cloud_timestamp_error(
+            now_ns=self.get_clock().now().nanoseconds,
+            stamp_ns=Time.from_msg(msg.header.stamp).nanoseconds,
+            max_age_s=float(self.get_parameter("max_cloud_age_s").value),
+            max_future_offset_s=float(
+                self.get_parameter("max_future_offset_s").value
+            ),
+        )
+        if timestamp_error is not None:
+            self._publish_stop(timestamp_error)
             return
 
         target_frame = self.get_parameter("target_frame").value
-        points = np.asarray(list(read_xyz_points(msg)), dtype=np.float32)
+        try:
+            points = np.asarray(list(read_xyz_points(msg)), dtype=np.float32)
+        except ValueError as exc:
+            self.get_logger().warn(
+                "Invalid LiDAR cloud: %s" % exc,
+                throttle_duration_sec=5.0,
+            )
+            self._publish_stop("invalid_lidar")
+            return
         if points.size == 0:
             self._publish_stop("empty_lidar")
             return
@@ -89,20 +104,14 @@ class LocalNavigationNode(Node):
                     msg.header.frame_id,
                     Time.from_msg(msg.header.stamp),
                 )
-            except TransformException:
-                try:
-                    transform = self._tf_buffer.lookup_transform(
-                        target_frame,
-                        msg.header.frame_id,
-                        Time(),
-                    )
-                except TransformException as exc:
-                    self.get_logger().warn(
-                        "No TF from %s to %s: %s" % (msg.header.frame_id, target_frame, exc),
-                        throttle_duration_sec=5.0,
-                    )
-                    self._publish_stop("missing_tf")
-                    return
+            except TransformException as exc:
+                self.get_logger().warn(
+                    "No timestamped TF from %s to %s: %s"
+                    % (msg.header.frame_id, target_frame, exc),
+                    throttle_duration_sec=5.0,
+                )
+                self._publish_stop("missing_tf")
+                return
             points = transform_points(points, transform)
 
         map_config = self._map_config()
@@ -121,12 +130,6 @@ class LocalNavigationNode(Node):
             best = max(safe_candidates, key=lambda candidate: candidate.score)
             self._path_pub.publish(build_path(header, best.points_xy))
 
-    def _is_stale(self, msg: PointCloud2) -> bool:
-        stamp = Time.from_msg(msg.header.stamp)
-        age_ns = self.get_clock().now().nanoseconds - stamp.nanoseconds
-        max_age_ns = int(float(self.get_parameter("max_cloud_age_s").value) * 1e9)
-        return age_ns > max_age_ns
-
     def _map_config(self) -> LocalCostmapConfig:
         return LocalCostmapConfig(
             size_m=float(self.get_parameter("size_m").value),
@@ -143,8 +146,29 @@ class LocalNavigationNode(Node):
         )
 
     def _publish_stop(self, reason: str) -> None:
-        self.get_logger().warn("Publishing zero proposed command: %s" % reason, throttle_duration_sec=5.0)
+        self.get_logger().warn(
+            "Publishing zero proposed command: %s" % reason,
+            throttle_duration_sec=5.0,
+        )
         self._cmd_pub.publish(Twist())
+
+
+def cloud_timestamp_error(
+    now_ns: int,
+    stamp_ns: int,
+    max_age_s: float,
+    max_future_offset_s: float,
+) -> str | None:
+    """Return a fail-safe reason for an unusable cloud timestamp."""
+
+    if stamp_ns <= 0:
+        return "invalid_lidar_timestamp"
+    age_ns = int(now_ns) - int(stamp_ns)
+    if age_ns > int(max_age_s * 1e9):
+        return "stale_lidar"
+    if age_ns < -int(max_future_offset_s * 1e9):
+        return "future_lidar"
+    return None
 
 
 def build_occupancy_grid(

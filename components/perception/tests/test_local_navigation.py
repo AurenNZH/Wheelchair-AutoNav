@@ -14,9 +14,39 @@ from perception.local_navigation import (  # noqa: E402
     make_local_costmap,
     world_to_cell,
 )
+from perception.local_navigation_node import cloud_timestamp_error  # noqa: E402
 
 
 class LocalNavigationTests(unittest.TestCase):
+    def test_cloud_timestamp_accepts_recent_data(self):
+        self.assertIsNone(
+            cloud_timestamp_error(
+                now_ns=2_000_000_000,
+                stamp_ns=1_500_000_000,
+                max_age_s=1.0,
+                max_future_offset_s=0.1,
+            )
+        )
+
+    def test_cloud_timestamp_rejects_stale_future_and_invalid_data(self):
+        common = {
+            "now_ns": 2_000_000_000,
+            "max_age_s": 1.0,
+            "max_future_offset_s": 0.1,
+        }
+        self.assertEqual(
+            cloud_timestamp_error(stamp_ns=0, **common),
+            "invalid_lidar_timestamp",
+        )
+        self.assertEqual(
+            cloud_timestamp_error(stamp_ns=500_000_000, **common),
+            "stale_lidar",
+        )
+        self.assertEqual(
+            cloud_timestamp_error(stamp_ns=2_200_000_000, **common),
+            "future_lidar",
+        )
+
     def test_costmap_marks_and_inflates_lidar_obstacle(self):
         config = LocalCostmapConfig(size_m=4.0, resolution_m=0.2, inflation_radius_m=0.2)
         points = np.array([[1.0, 0.0, 0.4]], dtype=np.float32)
