@@ -3,10 +3,10 @@
 Current packages:
 
 - `wheelchair_navigation`: LiDAR local costmap and conservative motion proposals.
+- `wheelchair_bringup`: top-level sensor, TF, navigation, and RViz launching.
 
 Planned ROS2 packages:
 
 - `wheelchair_msgs`: custom messages, services, and actions.
-- `wheelchair_bringup`: top-level launch files.
 - `sensor_bridge`: RGBD and LiDAR topic adapters.
 - `wheelchair_description`: optional transforms or robot description.
