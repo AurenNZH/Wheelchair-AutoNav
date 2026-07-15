@@ -7,7 +7,7 @@ This repository hosts software for a shared-control, obstacle-aware powered whee
 ```text
 components/
   can_controller/       Raspberry Pi CAN/RNET teleoperation runtime
-  perception_yolo/      Host-PC YOLOv8 perception component
+  perception/           Host-PC YOLOv8 perception and velocity component
   human_avoidance/      Host-PC pose estimation and human avoidance
   shared_control/       Arbitration between user input, perception, and safety
   communication/        PC-to-Pi command and telemetry protocol code
@@ -23,7 +23,7 @@ docs/
   setup/                Setup guides and quick-start material
   history/              Historical delivery notes
 
-ros2_ws/src/            ROS2 packages, messages, bringup, and sensor bridges
+ros2_ws/src/            ROS2 packages, including wheelchair navigation
 launch/                 System launch scripts for Pi and host PC
 scripts/                Setup, deployment, and developer utility scripts
 tests/                  Cross-component integration and hardware-in-loop tests

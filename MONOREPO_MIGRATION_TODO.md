@@ -88,7 +88,8 @@ remote-wheelchair/
 │       ├── wheelchair_msgs/        # custom ROS2 msg/srv/action definitions
 │       ├── wheelchair_bringup/     # top-level launch files
 │       ├── sensor_bridge/          # RGBD/LiDAR subscriptions/adapters
-│       └── wheelchair_description/ # optional URDF/static transforms
+│       ├── wheelchair_description/ # optional URDF/static transforms
+│       └── wheelchair_navigation/  # local costmap and navigation planning
 │
 ├── launch/
 │   ├── pi/
@@ -155,10 +156,10 @@ remote-wheelchair/
 
 - [ ] Create `ros2_ws/src/wheelchair_msgs/` for custom ROS2 messages, services, and actions.
 - [ ] Define message contracts for joystick commands, safe velocity commands, detections, human pose zones, and system status.
-- [ ] Create `ros2_ws/src/wheelchair_bringup/` for top-level launch files.
+- [x] Create `ros2_ws/src/wheelchair_bringup/` for top-level launch files.
 - [ ] Create `ros2_ws/src/sensor_bridge/` for RGBD and LiDAR topic adapters if needed.
 - [ ] Document expected ROS2 topics, frames, and QoS settings in `docs/architecture/ros2_graph.md`.
-- [ ] Add a minimal ROS2 launch path that can start without wheelchair hardware.
+- [x] Add a minimal ROS2 launch path that can start without wheelchair hardware.
 
 ## Phase 5: Add Host PC Perception Components
 
