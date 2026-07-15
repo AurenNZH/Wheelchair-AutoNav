@@ -14,6 +14,30 @@ from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
 
 
 class LocalNavigationTests(unittest.TestCase):
+    def test_navigation_defaults_filter_floor_and_distant_returns(self):
+        config = LocalCostmapConfig()
+        self.assertEqual(config.min_height_m, 0.05)
+        self.assertEqual(config.min_range_m, 0.30)
+        self.assertEqual(config.max_range_m, 4.0)
+
+        filter_config = LocalCostmapConfig(size_m=12.0)
+        points = np.array(
+            [
+                [-2.0, 0.0, 0.04],
+                [4.1, 0.0, 0.4],
+                [1.0, 0.0, 0.4],
+            ],
+            dtype=np.float32,
+        )
+        costmap = make_local_costmap(points, filter_config)
+
+        floor_cell = world_to_cell(-2.0, 0.0, filter_config, costmap.shape[0])
+        distant_cell = world_to_cell(4.1, 0.0, filter_config, costmap.shape[0])
+        obstacle_cell = world_to_cell(1.0, 0.0, filter_config, costmap.shape[0])
+        self.assertEqual(costmap[floor_cell[1], floor_cell[0]], 0)
+        self.assertEqual(costmap[distant_cell[1], distant_cell[0]], 0)
+        self.assertEqual(costmap[obstacle_cell[1], obstacle_cell[0]], 100)
+
     def test_cloud_timestamp_accepts_recent_data(self):
         self.assertIsNone(
             cloud_timestamp_error(

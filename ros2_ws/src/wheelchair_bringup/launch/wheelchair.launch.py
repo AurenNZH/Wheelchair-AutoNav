@@ -8,7 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-from wheelchair_bringup.defaults import CAMERA_LIDAR_TRANSFORM, LAUNCH_DEFAULTS
+from wheelchair_bringup.defaults import LAUNCH_DEFAULTS
 
 
 def _argument(name: str, description: str) -> DeclareLaunchArgument:
@@ -33,13 +33,18 @@ def generate_launch_description():
         "rviz",
         "wheelchair.rviz",
     )
+    lidar_config = os.path.join(
+        get_package_share_directory("wheelchair_bringup"),
+        "config",
+        "rslidar_airy.yaml",
+    )
 
     declarations = [
         _argument("use_lidar", "Start the RoboSense AIRY driver."),
         _argument("use_camera", "Start the RealSense L515 driver."),
         _argument("use_navigation", "Start non-actuating local navigation."),
         _argument("use_rviz", "Start RViz with the wheelchair view."),
-        _argument("publish_camera_tf", "Publish rslidar -> camera_link."),
+        _argument("publish_camera_tf", "Publish base_link -> camera_link."),
         _argument(
             "publish_base_lidar_tf",
             "Publish the measured base_link -> rslidar transform.",
@@ -50,6 +55,12 @@ def generate_launch_description():
         _argument("base_lidar_yaw", "Measured LiDAR yaw in radians."),
         _argument("base_lidar_pitch", "Measured LiDAR pitch in radians."),
         _argument("base_lidar_roll", "Measured LiDAR roll in radians."),
+        _argument("base_camera_x", "Measured camera X translation in metres."),
+        _argument("base_camera_y", "Measured camera Y translation in metres."),
+        _argument("base_camera_z", "Measured camera Z translation in metres."),
+        _argument("base_camera_yaw", "Measured camera yaw in radians."),
+        _argument("base_camera_pitch", "Measured camera pitch in radians."),
+        _argument("base_camera_roll", "Measured camera roll in radians."),
     ]
 
     lidar = Node(
@@ -57,7 +68,7 @@ def generate_launch_description():
         executable="rslidar_sdk_node",
         name="rslidar_sdk_node",
         output="screen",
-        parameters=[{"config_path": ""}],
+        parameters=[{"config_path": lidar_config}],
         condition=IfCondition(LaunchConfiguration("use_lidar")),
     )
     camera = IncludeLaunchDescription(
@@ -78,14 +89,14 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="camera_mount_tf",
         arguments=[
-            CAMERA_LIDAR_TRANSFORM["x"],
-            CAMERA_LIDAR_TRANSFORM["y"],
-            CAMERA_LIDAR_TRANSFORM["z"],
-            CAMERA_LIDAR_TRANSFORM["yaw"],
-            CAMERA_LIDAR_TRANSFORM["pitch"],
-            CAMERA_LIDAR_TRANSFORM["roll"],
-            CAMERA_LIDAR_TRANSFORM["parent"],
-            CAMERA_LIDAR_TRANSFORM["child"],
+            LaunchConfiguration("base_camera_x"),
+            LaunchConfiguration("base_camera_y"),
+            LaunchConfiguration("base_camera_z"),
+            LaunchConfiguration("base_camera_yaw"),
+            LaunchConfiguration("base_camera_pitch"),
+            LaunchConfiguration("base_camera_roll"),
+            "base_link",
+            "camera_link",
         ],
         condition=IfCondition(LaunchConfiguration("publish_camera_tf")),
     )

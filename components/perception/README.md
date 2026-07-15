@@ -93,23 +93,20 @@ python scripts/velocity_overlay.py --source path/to/video.mp4 --save outputs/vel
 
 ## Bring Up RoboSense AIRY LiDAR
 
-This project uses RoboSense's ROS2 driver for the AIRY LiDAR. Build the
-RoboSense `rslidar_sdk` workspace separately on the Jetson, then source ROS2
-and the SDK workspace before launching the RoboSense driver:
+The RoboSense SDK and message packages are pinned in this repository. Initialize
+the submodules and build the shared ROS2 workspace before launching:
 
 ```bash
 source /opt/ros/foxy/setup.bash
-source /home/jetson-xavier-wheelchair/lidar_workspace/install/setup.bash
-ros2 launch rslidar_sdk start.py
+cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
+git submodule update --init --recursive
+cd ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch wheelchair_bringup wheelchair.launch.py
 ```
 
-If your RoboSense workspace is somewhere else, source that workspace instead:
-
-```bash
-source /path/to/rslidar_ws/install/setup.bash
-```
-
-The RoboSense SDK config should match the AIRY online LiDAR setup:
+The bring-up-owned RoboSense configuration uses:
 
 - `lidar_type: RSAIRY`
 - `msg_source: 1`
@@ -141,11 +138,11 @@ former `/rslidar_points_colored` prototype has been retired. Navigation starts
 with `/rslidar_points`; after the LiDAR-only baseline passes, the RealSense
 cloud can contribute independent obstacle evidence to the same local costmap.
 
-The marked sensor mounts currently use this initial relative transform:
+The marked sensor mounts are direct children of `base_link`:
 
 ```bash
-ros2 run tf2_ros static_transform_publisher \
-  0.42 0.65 1.03 -0.78540 0 0 rslidar camera_link
+base_link -> rslidar:     -0.265 -0.330 0.320 -0.78540 0 0
+base_link -> camera_link:  0.265  0.360 1.300 -1.5708  0 0
 ```
 
 The RealSense driver owns the transforms below `camera_link`. Never publish a

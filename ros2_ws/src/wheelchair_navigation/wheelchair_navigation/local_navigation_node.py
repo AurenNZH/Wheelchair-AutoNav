@@ -35,8 +35,10 @@ class LocalNavigationNode(Node):
         self.declare_parameter("selected_path_topic", "/local_planner/selected_path")
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
-        self.declare_parameter("min_height_m", -0.25)
+        self.declare_parameter("min_height_m", 0.05)
         self.declare_parameter("max_height_m", 1.5)
+        self.declare_parameter("min_range_m", 0.30)
+        self.declare_parameter("max_range_m", 4.00)
         self.declare_parameter("inflation_radius_m", 0.45)
         self.declare_parameter("linear_speed_mps", 0.25)
         self.declare_parameter("footprint_radius_m", 0.45)
@@ -136,6 +138,8 @@ class LocalNavigationNode(Node):
             resolution_m=float(self.get_parameter("resolution_m").value),
             min_height_m=float(self.get_parameter("min_height_m").value),
             max_height_m=float(self.get_parameter("max_height_m").value),
+            min_range_m=float(self.get_parameter("min_range_m").value),
+            max_range_m=float(self.get_parameter("max_range_m").value),
             inflation_radius_m=float(self.get_parameter("inflation_radius_m").value),
         )
 

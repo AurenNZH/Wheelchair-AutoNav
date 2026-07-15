@@ -44,6 +44,10 @@ untransformable clouds, and when no sampled trajectory is collision-free.
 In RViz, use `base_link` as the fixed frame and display `/local_costmap` as a
 Map and `/local_planner/selected_path` as a Path.
 
+The default obstacle filter keeps LiDAR points from `0.30` to `4.00` metres
+and heights from `0.05` to `1.50` metres in `base_link`. These values are ROS
+parameters in `config/local_navigation.yaml`.
+
 ## Test
 
 ```bash

@@ -11,10 +11,10 @@ import numpy as np
 class LocalCostmapConfig:
     size_m: float = 8.0
     resolution_m: float = 0.1
-    min_height_m: float = -0.25
+    min_height_m: float = 0.05
     max_height_m: float = 1.5
-    min_range_m: float = 0.15
-    max_range_m: float = 6.0
+    min_range_m: float = 0.30
+    max_range_m: float = 4.0
     inflation_radius_m: float = 0.45
     occupied_cost: int = 100
     unknown_cost: int = -1
