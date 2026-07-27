@@ -19,12 +19,12 @@ setup(
     zip_safe=True,
     maintainer="AurenNZH",
     maintainer_email="auren.ng@gmail.com",
-    description="Local obstacle mapping and conservative navigation proposals.",
+    description="Non-actuating LiDAR local obstacle mapping.",
     license="MIT",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "local_navigation = wheelchair_navigation.local_navigation_node:main",
+            "local_costmap = wheelchair_navigation.local_navigation_node:main",
         ],
     },
 )

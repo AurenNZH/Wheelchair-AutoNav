@@ -1,6 +1,6 @@
 # Wheelchair Bringup
 
-Top-level ROS2 launch package for repeatable sensor and navigation testing. It
+Top-level ROS2 launch package for repeatable sensor and local-mapping testing. It
 does not command the wheelchair.
 
 ## Build and Source
@@ -34,26 +34,34 @@ Add the installed RViz view:
 ros2 launch wheelchair_bringup wheelchair.launch.py use_rviz:=true
 ```
 
-Navigation remains disabled by default. Start the current non-actuating,
-LiDAR-only navigation prototype with:
+Mapping remains disabled by default. Start the non-actuating LiDAR-only mapper
+with:
 
 ```bash
+export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_navigation:=true use_rviz:=true
+  use_camera:=false use_mapping:=true use_rviz:=true
 ```
+
+`ROS_LOCALHOST_ONLY=1` avoids ROS 2 Foxy discovery problems observed on the
+Jetson while Ethernet is connected to the LiDAR and Wi-Fi is also active. Use
+it when the driver, mapper, and RViz all run on the Jetson. Leave it unset when
+RViz or another ROS node must run on a different computer.
 
 The measured translations and yaw values are defaults. Pitch and roll are
 temporarily zero and all six values per sensor remain launch arguments for
 calibration overrides. The RealSense driver owns `camera_link`'s optical-frame
 children; do not publish a second optical transform.
 
-The initial local costmap accepts points from `0.30` to `4.00` metres and from
-`0.05` to `1.50` metres above the `base_link` ground plane.
+The mapper publishes raw returns on `/local_obstacles` and a separately derived
+`/local_costmap`. Inflation is zero by default until the chair footprint is
+measured. The initial filters accept points from `0.30` to `4.00` metres and
+from `0.05` to `1.50` metres above the `base_link` ground plane.
 
 ## Scope
 
 This package starts sensor drivers, static sensor transforms, optional local
-navigation, and optional RViz. It does not perform calibration, sensor fusion,
+mapping, and optional RViz. It does not perform calibration, sensor fusion,
 Nav2 planning, localization, shared control, CAN communication, or wheelchair
 actuation. It starts `rslidar_sdk_node` directly so the vendor package does not
 create a second RViz process.

@@ -6,24 +6,20 @@ from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import PointCloud2, PointField
 
 from wheelchair_navigation.point_cloud import (
+    point_cloud_to_arrays,
     quaternion_to_matrix,
-    read_xyz_points,
     transform_points,
 )
 
 
 class PointCloudTests(unittest.TestCase):
-    def test_reads_organized_cloud_with_row_padding_and_skips_nonfinite(self):
+    def test_vectorized_decode_respects_organized_row_padding(self):
         msg = PointCloud2()
         msg.height = 2
         msg.width = 2
         msg.point_step = 12
         msg.row_step = 28
-        msg.fields = [
-            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
-        ]
+        msg.fields = self._xyz_fields()
         msg.data = (
             struct.pack("<fff", 1.0, 2.0, 3.0)
             + struct.pack("<fff", 4.0, 5.0, 6.0)
@@ -32,11 +28,51 @@ class PointCloudTests(unittest.TestCase):
             + struct.pack("<fff", float("nan"), 0.0, 0.0)
         )
 
-        points = list(read_xyz_points(msg))
+        cloud = point_cloud_to_arrays(msg)
 
-        self.assertEqual(points, [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0)])
+        np.testing.assert_allclose(
+            cloud.xyz[:3],
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]],
+        )
+        self.assertTrue(np.isnan(cloud.xyz[3, 0]))
 
-    def test_rejects_cloud_missing_xyz(self):
+    def test_decodes_airy_diagnostic_fields(self):
+        msg = PointCloud2()
+        msg.height = 1
+        msg.width = 1
+        msg.point_step = 30
+        msg.row_step = 30
+        msg.fields = self._xyz_fields() + [
+            PointField(name="intensity", offset=12, datatype=PointField.FLOAT32, count=1),
+            PointField(name="ring", offset=16, datatype=PointField.UINT16, count=1),
+            PointField(name="timestamp", offset=22, datatype=PointField.FLOAT64, count=1),
+        ]
+        data = bytearray(30)
+        struct.pack_into("<fff", data, 0, 1.0, 2.0, 3.0)
+        struct.pack_into("<f", data, 12, 42.5)
+        struct.pack_into("<H", data, 16, 17)
+        struct.pack_into("<d", data, 22, 123.25)
+        msg.data = bytes(data)
+
+        cloud = point_cloud_to_arrays(msg)
+
+        np.testing.assert_allclose(cloud.intensity, [42.5])
+        np.testing.assert_array_equal(cloud.ring, [17])
+        np.testing.assert_allclose(cloud.timestamp, [123.25])
+
+    def test_decodes_big_endian_xyz(self):
+        msg = PointCloud2()
+        msg.height = 1
+        msg.width = 1
+        msg.point_step = 12
+        msg.row_step = 12
+        msg.is_bigendian = True
+        msg.fields = self._xyz_fields()
+        msg.data = struct.pack(">fff", 1.0, 2.0, 3.0)
+
+        np.testing.assert_allclose(point_cloud_to_arrays(msg).xyz, [[1.0, 2.0, 3.0]])
+
+    def test_rejects_missing_or_truncated_fields(self):
         msg = PointCloud2()
         msg.height = 1
         msg.width = 1
@@ -46,9 +82,14 @@ class PointCloudTests(unittest.TestCase):
             PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1)
         ]
         msg.data = struct.pack("<f", 1.0)
-
         with self.assertRaises(ValueError):
-            list(read_xyz_points(msg))
+            point_cloud_to_arrays(msg)
+
+        msg.fields = self._xyz_fields()
+        msg.point_step = 12
+        msg.row_step = 12
+        with self.assertRaises(ValueError):
+            point_cloud_to_arrays(msg)
 
     def test_transforms_points_with_rotation_and_translation(self):
         transform = TransformStamped()
@@ -68,6 +109,14 @@ class PointCloudTests(unittest.TestCase):
             quaternion_to_matrix(0.0, 0.0, 0.0, 0.0),
             np.eye(3, dtype=np.float32),
         )
+
+    @staticmethod
+    def _xyz_fields():
+        return [
+            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+        ]
 
 
 if __name__ == "__main__":

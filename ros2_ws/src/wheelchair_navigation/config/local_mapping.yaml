@@ -1,0 +1,23 @@
+local_costmap:
+  ros__parameters:
+    lidar_topic: /rslidar_points
+    target_frame: base_link
+    raw_obstacles_topic: /local_obstacles
+    costmap_topic: /local_costmap
+    diagnostics_topic: /diagnostics
+    size_m: 8.0
+    resolution_m: 0.1
+    min_height_m: 0.05
+    max_height_m: 1.5
+    min_range_m: 0.30
+    max_range_m: 4.00
+    # Clearance inflation is deliberately off during geometry validation.
+    inflation_radius_m: 0.0
+    # Flat groups: [min_x, max_x, min_y, max_y, min_z, max_z].
+    # Populate only after measuring the chair and footrests in base_link.
+    self_filter_boxes: []
+    self_filter_padding_m: 0.02
+    max_cloud_age_s: 1.0
+    max_future_offset_s: 0.1
+    processing_warn_ms: 100.0
+    cloud_age_warn_ms: 150.0

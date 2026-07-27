@@ -4,7 +4,7 @@
 LAUNCH_DEFAULTS = {
     "use_lidar": "true",
     "use_camera": "true",
-    "use_navigation": "false",
+    "use_mapping": "false",
     "use_rviz": "false",
     "publish_camera_tf": "true",
     "publish_base_lidar_tf": "true",

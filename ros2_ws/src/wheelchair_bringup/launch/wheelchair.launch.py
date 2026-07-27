@@ -23,10 +23,10 @@ def generate_launch_description():
     realsense_launch = os.path.join(
         get_package_share_directory("realsense2_camera"), "launch", "rs_launch.py"
     )
-    navigation_launch = os.path.join(
+    mapping_launch = os.path.join(
         get_package_share_directory("wheelchair_navigation"),
         "launch",
-        "local_navigation.launch.py",
+        "local_mapping.launch.py",
     )
     rviz_config = os.path.join(
         get_package_share_directory("wheelchair_bringup"),
@@ -42,7 +42,7 @@ def generate_launch_description():
     declarations = [
         _argument("use_lidar", "Start the RoboSense AIRY driver."),
         _argument("use_camera", "Start the RealSense L515 driver."),
-        _argument("use_navigation", "Start non-actuating local navigation."),
+        _argument("use_mapping", "Start non-actuating LiDAR local mapping."),
         _argument("use_rviz", "Start RViz with the wheelchair view."),
         _argument("publish_camera_tf", "Publish base_link -> camera_link."),
         _argument(
@@ -116,9 +116,9 @@ def generate_launch_description():
         ],
         condition=IfCondition(LaunchConfiguration("publish_base_lidar_tf")),
     )
-    navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(navigation_launch),
-        condition=IfCondition(LaunchConfiguration("use_navigation")),
+    mapping = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(mapping_launch),
+        condition=IfCondition(LaunchConfiguration("use_mapping")),
     )
     rviz = Node(
         package="rviz2",
@@ -131,5 +131,5 @@ def generate_launch_description():
 
     return LaunchDescription(
         declarations
-        + [lidar, camera, camera_tf, base_lidar_tf, navigation, rviz]
+        + [lidar, camera, camera_tf, base_lidar_tf, mapping, rviz]
     )

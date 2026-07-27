@@ -1,10 +1,11 @@
-"""Local costmap and conservative command-proposal algorithms."""
+"""Vectorized local obstacle-grid construction for the wheelchair."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.ndimage import binary_dilation
 
 
 @dataclass(frozen=True)
@@ -15,232 +16,204 @@ class LocalCostmapConfig:
     max_height_m: float = 1.5
     min_range_m: float = 0.30
     max_range_m: float = 4.0
-    inflation_radius_m: float = 0.45
+    inflation_radius_m: float = 0.0
     occupied_cost: int = 100
     unknown_cost: int = -1
 
 
 @dataclass(frozen=True)
-class TrajectoryConfig:
-    horizon_s: float = 2.0
-    dt_s: float = 0.2
-    linear_speed_mps: float = 0.25
-    angular_samples_radps: tuple[float, ...] = (-0.7, -0.35, 0.0, 0.35, 0.7)
-    footprint_radius_m: float = 0.45
-    goal_heading_rad: float = 0.0
-    heading_weight: float = 1.0
-    clearance_weight: float = 0.25
+class SelfFilterBox:
+    """Axis-aligned exclusion box expressed in ``base_link``."""
+
+    min_x_m: float
+    max_x_m: float
+    min_y_m: float
+    max_y_m: float
+    min_z_m: float
+    max_z_m: float
 
 
 @dataclass(frozen=True)
-class CommandProposal:
-    linear_x_mps: float
-    angular_z_radps: float
-    safe: bool
-    reason: str
+class CostmapStats:
+    input_points: int
+    finite_points: int
+    height_range_points: int
+    self_filtered_points: int
+    accepted_points: int
+    occupied_cells: int
 
 
-@dataclass(frozen=True)
-class TrajectoryCandidate:
-    angular_z_radps: float
-    points_xy: np.ndarray
-    safe: bool
-    score: float
-    min_clearance_m: float
-
-
-@dataclass(frozen=True)
-class SocialZone:
-    x_m: float
-    y_m: float
-    radius_m: float
-    cost: int = 80
-
-
-def make_local_costmap(
+def make_local_costmaps(
     points_base: np.ndarray,
     config: LocalCostmapConfig = LocalCostmapConfig(),
-    social_zones: tuple[SocialZone, ...] = (),
-) -> np.ndarray:
-    """Build a local occupancy costmap centered on the robot base frame."""
+    self_filter_boxes: tuple[SelfFilterBox, ...] = (),
+) -> tuple[np.ndarray, np.ndarray, CostmapStats]:
+    """Return raw obstacles, an optionally inflated layer, and filter stats."""
 
+    _validate_config(config)
     cell_count = int(np.ceil(config.size_m / config.resolution_m))
-    if cell_count % 2 == 0:
-        cell_count += 1
-    grid = np.zeros((cell_count, cell_count), dtype=np.int8)
+    raw = np.zeros((cell_count, cell_count), dtype=np.int8)
 
-    if points_base.size:
-        points = np.asarray(points_base, dtype=np.float32)
-        ranges = np.linalg.norm(points[:, :2], axis=1)
-        mask = (
-            np.isfinite(points).all(axis=1)
+    points = np.asarray(points_base, dtype=np.float32)
+    if points.size == 0:
+        points = np.empty((0, 3), dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("points_base must have shape (N, 3)")
+
+    input_points = int(points.shape[0])
+    finite_mask = np.isfinite(points).all(axis=1)
+    finite_points = int(np.count_nonzero(finite_mask))
+
+    ranges = np.linalg.norm(points[:, :2], axis=1)
+    with np.errstate(invalid="ignore"):
+        filtered_mask = (
+            finite_mask
             & (points[:, 2] >= config.min_height_m)
             & (points[:, 2] <= config.max_height_m)
             & (ranges >= config.min_range_m)
             & (ranges <= config.max_range_m)
         )
-        for x_m, y_m, _ in points[mask]:
-            cell = world_to_cell(float(x_m), float(y_m), config, cell_count)
-            if cell is not None:
-                grid[cell[1], cell[0]] = config.occupied_cost
+    height_range_points = int(np.count_nonzero(filtered_mask))
 
-    inflate_grid(grid, config.inflation_radius_m, config.resolution_m, config.occupied_cost)
-    apply_social_zones(grid, social_zones, config, cell_count)
-    return grid
+    self_mask = np.zeros(input_points, dtype=bool)
+    for box in self_filter_boxes:
+        self_mask |= points_in_box(points, box)
+    self_filtered_points = int(np.count_nonzero(filtered_mask & self_mask))
+    accepted = points[filtered_mask & ~self_mask]
+
+    if accepted.size:
+        origin_m = grid_origin_m(config)
+        cols = np.floor((accepted[:, 0] - origin_m) / config.resolution_m).astype(
+            np.int32
+        )
+        rows = np.floor((accepted[:, 1] - origin_m) / config.resolution_m).astype(
+            np.int32
+        )
+        in_grid = (
+            (cols >= 0)
+            & (cols < cell_count)
+            & (rows >= 0)
+            & (rows < cell_count)
+        )
+        raw[rows[in_grid], cols[in_grid]] = config.occupied_cost
+
+    inflated = inflate_obstacles(raw, config)
+    stats = CostmapStats(
+        input_points=input_points,
+        finite_points=finite_points,
+        height_range_points=height_range_points,
+        self_filtered_points=self_filtered_points,
+        accepted_points=int(accepted.shape[0]),
+        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
+    )
+    return raw, inflated, stats
 
 
-def choose_command(
-    costmap: np.ndarray,
-    map_config: LocalCostmapConfig = LocalCostmapConfig(),
-    trajectory_config: TrajectoryConfig = TrajectoryConfig(),
-) -> tuple[CommandProposal, list[TrajectoryCandidate]]:
-    candidates = sample_trajectories(costmap, map_config, trajectory_config)
-    safe_candidates = [candidate for candidate in candidates if candidate.safe]
-    if not safe_candidates:
-        return CommandProposal(0.0, 0.0, False, "no_collision_free_trajectory"), candidates
+def points_in_box(points: np.ndarray, box: SelfFilterBox) -> np.ndarray:
+    """Return a vectorized mask for points inside a closed 3D box."""
 
-    best = max(safe_candidates, key=lambda candidate: candidate.score)
     return (
-        CommandProposal(
-            trajectory_config.linear_speed_mps,
-            best.angular_z_radps,
-            True,
-            "collision_free_trajectory",
-        ),
-        candidates,
+        (points[:, 0] >= box.min_x_m)
+        & (points[:, 0] <= box.max_x_m)
+        & (points[:, 1] >= box.min_y_m)
+        & (points[:, 1] <= box.max_y_m)
+        & (points[:, 2] >= box.min_z_m)
+        & (points[:, 2] <= box.max_z_m)
     )
 
 
-def sample_trajectories(
-    costmap: np.ndarray,
-    map_config: LocalCostmapConfig,
-    trajectory_config: TrajectoryConfig,
-) -> list[TrajectoryCandidate]:
-    candidates: list[TrajectoryCandidate] = []
-    for angular_z in trajectory_config.angular_samples_radps:
-        points_xy = rollout_arc(
-            trajectory_config.linear_speed_mps,
-            angular_z,
-            trajectory_config.horizon_s,
-            trajectory_config.dt_s,
+def parse_self_filter_boxes(
+    values: list[float] | tuple[float, ...] | None, padding_m: float = 0.0
+) -> tuple[SelfFilterBox, ...]:
+    """Parse flat groups of six base-frame box bounds."""
+
+    if padding_m < 0.0:
+        raise ValueError("self-filter padding must be non-negative")
+    if values is None:
+        return ()
+    if len(values) % 6:
+        raise ValueError("self_filter_boxes must contain groups of six values")
+
+    boxes = []
+    for start in range(0, len(values), 6):
+        min_x, max_x, min_y, max_y, min_z, max_z = (
+            float(value) for value in values[start : start + 6]
         )
-        safe, min_clearance = trajectory_is_safe(
-            points_xy,
-            costmap,
-            map_config,
-            trajectory_config.footprint_radius_m,
+        if min_x > max_x or min_y > max_y or min_z > max_z:
+            raise ValueError("self-filter box minimum exceeds maximum")
+        boxes.append(
+            SelfFilterBox(
+                min_x - padding_m,
+                max_x + padding_m,
+                min_y - padding_m,
+                max_y + padding_m,
+                min_z - padding_m,
+                max_z + padding_m,
+            )
         )
-        heading_error = abs(angular_z - trajectory_config.goal_heading_rad)
-        score = (
-            -trajectory_config.heading_weight * heading_error
-            + trajectory_config.clearance_weight * min_clearance
-        )
-        candidates.append(TrajectoryCandidate(angular_z, points_xy, safe, score, min_clearance))
-    return candidates
+    return tuple(boxes)
 
 
-def rollout_arc(
-    linear_x_mps: float,
-    angular_z_radps: float,
-    horizon_s: float,
-    dt_s: float,
-) -> np.ndarray:
-    steps = max(1, int(np.ceil(horizon_s / dt_s)))
-    x_m = 0.0
-    y_m = 0.0
-    yaw_rad = 0.0
-    points = []
-    for _ in range(steps):
-        x_m += linear_x_mps * np.cos(yaw_rad) * dt_s
-        y_m += linear_x_mps * np.sin(yaw_rad) * dt_s
-        yaw_rad += angular_z_radps * dt_s
-        points.append((x_m, y_m))
-    return np.asarray(points, dtype=np.float32)
+def inflate_obstacles(grid: np.ndarray, config: LocalCostmapConfig) -> np.ndarray:
+    """Inflate occupied cells once, leaving the raw grid unchanged."""
+
+    inflated = np.array(grid, copy=True)
+    if config.inflation_radius_m <= 0.0:
+        return inflated
+
+    radius_cells = int(np.ceil(config.inflation_radius_m / config.resolution_m))
+    offsets = np.arange(-radius_cells, radius_cells + 1, dtype=np.float32)
+    yy, xx = np.meshgrid(offsets, offsets, indexing="ij")
+    footprint = (
+        np.hypot(xx, yy) * config.resolution_m
+        <= config.inflation_radius_m + 1e-6
+    )
+    occupied = grid >= config.occupied_cost
+    inflated[binary_dilation(occupied, structure=footprint)] = config.occupied_cost
+    return inflated
 
 
-def trajectory_is_safe(
-    points_xy: np.ndarray,
-    costmap: np.ndarray,
-    config: LocalCostmapConfig,
-    footprint_radius_m: float,
-) -> tuple[bool, float]:
-    inflated = np.array(costmap, copy=True)
-    inflate_grid(inflated, footprint_radius_m, config.resolution_m, config.occupied_cost)
-    cell_count = costmap.shape[0]
-    min_clearance = config.size_m
-    occupied_cells = np.argwhere(costmap >= config.occupied_cost)
-
-    for x_m, y_m in points_xy:
-        cell = world_to_cell(float(x_m), float(y_m), config, cell_count)
-        if cell is None:
-            return False, 0.0
-        if inflated[cell[1], cell[0]] >= config.occupied_cost:
-            return False, 0.0
-        if occupied_cells.size:
-            cell_xy = np.array([cell[1], cell[0]], dtype=np.float32)
-            distances = np.linalg.norm((occupied_cells - cell_xy) * config.resolution_m, axis=1)
-            min_clearance = min(min_clearance, float(np.min(distances)))
-
-    return True, min_clearance
+def grid_origin_m(config: LocalCostmapConfig) -> float:
+    cell_count = int(np.ceil(config.size_m / config.resolution_m))
+    return -(cell_count * config.resolution_m) / 2.0
 
 
 def world_to_cell(
     x_m: float,
     y_m: float,
     config: LocalCostmapConfig,
-    cell_count: int,
+    cell_count: int | None = None,
 ) -> tuple[int, int] | None:
-    origin_m = -config.size_m / 2.0
+    """Convert a base-frame point to a local-grid column and row."""
+
+    count = cell_count or int(np.ceil(config.size_m / config.resolution_m))
+    origin_m = -(count * config.resolution_m) / 2.0
     col = int(np.floor((x_m - origin_m) / config.resolution_m))
     row = int(np.floor((y_m - origin_m) / config.resolution_m))
-    if 0 <= col < cell_count and 0 <= row < cell_count:
+    if 0 <= col < count and 0 <= row < count:
         return col, row
     return None
 
 
-def inflate_grid(grid: np.ndarray, radius_m: float, resolution_m: float, cost: int) -> None:
-    radius_cells = int(np.ceil(radius_m / resolution_m))
-    if radius_cells <= 0:
-        return
-
-    occupied = np.argwhere(grid >= cost)
-    height, width = grid.shape
-    for row, col in occupied:
-        row_min = max(0, row - radius_cells)
-        row_max = min(height, row + radius_cells + 1)
-        col_min = max(0, col - radius_cells)
-        col_max = min(width, col + radius_cells + 1)
-        for out_row in range(row_min, row_max):
-            for out_col in range(col_min, col_max):
-                if (out_row - row) ** 2 + (out_col - col) ** 2 <= radius_cells**2:
-                    grid[out_row, out_col] = max(grid[out_row, out_col], cost)
-
-
-def apply_social_zones(
-    grid: np.ndarray,
-    zones: tuple[SocialZone, ...],
-    config: LocalCostmapConfig,
-    cell_count: int,
-) -> None:
-    for zone in zones:
-        center = world_to_cell(zone.x_m, zone.y_m, config, cell_count)
-        if center is None:
-            continue
-        radius_cells = int(np.ceil(zone.radius_m / config.resolution_m))
-        for row in range(max(0, center[1] - radius_cells), min(cell_count, center[1] + radius_cells + 1)):
-            for col in range(max(0, center[0] - radius_cells), min(cell_count, center[0] + radius_cells + 1)):
-                if (row - center[1]) ** 2 + (col - center[0]) ** 2 <= radius_cells**2:
-                    grid[row, col] = max(grid[row, col], int(zone.cost))
+def _validate_config(config: LocalCostmapConfig) -> None:
+    if config.size_m <= 0.0 or config.resolution_m <= 0.0:
+        raise ValueError("map size and resolution must be positive")
+    if config.min_height_m > config.max_height_m:
+        raise ValueError("minimum height exceeds maximum height")
+    if config.min_range_m < 0.0 or config.min_range_m > config.max_range_m:
+        raise ValueError("invalid range limits")
+    if config.inflation_radius_m < 0.0:
+        raise ValueError("inflation radius must be non-negative")
 
 
 __all__ = [
-    "CommandProposal",
+    "CostmapStats",
     "LocalCostmapConfig",
-    "SocialZone",
-    "TrajectoryCandidate",
-    "TrajectoryConfig",
-    "choose_command",
-    "make_local_costmap",
-    "rollout_arc",
-    "sample_trajectories",
+    "SelfFilterBox",
+    "grid_origin_m",
+    "inflate_obstacles",
+    "make_local_costmaps",
+    "parse_self_filter_boxes",
+    "points_in_box",
+    "world_to_cell",
 ]

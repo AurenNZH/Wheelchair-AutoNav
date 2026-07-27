@@ -20,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer="AurenNZH",
     maintainer_email="auren.ng@gmail.com",
-    description="Top-level sensor and navigation launch files for the wheelchair.",
+    description="Top-level sensor and non-actuating mapping launch files.",
     license="MIT",
     tests_require=["pytest"],
 )

@@ -23,7 +23,7 @@ docs/
   setup/                Setup guides and quick-start material
   history/              Historical delivery notes
 
-ros2_ws/src/            ROS2 packages, including wheelchair navigation
+ros2_ws/src/            ROS2 packages, including wheelchair local mapping
 launch/                 System launch scripts for Pi and host PC
 scripts/                Setup, deployment, and developer utility scripts
 tests/                  Cross-component integration and hardware-in-loop tests

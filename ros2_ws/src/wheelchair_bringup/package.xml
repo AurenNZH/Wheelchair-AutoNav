@@ -2,7 +2,7 @@
 <package format="3">
   <name>wheelchair_bringup</name>
   <version>0.1.0</version>
-  <description>Top-level sensor and navigation launch files for the wheelchair.</description>
+  <description>Top-level sensor and non-actuating mapping launch files for the wheelchair.</description>
   <maintainer email="auren.ng@gmail.com">AurenNZH</maintainer>
   <license>MIT</license>
 

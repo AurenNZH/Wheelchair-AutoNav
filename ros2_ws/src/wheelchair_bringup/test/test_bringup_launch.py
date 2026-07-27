@@ -9,7 +9,7 @@ from wheelchair_bringup.defaults import LAUNCH_DEFAULTS, SENSOR_TRANSFORMS
 def test_defaults_are_safe_and_start_both_sensors():
     assert LAUNCH_DEFAULTS["use_lidar"] == "true"
     assert LAUNCH_DEFAULTS["use_camera"] == "true"
-    assert LAUNCH_DEFAULTS["use_navigation"] == "false"
+    assert LAUNCH_DEFAULTS["use_mapping"] == "false"
     assert LAUNCH_DEFAULTS["use_rviz"] == "false"
     assert LAUNCH_DEFAULTS["publish_base_lidar_tf"] == "true"
 

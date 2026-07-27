@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="wheelchair">
+  <link name="base_link">
+    <inertial><mass value="80"/><origin xyz="0 0 0.35"/><inertia ixx="8" ixy="0" ixz="0" iyy="8" iyz="0" izz="8"/></inertial>
+    <visual><geometry><box size="0.75 0.65 0.7"/></geometry><origin xyz="0 0 0.35"/></visual>
+    <collision><geometry><box size="0.75 0.65 0.7"/></geometry><origin xyz="0 0 0.35"/></collision>
+  </link>
+  <link name="rslidar"/>
+  <joint name="rslidar_mount" type="fixed">
+    <parent link="base_link"/><child link="rslidar"/>
+    <origin xyz="-0.265 -0.330 0.320" rpy="0 0 -0.7854"/>
+  </joint>
+  <gazebo reference="rslidar">
+    <sensor name="airy_sim" type="ray">
+      <always_on>true</always_on><visualize>false</visualize><update_rate>10</update_rate>
+      <ray><scan><horizontal><samples>360</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal><vertical><samples>32</samples><resolution>1</resolution><min_angle>-0.7854</min_angle><max_angle>0.7854</max_angle></vertical></scan><range><min>0.2</min><max>30.0</max><resolution>0.01</resolution></range></ray>
+      <plugin name="airy_pointcloud" filename="libgazebo_ros_ray_sensor.so"><ros><namespace>/sim</namespace><remapping>~/out:=/rslidar_points</remapping></ros><output_type>sensor_msgs/PointCloud2</output_type><frame_name>rslidar</frame_name></plugin>
+    </sensor>
+  </gazebo>
+</robot>

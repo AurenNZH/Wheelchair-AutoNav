@@ -1,48 +1,102 @@
-"""PointCloud2 parsing and rigid-transform utilities for navigation."""
+"""Vectorized PointCloud2 decoding and rigid-transform utilities."""
 
 from __future__ import annotations
 
-import math
-import struct
-from typing import Iterable
+from dataclasses import dataclass
 
 import numpy as np
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 
 
-def read_xyz_points(msg: PointCloud2) -> Iterable[tuple[float, float, float]]:
-    """Yield finite XYZ points while respecting organized-cloud row padding."""
+@dataclass(frozen=True)
+class PointCloudArrays:
+    xyz: np.ndarray
+    intensity: np.ndarray | None = None
+    ring: np.ndarray | None = None
+    timestamp: np.ndarray | None = None
 
-    offsets = {field.name: field.offset for field in msg.fields}
-    missing = {"x", "y", "z"} - set(offsets)
+
+_FIELD_DTYPES = {
+    PointField.INT8: "i1",
+    PointField.UINT8: "u1",
+    PointField.INT16: "i2",
+    PointField.UINT16: "u2",
+    PointField.INT32: "i4",
+    PointField.UINT32: "u4",
+    PointField.FLOAT32: "f4",
+    PointField.FLOAT64: "f8",
+}
+
+
+def point_cloud_to_arrays(msg: PointCloud2) -> PointCloudArrays:
+    """Decode supported fields without a Python loop over individual points."""
+
+    fields = {field.name: field for field in msg.fields}
+    missing = {"x", "y", "z"} - set(fields)
     if missing:
         raise ValueError("PointCloud2 missing XYZ fields: %s" % sorted(missing))
     if msg.point_step <= 0:
         raise ValueError("PointCloud2 point_step must be positive.")
 
-    for name in ("x", "y", "z"):
-        if offsets[name] < 0 or offsets[name] + 4 > msg.point_step:
+    byte_order = ">" if msg.is_bigendian else "<"
+    names = []
+    formats = []
+    offsets = []
+    for name in ("x", "y", "z", "intensity", "ring", "timestamp"):
+        field = fields.get(name)
+        if field is None:
+            continue
+        if field.count != 1 or field.datatype not in _FIELD_DTYPES:
+            raise ValueError("Unsupported PointCloud2 field: %s" % name)
+        item_dtype = np.dtype(byte_order + _FIELD_DTYPES[field.datatype])
+        if field.offset < 0 or field.offset + item_dtype.itemsize > msg.point_step:
             raise ValueError("PointCloud2 %s field lies outside point_step." % name)
+        names.append(name)
+        formats.append(item_dtype)
+        offsets.append(field.offset)
 
-    endian = ">" if msg.is_bigendian else "<"
-    unpack_float = struct.Struct("%sf" % endian).unpack_from
-    data = memoryview(msg.data)
+    for name in ("x", "y", "z"):
+        if fields[name].datatype != PointField.FLOAT32 or fields[name].count != 1:
+            raise ValueError("PointCloud2 XYZ fields must be scalar FLOAT32 values.")
+
+    dtype = np.dtype(
+        {"names": names, "formats": formats, "offsets": offsets, "itemsize": msg.point_step}
+    )
     height = max(1, int(msg.height))
     width = int(msg.width)
     row_step = int(msg.row_step) or width * int(msg.point_step)
+    if row_step < width * int(msg.point_step):
+        raise ValueError("PointCloud2 row_step is shorter than one row.")
     required_bytes = (height - 1) * row_step + width * int(msg.point_step)
-    if len(data) < required_bytes:
+    if len(msg.data) < required_bytes:
         raise ValueError("PointCloud2 data is shorter than its declared dimensions.")
 
-    for row in range(height):
-        row_offset = row * row_step
-        for column in range(width):
-            point_offset = row_offset + column * msg.point_step
-            x = unpack_float(data, point_offset + offsets["x"])[0]
-            y = unpack_float(data, point_offset + offsets["y"])[0]
-            z = unpack_float(data, point_offset + offsets["z"])[0]
-            if math.isfinite(x) and math.isfinite(y) and math.isfinite(z):
-                yield x, y, z
+    structured = np.ndarray(
+        shape=(height, width),
+        dtype=dtype,
+        buffer=msg.data,
+        strides=(row_step, int(msg.point_step)),
+    )
+    xyz = np.column_stack(
+        (
+            structured["x"].reshape(-1),
+            structured["y"].reshape(-1),
+            structured["z"].reshape(-1),
+        )
+    ).astype(np.float32, copy=False)
+
+    return PointCloudArrays(
+        xyz=xyz,
+        intensity=_optional_flat(structured, "intensity"),
+        ring=_optional_flat(structured, "ring"),
+        timestamp=_optional_flat(structured, "timestamp"),
+    )
+
+
+def _optional_flat(structured: np.ndarray, name: str) -> np.ndarray | None:
+    if name not in structured.dtype.names:
+        return None
+    return np.asarray(structured[name]).reshape(-1)
 
 
 def transform_points(points: np.ndarray, transform) -> np.ndarray:
@@ -63,16 +117,9 @@ def quaternion_to_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
         return np.eye(3, dtype=np.float32)
 
     scale = 2.0 / norm
-    xx = x * x * scale
-    yy = y * y * scale
-    zz = z * z * scale
-    xy = x * y * scale
-    xz = x * z * scale
-    yz = y * z * scale
-    wx = w * x * scale
-    wy = w * y * scale
-    wz = w * z * scale
-
+    xx, yy, zz = x * x * scale, y * y * scale, z * z * scale
+    xy, xz, yz = x * y * scale, x * z * scale, y * z * scale
+    wx, wy, wz = w * x * scale, w * y * scale, w * z * scale
     return np.array(
         [
             [1.0 - yy - zz, xy - wz, xz + wy],
@@ -83,4 +130,9 @@ def quaternion_to_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
     )
 
 
-__all__ = ["quaternion_to_matrix", "read_xyz_points", "transform_points"]
+__all__ = [
+    "PointCloudArrays",
+    "point_cloud_to_arrays",
+    "quaternion_to_matrix",
+    "transform_points",
+]
