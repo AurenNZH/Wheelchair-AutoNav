@@ -16,5 +16,11 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    entry_points={"console_scripts": []},
+    tests_require=["pytest"],
+    entry_points={
+        "console_scripts": [
+            "moving_dummy = wheelchair_simulation.moving_dummy:main",
+            "safe_cmd_adapter = wheelchair_simulation.safe_cmd_adapter:main",
+        ]
+    },
 )

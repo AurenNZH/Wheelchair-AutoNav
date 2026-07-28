@@ -21,8 +21,14 @@ class JoystickController:
     3. Actual position -> CAN frame transmission
     """
     
-    def __init__(self, can_interface, safety_manager, 
-                 send_interval_ms: float = 10.0):
+    def __init__(
+        self,
+        can_interface,
+        safety_manager,
+        send_interval_ms: float = 10.0,
+        safety_link=None,
+        deadman_timeout_s: float = 0.35,
+    ):
         """
         Initialize joystick controller.
         
@@ -30,9 +36,13 @@ class JoystickController:
             can_interface: CANInterface instance
             safety_manager: SafetyManager instance
             send_interval_ms: Time between CAN frame sends (RNET requires 10ms)
+            safety_link: Optional fail-safe Jetson safety-envelope client
+            deadman_timeout_s: Maximum age of refreshed input in shared-control mode
         """
         self.can_interface = can_interface
         self.safety_manager = safety_manager
+        self.safety_link = safety_link
+        self.deadman_timeout_s = float(deadman_timeout_s)
         self.send_interval_ms = send_interval_ms / 1000.0  # Convert to seconds
         
         self._desired_x = 0
@@ -40,6 +50,7 @@ class JoystickController:
         self._current_x = 0
         self._current_y = 0
         self._current_speed = 50
+        self._last_operator_input_monotonic = 0.0
         
         self._send_thread = None
         self._stop_sending = False
@@ -72,6 +83,8 @@ class JoystickController:
         # Send centering frame
         self.can_interface.set_teleop_active(False)
         self.can_interface.send_joystick_frame(0, 0)
+        if self.safety_link:
+            self.safety_link.close()
         self._is_running = False
         logger.info("Joystick controller stopped")
     
@@ -84,6 +97,7 @@ class JoystickController:
             y: Y-axis position (-100 to +100)
         """
         self._desired_x, self._desired_y = self.safety_manager.validate_joystick_input(x, y)
+        self._last_operator_input_monotonic = time.monotonic()
         self.safety_manager.record_input()
     
     def set_speed(self, speed_percent: int):
@@ -116,6 +130,8 @@ class JoystickController:
         self._desired_y = 0
         self._current_x = 0
         self._current_y = 0
+        if self.safety_link:
+            self.safety_link.emergency_stop()
         
         # Send centering frame immediately
         self.can_interface.set_teleop_active(False)
@@ -138,6 +154,23 @@ class JoystickController:
                         self._desired_x = 0
                         self._desired_y = 0
                     
+                    requested_x = self._desired_x
+                    requested_y = self._desired_y
+                    if self.safety_link and self.safety_link.enabled:
+                        deadman = (
+                            time.monotonic() - self._last_operator_input_monotonic
+                            <= self.deadman_timeout_s
+                        )
+                        try:
+                            requested_x, requested_y = self.safety_link.apply(
+                                requested_x, requested_y, deadman
+                            )
+                        except Exception as exc:
+                            requested_x, requested_y = 0, 0
+                            logger.error(
+                                f"Safety link failed closed: {exc}"
+                            )
+
                     # Update speed with ramping
                     actual_speed = self.safety_manager.set_target_speed(
                         self._current_speed
@@ -150,8 +183,8 @@ class JoystickController:
                     else:
                         speed_factor = 0
                     
-                    scaled_x = int(self._desired_x * speed_factor)
-                    scaled_y = int(self._desired_y * speed_factor)
+                    scaled_x = int(requested_x * speed_factor)
+                    scaled_y = int(requested_y * speed_factor)
 
                     self.can_interface.set_teleop_active(
                         scaled_x != 0 or scaled_y != 0
@@ -175,6 +208,8 @@ class JoystickController:
         except Exception as e:
             logger.error(f"Control loop error: {e}")
         finally:
+            self.can_interface.set_teleop_active(False)
+            self.can_interface.send_joystick_frame(0, 0)
             logger.info("Control loop stopped")
     
     def get_telemetry(self) -> dict:
@@ -184,7 +219,7 @@ class JoystickController:
         Returns:
             Dictionary with current state
         """
-        return {
+        telemetry = {
             "desired_position": {
                 "x": self._desired_x,
                 "y": self._desired_y,
@@ -199,3 +234,9 @@ class JoystickController:
             "gateway_running": self.can_interface.is_gateway_running,
             "gateway_stats": self.can_interface.get_gateway_stats(),
         }
+        telemetry["shared_control"] = (
+            self.safety_link.get_status()
+            if self.safety_link
+            else {"enabled": False, "reason": "not_configured"}
+        )
+        return telemetry

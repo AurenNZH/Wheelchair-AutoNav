@@ -32,6 +32,7 @@ Interfaces:
 - Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, best effort, depth 1)
 - Raw obstacle cells: `/local_obstacles`
 - Derived clearance grid: `/local_costmap`
+- Front 180-degree clearance grid: `/front_costmap`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -39,11 +40,20 @@ Interfaces:
 measured self-body filtering. `/local_costmap` is a separate copy on which
 optional clearance inflation is applied once. `inflation_radius_m` defaults to
 zero so clearance padding cannot be mistaken for obstacle size during sensor
-validation.
+validation. `/front_costmap` covers X = 0 to 4 m and Y = -4 to 4 m by default.
+It is derived from the same filtered cloud in the same callback; it does not
+replace the 360-degree map, which remains available for close-range side and
+rear vetoes.
 
 The mapper rejects invalid, stale, future-dated, empty, or untransformable
 clouds and reports the reason through diagnostics. It does not publish a stop
 command because this milestone has no motion-command interface.
+
+The diagnostics separate point-cloud decoding, TF transformation, map
+generation, and publication time. They also report source/arrival period,
+cloud age, accepted/self-filtered point counts, and full/front occupied-cell
+counts. This makes a driver/network delay distinguishable from costmap
+processing time.
 
 ## Chair and footrest measurement
 

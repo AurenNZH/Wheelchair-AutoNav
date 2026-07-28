@@ -1,0 +1,163 @@
+# Shared-Control Validation Gates
+
+This checklist validates supervised, low-speed forward motion with gentle
+operator-requested steering. It does not validate autonomous navigation,
+reverse assistance, stairs/drop-offs, curbs, outdoor/public operation, or
+operation without an attendant and tested physical power cutoff.
+
+Keep all three live gates off until their preceding stages pass:
+
+- Jetson `enable_motion: false`
+- Jetson `enable_udp: false`
+- Pi `shared_control.enabled: false`
+
+Record the software revision, configuration files, chair/load, AIRY mounting
+measurements, test layout, timestamps, and pass/fail evidence for every run.
+
+## 1. Software and fail-closed checks
+
+From the repository root:
+
+```bash
+source /opt/ros/foxy/setup.bash
+cd ros2_ws
+colcon build --symlink-install --packages-select \
+  wheelchair_msgs wheelchair_navigation wheelchair_shared_control \
+  wheelchair_simulation wheelchair_bringup
+colcon test --packages-select wheelchair_msgs wheelchair_navigation \
+  wheelchair_shared_control wheelchair_simulation wheelchair_bringup
+colcon test-result --verbose
+cd ..
+python3 -m pytest components/can_controller/tests
+```
+
+Launch shared control with its defaults. Confirm diagnostics say
+`live_control_disabled` once maps and intent exist, UDP reports disabled, and
+no node publishes a physical `cmd_vel` or accesses CAN.
+
+## 2. AIRY mapping acceptance
+
+With drive power physically isolated, run the AIRY mapper and inspect
+`/local_obstacles`, `/local_costmap`, and `/front_costmap` in RViz.
+
+Pass only if all of the following hold:
+
+- A measured target appears at the correct distance and size throughout the
+  entire forward driving envelope, including beside both footrests.
+- Side/rear obstacles remain in the 360-degree raw map.
+- Empty-scene footrest ghosts meet the reflection protocol in the navigation
+  README; nearby real targets are not removed by the self-filter.
+- Raw obstacle size is credible with inflation set to zero.
+- No unobserved sector is shown or treated as clear.
+- At 10 Hz, 95th-percentile source-stamp-to-map age is below 150 ms, core
+  processing is below 100 ms for representative clouds, and no queue grows.
+
+Save a short ROS bag for each measured target position and an empty-chair
+reflection capture.
+
+## 3. Simulation
+
+Build the workspace, then run:
+
+```bash
+source /opt/ros/foxy/setup.bash
+source ros2_ws/install/setup.bash
+ros2 launch wheelchair_simulation shared_control_sim.launch.py \
+  gui:=false move_dummy:=false enable_sim_motion:=false
+```
+
+Confirm the simulated AIRY produces both maps, the supervisor remains STOP
+without fresh intent, and `/sim/safe_cmd_vel` stays zero. Then test, in
+simulation only, each case: clear corridor, one-metre doorway, obstacle in the
+straight sweep, obstacle in a requested curved sweep, narrow pole, low block,
+side/rear proximity, stale map, stale intent, sequence mismatch, and moving
+dummy up to 0.5 m/s. `enable_sim_motion:=true` must never affect a non-`/sim`
+topic.
+
+## 4. Network and Pi bench test
+
+Do this without a live CAN connection, preferably using `vcan`.
+
+1. Give the Jetson and Pi fixed router addresses and allowlist each exact peer.
+2. Confirm intent UDP 45450 is Pi-to-Jetson and envelope UDP 45451 is
+   Jetson-to-Pi.
+3. Enable only the UDP bridge and Pi safety link.
+4. Verify five distinct clear heartbeats are required before a non-zero
+   command is accepted.
+5. During a held forward request, test Jetson process exit, Pi/Jetson cable
+   removal, router power loss, packet loss/reordering, wrong sender, malformed
+   JSON, old sequence, old session, stale map, and stale intent.
+6. Every case must centre the output within the 200 ms envelope timeout.
+7. Verify STOP remains latched until the operator releases the key.
+
+The UDP protocol is unauthenticated; use only the isolated trusted router LAN.
+
+## 5. Geometry, speed, and stopping calibration
+
+Measure the chair body, wheel/caster sweep, every supported footrest position,
+AIRY six-degree mount transform, and the maximum intended loaded mass. Replace
+all provisional YAML dimensions. Validate each dimension against measured
+targets in RViz.
+
+With wheels raised and an observer at the physical cutoff:
+
+1. Confirm keyboard release, stale input, Jetson loss, and emergency stop all
+   centre the CAN command.
+2. Confirm forward-only behavior and the 20% command cap.
+3. Confirm the physical cutoff works while software is unresponsive.
+
+On a level, dry, controlled floor, measure worst-case stopping distance over
+repeated runs at every allowed test speed and load. Set software STOP distance
+no smaller than:
+
+```text
+worst measured stopping distance
++ distance travelled during worst measured end-to-end latency
++ localization/map resolution allowance
++ an explicit engineering safety margin
+```
+
+Do not infer braking distance from nominal motor speed.
+
+## 6. Controlled obstacle gates
+
+Use a safety observer, physical cutoff, open escape space, and command cap at
+20% or lower.
+
+1. Empty corridor: no false intervention.
+2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
+   boundary.
+3. Requested gentle left/right curves: stop only when the requested swept
+   footprint is blocked.
+4. Doorway: reject openings below the measured chair envelope plus margin;
+   allow a measured safe opening without autonomous steering.
+5. Narrow pole and low block: repeat at multiple lateral offsets.
+6. Side/rear close obstacle: full-surround proximity veto.
+7. Stationary human-sized dummy, then remotely moved dummy up to 0.5 m/s.
+
+Any collision, missed detection, oscillating permit/stop behavior, timeout
+violation, or unexplained map dropout is a failed gate.
+
+## 7. Conditional human crossing
+
+Attempt this only after every previous gate passes with repeatable logs. Use a
+walking volunteer only in a controlled indoor test area, at the lowest speed,
+with an independent observer holding the tested cutoff. Start well outside the
+stopping envelope and cross predictably. Stop immediately after any unexpected
+behavior; do not tune during a live human run.
+
+## AIRY versus Unitree L2 decision
+
+Keep the single AIRY through the August 31 delivery if it passes the mapping,
+coverage, latency, and controlled-obstacle gates. Its working driver,
+calibrated transform, and measured low processing latency are a schedule
+advantage.
+
+Trigger a single-L2 contingency only if the AIRY has a documented,
+safety-relevant blind/reflection sector that cannot be fixed physically or
+filtered without losing real targets. Freeze the delivery sensor choice no
+later than mid-August; a dual-L2 integration adds power, Ethernet, time
+synchronization, calibration, fusion, mounting, and regression work and should
+not be placed on the August 31 critical path. Consider dual L2 only as a
+post-delivery coverage upgrade after one L2 independently passes the same
+gates.

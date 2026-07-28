@@ -16,6 +16,6 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("gui", default_value="false"),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(gazebo), launch_arguments={"world": world, "gui": LaunchConfiguration("gui")}.items()),
-        Node(package="robot_state_publisher", executable="robot_state_publisher", output="screen", parameters=[{"robot_description": Command(["xacro ", robot])}]),
+        Node(package="robot_state_publisher", executable="robot_state_publisher", output="screen", parameters=[{"robot_description": Command(["xacro ", robot]), "use_sim_time": True}]),
         Node(package="gazebo_ros", executable="spawn_entity.py", arguments=["-entity", "wheelchair", "-topic", "robot_description"], output="screen"),
     ])

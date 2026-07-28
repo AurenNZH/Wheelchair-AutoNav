@@ -4,8 +4,10 @@ import unittest
 import numpy as np
 
 from wheelchair_navigation.local_navigation import (
+    FrontCostmapConfig,
     LocalCostmapConfig,
     SelfFilterBox,
+    make_local_and_front_costmaps,
     make_local_costmaps,
     parse_self_filter_boxes,
     world_to_cell,
@@ -58,6 +60,51 @@ class LocalNavigationTests(unittest.TestCase):
 
         self.assertEqual(np.count_nonzero(raw == 100), 1)
         self.assertEqual(np.count_nonzero(costmap == 100), 13)
+
+    def test_front_map_contains_only_forward_sector(self):
+        points = np.array(
+            [
+                [1.0, 0.0, 0.4],
+                [1.0, 1.0, 0.4],
+                [-1.0, 0.0, 0.4],
+            ],
+            dtype=np.float32,
+        )
+
+        raw, costmap, front, stats = make_local_and_front_costmaps(
+            points,
+            LocalCostmapConfig(size_m=4.0, resolution_m=0.1),
+            FrontCostmapConfig(length_m=2.0, width_m=4.0, resolution_m=0.1),
+        )
+
+        np.testing.assert_array_equal(raw, costmap)
+        self.assertEqual(front.shape, (40, 20))
+        self.assertEqual(np.count_nonzero(raw == 100), 3)
+        self.assertEqual(np.count_nonzero(front == 100), 2)
+        self.assertEqual(stats.front_points, 2)
+        self.assertEqual(stats.front_occupied_cells, 2)
+
+    def test_front_fov_can_be_narrowed_without_changing_full_map(self):
+        points = np.array(
+            [[1.0, 0.0, 0.4], [1.0, 1.0, 0.4]], dtype=np.float32
+        )
+
+        raw, _, front, _ = make_local_and_front_costmaps(
+            points,
+            LocalCostmapConfig(size_m=4.0),
+            FrontCostmapConfig(length_m=2.0, width_m=4.0, fov_deg=60.0),
+        )
+
+        self.assertEqual(np.count_nonzero(raw == 100), 2)
+        self.assertEqual(np.count_nonzero(front == 100), 1)
+
+    def test_invalid_front_geometry_is_rejected(self):
+        with self.assertRaises(ValueError):
+            make_local_and_front_costmaps(
+                np.empty((0, 3), dtype=np.float32),
+                LocalCostmapConfig(),
+                FrontCostmapConfig(fov_deg=181.0),
+            )
 
     def test_measured_self_filter_box_removes_only_points_inside_it(self):
         config = LocalCostmapConfig(size_m=4.0)

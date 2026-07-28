@@ -22,6 +22,17 @@ class LocalCostmapConfig:
 
 
 @dataclass(frozen=True)
+class FrontCostmapConfig:
+    length_m: float = 4.0
+    width_m: float = 8.0
+    resolution_m: float = 0.1
+    fov_deg: float = 180.0
+    inflation_radius_m: float = 0.0
+    occupied_cost: int = 100
+    unknown_cost: int = -1
+
+
+@dataclass(frozen=True)
 class SelfFilterBox:
     """Axis-aligned exclusion box expressed in ``base_link``."""
 
@@ -41,6 +52,8 @@ class CostmapStats:
     self_filtered_points: int
     accepted_points: int
     occupied_cells: int
+    front_points: int = 0
+    front_occupied_cells: int = 0
 
 
 def make_local_costmaps(
@@ -51,8 +64,107 @@ def make_local_costmaps(
     """Return raw obstacles, an optionally inflated layer, and filter stats."""
 
     _validate_config(config)
+    accepted, counts = filter_obstacle_points(points_base, config, self_filter_boxes)
     cell_count = int(np.ceil(config.size_m / config.resolution_m))
-    raw = np.zeros((cell_count, cell_count), dtype=np.int8)
+    origin_m = grid_origin_m(config)
+    raw = rasterize_points(
+        accepted,
+        origin_x_m=origin_m,
+        origin_y_m=origin_m,
+        width=cell_count,
+        height=cell_count,
+        resolution_m=config.resolution_m,
+        occupied_cost=config.occupied_cost,
+    )
+    inflated = inflate_grid(
+        raw,
+        config.inflation_radius_m,
+        config.resolution_m,
+        config.occupied_cost,
+    )
+    stats = CostmapStats(
+        input_points=counts["input_points"],
+        finite_points=counts["finite_points"],
+        height_range_points=counts["height_range_points"],
+        self_filtered_points=counts["self_filtered_points"],
+        accepted_points=int(accepted.shape[0]),
+        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
+    )
+    return raw, inflated, stats
+
+
+def make_local_and_front_costmaps(
+    points_base: np.ndarray,
+    config: LocalCostmapConfig = LocalCostmapConfig(),
+    front_config: FrontCostmapConfig = FrontCostmapConfig(),
+    self_filter_boxes: tuple[SelfFilterBox, ...] = (),
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, CostmapStats]:
+    """Build full-surround raw/derived grids and a forward-only grid."""
+
+    _validate_config(config)
+    _validate_front_config(front_config)
+    accepted, counts = filter_obstacle_points(points_base, config, self_filter_boxes)
+
+    full_count = int(np.ceil(config.size_m / config.resolution_m))
+    full_origin = grid_origin_m(config)
+    raw = rasterize_points(
+        accepted,
+        origin_x_m=full_origin,
+        origin_y_m=full_origin,
+        width=full_count,
+        height=full_count,
+        resolution_m=config.resolution_m,
+        occupied_cost=config.occupied_cost,
+    )
+    inflated = inflate_grid(
+        raw,
+        config.inflation_radius_m,
+        config.resolution_m,
+        config.occupied_cost,
+    )
+
+    front_mask = points_in_front_fov(accepted, front_config.fov_deg)
+    front_points = accepted[front_mask]
+    front_width = int(np.ceil(front_config.length_m / front_config.resolution_m))
+    front_height = int(np.ceil(front_config.width_m / front_config.resolution_m))
+    front_origin_y = -(front_height * front_config.resolution_m) / 2.0
+    front = rasterize_points(
+        front_points,
+        origin_x_m=0.0,
+        origin_y_m=front_origin_y,
+        width=front_width,
+        height=front_height,
+        resolution_m=front_config.resolution_m,
+        occupied_cost=front_config.occupied_cost,
+    )
+    front = inflate_grid(
+        front,
+        front_config.inflation_radius_m,
+        front_config.resolution_m,
+        front_config.occupied_cost,
+    )
+
+    stats = CostmapStats(
+        input_points=counts["input_points"],
+        finite_points=counts["finite_points"],
+        height_range_points=counts["height_range_points"],
+        self_filtered_points=counts["self_filtered_points"],
+        accepted_points=int(accepted.shape[0]),
+        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
+        front_points=int(front_points.shape[0]),
+        front_occupied_cells=int(
+            np.count_nonzero(front == front_config.occupied_cost)
+        ),
+    )
+    return raw, inflated, front, stats
+
+
+def filter_obstacle_points(
+    points_base: np.ndarray,
+    config: LocalCostmapConfig,
+    self_filter_boxes: tuple[SelfFilterBox, ...] = (),
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Filter obstacle points once so multiple map layers can reuse them."""
 
     points = np.asarray(points_base, dtype=np.float32)
     if points.size == 0:
@@ -80,33 +192,51 @@ def make_local_costmaps(
         self_mask |= points_in_box(points, box)
     self_filtered_points = int(np.count_nonzero(filtered_mask & self_mask))
     accepted = points[filtered_mask & ~self_mask]
+    return accepted, {
+        "input_points": input_points,
+        "finite_points": finite_points,
+        "height_range_points": height_range_points,
+        "self_filtered_points": self_filtered_points,
+    }
 
-    if accepted.size:
-        origin_m = grid_origin_m(config)
-        cols = np.floor((accepted[:, 0] - origin_m) / config.resolution_m).astype(
-            np.int32
-        )
-        rows = np.floor((accepted[:, 1] - origin_m) / config.resolution_m).astype(
-            np.int32
-        )
-        in_grid = (
-            (cols >= 0)
-            & (cols < cell_count)
-            & (rows >= 0)
-            & (rows < cell_count)
-        )
-        raw[rows[in_grid], cols[in_grid]] = config.occupied_cost
 
-    inflated = inflate_obstacles(raw, config)
-    stats = CostmapStats(
-        input_points=input_points,
-        finite_points=finite_points,
-        height_range_points=height_range_points,
-        self_filtered_points=self_filtered_points,
-        accepted_points=int(accepted.shape[0]),
-        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
+def points_in_front_fov(points: np.ndarray, fov_deg: float) -> np.ndarray:
+    """Return points inside a base-link-centred forward angular sector."""
+
+    points = np.asarray(points)
+    if points.size == 0:
+        return np.zeros(points.shape[0], dtype=bool)
+    half_fov_rad = np.deg2rad(fov_deg / 2.0)
+    angles = np.arctan2(points[:, 1], points[:, 0])
+    return np.abs(angles) <= half_fov_rad + 1e-7
+
+
+def rasterize_points(
+    points: np.ndarray,
+    *,
+    origin_x_m: float,
+    origin_y_m: float,
+    width: int,
+    height: int,
+    resolution_m: float,
+    occupied_cost: int,
+) -> np.ndarray:
+    """Rasterize XY points into an occupancy grid with explicit geometry."""
+
+    grid = np.zeros((height, width), dtype=np.int8)
+    if not points.size:
+        return grid
+
+    cols = np.floor((points[:, 0] - origin_x_m) / resolution_m).astype(np.int32)
+    rows = np.floor((points[:, 1] - origin_y_m) / resolution_m).astype(np.int32)
+    in_grid = (
+        (cols >= 0)
+        & (cols < width)
+        & (rows >= 0)
+        & (rows < height)
     )
-    return raw, inflated, stats
+    grid[rows[in_grid], cols[in_grid]] = occupied_cost
+    return grid
 
 
 def points_in_box(points: np.ndarray, box: SelfFilterBox) -> np.ndarray:
@@ -157,19 +287,35 @@ def parse_self_filter_boxes(
 def inflate_obstacles(grid: np.ndarray, config: LocalCostmapConfig) -> np.ndarray:
     """Inflate occupied cells once, leaving the raw grid unchanged."""
 
+    return inflate_grid(
+        grid,
+        config.inflation_radius_m,
+        config.resolution_m,
+        config.occupied_cost,
+    )
+
+
+def inflate_grid(
+    grid: np.ndarray,
+    inflation_radius_m: float,
+    resolution_m: float,
+    occupied_cost: int,
+) -> np.ndarray:
+    """Inflate an occupancy grid using a circular metric footprint."""
+
     inflated = np.array(grid, copy=True)
-    if config.inflation_radius_m <= 0.0:
+    if inflation_radius_m <= 0.0:
         return inflated
 
-    radius_cells = int(np.ceil(config.inflation_radius_m / config.resolution_m))
+    radius_cells = int(np.ceil(inflation_radius_m / resolution_m))
     offsets = np.arange(-radius_cells, radius_cells + 1, dtype=np.float32)
     yy, xx = np.meshgrid(offsets, offsets, indexing="ij")
     footprint = (
-        np.hypot(xx, yy) * config.resolution_m
-        <= config.inflation_radius_m + 1e-6
+        np.hypot(xx, yy) * resolution_m
+        <= inflation_radius_m + 1e-6
     )
-    occupied = grid >= config.occupied_cost
-    inflated[binary_dilation(occupied, structure=footprint)] = config.occupied_cost
+    occupied = grid >= occupied_cost
+    inflated[binary_dilation(occupied, structure=footprint)] = occupied_cost
     return inflated
 
 
@@ -206,14 +352,31 @@ def _validate_config(config: LocalCostmapConfig) -> None:
         raise ValueError("inflation radius must be non-negative")
 
 
+def _validate_front_config(config: FrontCostmapConfig) -> None:
+    if config.length_m <= 0.0 or config.width_m <= 0.0:
+        raise ValueError("front map dimensions must be positive")
+    if config.resolution_m <= 0.0:
+        raise ValueError("front map resolution must be positive")
+    if config.fov_deg <= 0.0 or config.fov_deg > 180.0:
+        raise ValueError("front FOV must be in (0, 180] degrees")
+    if config.inflation_radius_m < 0.0:
+        raise ValueError("front inflation radius must be non-negative")
+
+
 __all__ = [
     "CostmapStats",
+    "FrontCostmapConfig",
     "LocalCostmapConfig",
     "SelfFilterBox",
+    "filter_obstacle_points",
     "grid_origin_m",
+    "inflate_grid",
     "inflate_obstacles",
+    "make_local_and_front_costmaps",
     "make_local_costmaps",
     "parse_self_filter_boxes",
+    "points_in_front_fov",
     "points_in_box",
+    "rasterize_points",
     "world_to_cell",
 ]

@@ -18,6 +18,7 @@ from wheelchair_teleop import (
     CANInterface,
     KeyboardHandler,
     JoystickController,
+    SafetyLink,
     SafetyManager,
 )
 from wheelchair_teleop.config import Config
@@ -89,6 +90,9 @@ def print_telemetry(controller: JoystickController):
     print(f"│ Current Speed:       {telemetry['speed_percent']:3d}%")
     print(f"│ Moving:              {telemetry['is_moving']}")
     print(f"│ CAN Gateway:         {telemetry['gateway_running']}")
+    shared = telemetry["shared_control"]
+    print(f"│ Shared Control:      {shared['enabled']}")
+    print(f"│ Safety Reason:       {shared['reason'][:31]:31s}")
     if telemetry["gateway_running"]:
         stats = telemetry["gateway_stats"]
         print(f"│ Gateway Fwd Ctl:     {stats['forwarded_to_controller']:8d}")
@@ -137,6 +141,17 @@ def main():
         help="Disable safety features (NOT RECOMMENDED)"
     )
     parser.add_argument(
+        "--enable-shared-control",
+        action="store_true",
+        help="Enable fail-safe Jetson envelope enforcement (disabled by default)"
+    )
+    parser.add_argument(
+        "--jetson-address",
+        type=str,
+        default=None,
+        help="Jetson IP for shared control; required when it is enabled"
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -173,6 +188,16 @@ def main():
             config.data["gateway"]["enabled"] = False
         if args.max_speed is not None:
             config.data["wheelchair"]["max_speed"] = args.max_speed
+        if args.enable_shared_control:
+            config.data["shared_control"]["enabled"] = True
+        if args.jetson_address:
+            config.data["shared_control"]["jetson_address"] = args.jetson_address
+            config.data["shared_control"]["allowed_jetson_address"] = (
+                args.jetson_address
+            )
+        if args.no_safety and config.get("shared_control.enabled", False):
+            logger.error("--no-safety cannot be used with shared control")
+            return 2
         
         # Initialize components
         logger.info("Initializing wheelchair teleoperation system...")
@@ -208,12 +233,31 @@ def main():
             logger.warning("Safety features DISABLED")
             safety_manager.inactivity_timeout = 0
             safety_manager.acceleration_rate = 1000.0
+
+        shared_config = config.data.get("shared_control", {})
+        safety_link = SafetyLink(
+            enabled=shared_config.get("enabled", False),
+            jetson_address=shared_config.get("jetson_address", ""),
+            allowed_jetson_address=shared_config.get(
+                "allowed_jetson_address", ""
+            ),
+            intent_port=shared_config.get("intent_port", 45450),
+            envelope_port=shared_config.get("envelope_port", 45451),
+            heartbeat_hz=shared_config.get("heartbeat_hz", 20.0),
+            envelope_timeout_s=shared_config.get("envelope_timeout_s", 0.20),
+            required_clear_envelopes=shared_config.get(
+                "required_clear_envelopes", 5
+            ),
+            command_cap=shared_config.get("command_cap", 0.20),
+        )
         
         # Joystick Controller
         controller = JoystickController(
             can_interface=can_interface,
             safety_manager=safety_manager,
-            send_interval_ms=config.get("control.send_interval_ms", 10.0)
+            send_interval_ms=config.get("control.send_interval_ms", 10.0),
+            safety_link=safety_link,
+            deadman_timeout_s=shared_config.get("deadman_timeout_s", 0.35),
         )
 
         stop_requested = False

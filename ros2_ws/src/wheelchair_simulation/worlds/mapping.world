@@ -1,6 +1,59 @@
 <?xml version="1.0"?>
-<sdf version="1.6"><world name="mapping">
-  <include><uri>model://ground_plane</uri></include><include><uri>model://sun</uri></include>
-  <model name="wall_front"><static>true</static><pose>3 0 1 0 0 0</pose><link name="link"><collision name="collision"><geometry><box><size>0.1 6 2</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.1 6 2</size></box></geometry></visual></link></model>
-  <model name="box_obstacle"><static>true</static><pose>1.5 1 0.35 0 0 0</pose><link name="link"><collision name="collision"><geometry><box><size>0.6 0.6 0.7</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.6 0.6 0.7</size></box></geometry></visual></link></model>
-</world></sdf>
+<sdf version="1.6">
+  <world name="mapping">
+    <include><uri>model://ground_plane</uri></include>
+    <include><uri>model://sun</uri></include>
+
+    <!-- Two wall segments form a one-metre doorway on the forward route. -->
+    <model name="doorway_left">
+      <static>true</static>
+      <pose>3 1.75 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.1 2.5 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 2.5 2</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="doorway_right">
+      <static>true</static>
+      <pose>3 -1.75 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.1 2.5 2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.1 2.5 2</size></box></geometry></visual>
+      </link>
+    </model>
+
+    <model name="box_obstacle">
+      <static>true</static>
+      <pose>1.5 1 0.35 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.6 0.6 0.7</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.6 0.6 0.7</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="low_block">
+      <static>true</static>
+      <pose>1.8 -0.8 0.05 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.3 0.3 0.1</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.3 0.3 0.1</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="pole_obstacle">
+      <static>true</static>
+      <pose>2.0 0.65 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><cylinder><radius>0.025</radius><length>1.0</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.025</radius><length>1.0</length></cylinder></geometry></visual>
+      </link>
+    </model>
+    <model name="moving_dummy">
+      <static>false</static>
+      <pose>2.2 -1.5 0.75 0 0 0</pose>
+      <link name="link">
+        <inertial><mass>20</mass><inertia><ixx>4</ixx><iyy>4</iyy><izz>1</izz></inertia></inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.25</radius><length>1.5</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.25</radius><length>1.5</length></cylinder></geometry></visual>
+      </link>
+    </model>
+  </world>
+</sdf>

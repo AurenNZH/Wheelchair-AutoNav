@@ -29,6 +29,33 @@ python scripts/teleoperate_keyboard.py --config ../../configs/wheelchair/default
 
 The older notes below still describe the CAN/RNET behavior and safety model, but some command paths have changed to match the monorepo layout.
 
+## Optional Jetson safety envelope
+
+Shared control is disabled by default, so existing manual teleoperation
+behavior is unchanged. When enabled, each forward keyboard request is sent to
+the Jetson and the Pi transmits only the bounded command returned in a fresh,
+matching safety envelope:
+
+```bash
+python scripts/teleoperate_keyboard.py \
+  --config ../../configs/wheelchair/default.yaml \
+  --enable-shared-control \
+  --jetson-address 192.168.1.10
+```
+
+Do not run this against a live chair until the
+[shared-control validation checklist](../../docs/setup/shared_control_validation.md)
+is complete. The link stops on a missing or stale response,
+malformed/wrong-peer packet, sequence mismatch, released input, or Jetson STOP.
+An automatic STOP stays latched until the operator releases the motion key.
+Five distinct clear heartbeats are required to re-arm, and the default RNET
+command ceiling is 20%.
+
+Set the Pi address/allowlist in the Jetson ROS configuration and use fixed IPs
+on the existing router. See the
+[PC-to-Pi protocol](../communication/protocol.md) for the wire format and
+failure behavior.
+
 ## Original Package Notes
 
 Keyboard-based remote control of powered wheelchairs via RNET CAN bus over SSH.

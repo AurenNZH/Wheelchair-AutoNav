@@ -34,6 +34,18 @@ class Config:
         "control": {
             "send_interval_ms": 10.0,
         },
+        "shared_control": {
+            "enabled": False,
+            "jetson_address": "",
+            "allowed_jetson_address": "",
+            "intent_port": 45450,
+            "envelope_port": 45451,
+            "heartbeat_hz": 20.0,
+            "envelope_timeout_s": 0.20,
+            "deadman_timeout_s": 0.35,
+            "required_clear_envelopes": 5,
+            "command_cap": 0.20,
+        },
         "logging": {
             "level": "INFO",
             "file": None,

@@ -1,0 +1,64 @@
+import json
+import unittest
+
+from wheelchair_shared_control.protocol import (
+    EnvelopePacket,
+    IntentPacket,
+    ProtocolError,
+    decode_envelope,
+    decode_intent,
+    encode_envelope,
+    encode_intent,
+)
+
+
+class ProtocolTests(unittest.TestCase):
+    def test_intent_round_trip(self):
+        packet = IntentPacket("session-a", 7, -0.2, 0.4, True)
+        self.assertEqual(decode_intent(encode_intent(packet)), packet)
+
+    def test_envelope_round_trip(self):
+        packet = EnvelopePacket("session-a", 7, 1, 0.25, -0.2, "slow", 142.0)
+        self.assertEqual(decode_envelope(encode_envelope(packet)), packet)
+
+    def test_stop_envelope_cannot_allow_motion(self):
+        with self.assertRaises(ProtocolError):
+            encode_envelope(
+                EnvelopePacket("session-a", 7, 0, 0.1, 0.0, "bad", 10.0)
+            )
+
+    def test_wrong_version_and_out_of_range_intent_are_rejected(self):
+        wrong_version = json.dumps(
+            {
+                "v": 2,
+                "type": "intent",
+                "session": "s",
+                "seq": 1,
+                "steering": 0.0,
+                "forward": 0.0,
+                "deadman": False,
+            }
+        ).encode()
+        with self.assertRaises(ProtocolError):
+            decode_intent(wrong_version)
+        with self.assertRaises(ProtocolError):
+            encode_intent(IntentPacket("s", 1, 0.0, 1.1, True))
+
+    def test_boolean_is_not_accepted_as_numeric_sequence(self):
+        data = json.dumps(
+            {
+                "v": 1,
+                "type": "intent",
+                "session": "s",
+                "seq": True,
+                "steering": 0.0,
+                "forward": 0.0,
+                "deadman": False,
+            }
+        ).encode()
+        with self.assertRaises(ProtocolError):
+            decode_intent(data)
+
+
+if __name__ == "__main__":
+    unittest.main()

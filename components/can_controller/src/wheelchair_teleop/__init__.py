@@ -9,11 +9,13 @@ __author__ = "Wheelchair Accessibility Research"
 from .can_interface import CANInterface
 from .keyboard_handler import KeyboardHandler
 from .joystick_controller import JoystickController
+from .safety_link import SafetyLink
 from .safety import SafetyManager
 
 __all__ = [
     "CANInterface",
     "KeyboardHandler",
     "JoystickController",
+    "SafetyLink",
     "SafetyManager",
 ]

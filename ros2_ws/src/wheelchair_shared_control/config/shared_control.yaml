@@ -1,0 +1,36 @@
+/**:
+  ros__parameters:
+    operator_intent_topic: /operator_intent
+    safety_envelope_topic: /safety_envelope
+    front_costmap_topic: /front_costmap
+    full_obstacles_topic: /local_obstacles
+    diagnostics_topic: /shared_control/diagnostics
+    decision_rate_hz: 20.0
+    max_intent_age_s: 0.20
+
+    # Both gates remain false until physical calibration and elevated-wheel tests pass.
+    enable_motion: false
+    geometry_calibrated: false
+
+    # Provisional dimensions: replace with measurements in base_link.
+    chair_width_m: 0.70
+    front_extent_m: 0.80
+    rear_extent_m: 0.40
+    lateral_margin_m: 0.15
+    proximity_margin_m: 0.15
+    stop_distance_m: 0.70
+    slow_distance_m: 1.20
+    min_turn_radius_m: 1.20
+    max_abs_steering: 0.35
+    slow_forward_limit: 0.35
+    path_sample_step_m: 0.05
+    max_map_age_s: 0.30
+
+    enable_udp: false
+    bind_address: 0.0.0.0
+    intent_port: 45450
+    envelope_port: 45451
+    pi_address: ""
+    allowed_pi_address: ""
+    operator_intent_topic: /operator_intent
+    safety_envelope_topic: /safety_envelope

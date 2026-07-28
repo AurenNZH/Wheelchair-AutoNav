@@ -1,6 +1,11 @@
 # Remote Wheelchair Shared-Control Monorepo
 
-This repository hosts software for a shared-control, obstacle-aware powered wheelchair project. The current working code is the Raspberry Pi CAN teleoperation controller; the repository structure is now prepared for host-PC perception, human avoidance, ROS2 integration, and shared-control development.
+This repository hosts software for a shared-control, obstacle-aware powered
+wheelchair project. It now includes the Raspberry Pi CAN teleoperation
+controller, RoboSense AIRY local mapping, fail-safe operator-intent
+supervision, an opt-in Jetson-to-Pi safety link, and isolated Gazebo fixtures.
+Physical shared-control remains disabled until the documented validation gates
+pass.
 
 ## Repository Layout
 
@@ -47,10 +52,16 @@ python scripts/teleoperate_keyboard.py --config ../../configs/wheelchair/default
 
 See [components/can_controller/README.md](components/can_controller/README.md) for Raspberry Pi, CAN interface, and keyboard-control details.
 
-The migrated architecture notes are in [docs/architecture/system_architecture.md](docs/architecture/system_architecture.md).
+The local mapping instructions are in
+[ros2_ws/src/wheelchair_navigation/README.md](ros2_ws/src/wheelchair_navigation/README.md).
+The staged shared-control acceptance checklist is in
+[docs/setup/shared_control_validation.md](docs/setup/shared_control_validation.md).
 
-## Migration Plan
+## Current safety boundary
 
-The phased migration checklist is tracked in `MONOREPO_MIGRATION_TODO.md`.
-
-The next recommended steps are to add unit tests around the existing CAN controller behavior, then introduce the ROS2 message contracts that perception, human avoidance, shared control, and communication will share.
+The Jetson supervisor publishes limits, not `cmd_vel` or CAN. The Pi safety
+link is disabled unless explicitly configured, and then fails closed on
+missing, stale, malformed, or mismatched responses. Simulation motion is
+isolated under `/sim` and also defaults off. Autonomous path selection,
+reverse assistance, stairs/drop-offs, curbs, and public operation are outside
+the current prototype scope.
