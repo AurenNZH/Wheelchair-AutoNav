@@ -84,8 +84,8 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertLess(slow.permitted_forward, self.intent.forward)
 
     def test_requested_turn_checks_curved_swept_footprint(self):
-        turning_intent = OperatorIntentData("session", 3, 0.35, 0.5, True)
-        obstacle = np.array([[1.3, 0.65]], dtype=np.float32)
+        turning_intent = OperatorIntentData("session", 3, -0.35, 0.5, True)
+        obstacle = np.array([[1.3, -0.65]], dtype=np.float32)
         turn = evaluate_safety(
             turning_intent, obstacle, self.empty, 0.1, self.enabled
         )
@@ -94,6 +94,27 @@ class SafetyPolicyTests(unittest.TestCase):
         )
         self.assertIn(turn.decision, (STOP, SLOW))
         self.assertEqual(straight.decision, CLEAR)
+
+    def test_left_and_excessive_right_turns_are_vetoed(self):
+        left = evaluate_safety(
+            OperatorIntentData("session", 4, 0.1, 0.5, True),
+            self.empty,
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+        excessive_right = evaluate_safety(
+            OperatorIntentData("session", 5, -0.5, 0.5, True),
+            self.empty,
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+
+        self.assertEqual(left.decision, STOP)
+        self.assertEqual(left.reason, "left_turn_unobserved")
+        self.assertEqual(excessive_right.decision, STOP)
+        self.assertEqual(excessive_right.reason, "right_turn_limit_exceeded")
 
     def test_full_surround_proximity_vetoes_motion(self):
         decision = evaluate_safety(

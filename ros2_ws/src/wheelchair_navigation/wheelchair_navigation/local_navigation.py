@@ -65,31 +65,14 @@ def make_local_costmaps(
 
     _validate_config(config)
     accepted, counts = filter_obstacle_points(points_base, config, self_filter_boxes)
-    cell_count = int(np.ceil(config.size_m / config.resolution_m))
-    origin_m = grid_origin_m(config)
-    raw = rasterize_points(
-        accepted,
-        origin_x_m=origin_m,
-        origin_y_m=origin_m,
-        width=cell_count,
-        height=cell_count,
-        resolution_m=config.resolution_m,
-        occupied_cost=config.occupied_cost,
-    )
+    raw = make_full_raw_grid(accepted, config)
     inflated = inflate_grid(
         raw,
         config.inflation_radius_m,
         config.resolution_m,
         config.occupied_cost,
     )
-    stats = CostmapStats(
-        input_points=counts["input_points"],
-        finite_points=counts["finite_points"],
-        height_range_points=counts["height_range_points"],
-        self_filtered_points=counts["self_filtered_points"],
-        accepted_points=int(accepted.shape[0]),
-        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
-    )
+    stats = make_costmap_stats(counts, accepted, raw, config)
     return raw, inflated, stats
 
 
@@ -105,17 +88,7 @@ def make_local_and_front_costmaps(
     _validate_front_config(front_config)
     accepted, counts = filter_obstacle_points(points_base, config, self_filter_boxes)
 
-    full_count = int(np.ceil(config.size_m / config.resolution_m))
-    full_origin = grid_origin_m(config)
-    raw = rasterize_points(
-        accepted,
-        origin_x_m=full_origin,
-        origin_y_m=full_origin,
-        width=full_count,
-        height=full_count,
-        resolution_m=config.resolution_m,
-        occupied_cost=config.occupied_cost,
-    )
+    raw = make_full_raw_grid(accepted, config)
     inflated = inflate_grid(
         raw,
         config.inflation_radius_m,
@@ -123,40 +96,107 @@ def make_local_and_front_costmaps(
         config.occupied_cost,
     )
 
-    front_mask = points_in_front_fov(accepted, front_config.fov_deg)
-    front_points = accepted[front_mask]
-    front_width = int(np.ceil(front_config.length_m / front_config.resolution_m))
-    front_height = int(np.ceil(front_config.width_m / front_config.resolution_m))
-    front_origin_y = -(front_height * front_config.resolution_m) / 2.0
+    front_points = select_front_points(accepted, front_config)
+    front = make_front_grid(front_points, front_config)
+    stats = make_costmap_stats(
+        counts,
+        accepted,
+        raw,
+        config,
+        front_points=front_points,
+        front=front,
+        front_config=front_config,
+    )
+    return raw, inflated, front, stats
+
+
+def make_full_raw_grid(
+    accepted_points: np.ndarray,
+    config: LocalCostmapConfig,
+) -> np.ndarray:
+    """Rasterize filtered points into the base-link-centred raw grid."""
+
+    cell_count = int(np.ceil(config.size_m / config.resolution_m))
+    origin_m = grid_origin_m(config)
+    return rasterize_points(
+        accepted_points,
+        origin_x_m=origin_m,
+        origin_y_m=origin_m,
+        width=cell_count,
+        height=cell_count,
+        resolution_m=config.resolution_m,
+        occupied_cost=config.occupied_cost,
+    )
+
+
+def select_front_points(
+    accepted_points: np.ndarray,
+    config: FrontCostmapConfig,
+) -> np.ndarray:
+    """Select the robot-forward sector after points are in ``base_link``."""
+
+    _validate_front_config(config)
+    return accepted_points[points_in_front_fov(accepted_points, config.fov_deg)]
+
+
+def make_front_grid(
+    front_points: np.ndarray,
+    config: FrontCostmapConfig,
+) -> np.ndarray:
+    """Rasterize selected front points into an X-forward rectangular grid."""
+
+    front_width = int(np.ceil(config.length_m / config.resolution_m))
+    front_height = int(np.ceil(config.width_m / config.resolution_m))
+    front_origin_y = -(front_height * config.resolution_m) / 2.0
     front = rasterize_points(
         front_points,
         origin_x_m=0.0,
         origin_y_m=front_origin_y,
         width=front_width,
         height=front_height,
-        resolution_m=front_config.resolution_m,
-        occupied_cost=front_config.occupied_cost,
+        resolution_m=config.resolution_m,
+        occupied_cost=config.occupied_cost,
     )
-    front = inflate_grid(
+    return inflate_grid(
         front,
-        front_config.inflation_radius_m,
-        front_config.resolution_m,
-        front_config.occupied_cost,
+        config.inflation_radius_m,
+        config.resolution_m,
+        config.occupied_cost,
     )
 
-    stats = CostmapStats(
+
+def make_costmap_stats(
+    counts: dict[str, int],
+    accepted_points: np.ndarray,
+    raw: np.ndarray | None,
+    config: LocalCostmapConfig,
+    *,
+    front_points: np.ndarray | None = None,
+    front: np.ndarray | None = None,
+    front_config: FrontCostmapConfig | None = None,
+) -> CostmapStats:
+    """Build consistent counters for any explicitly selected map outputs."""
+
+    return CostmapStats(
         input_points=counts["input_points"],
         finite_points=counts["finite_points"],
         height_range_points=counts["height_range_points"],
         self_filtered_points=counts["self_filtered_points"],
-        accepted_points=int(accepted.shape[0]),
-        occupied_cells=int(np.count_nonzero(raw == config.occupied_cost)),
-        front_points=int(front_points.shape[0]),
-        front_occupied_cells=int(
-            np.count_nonzero(front == front_config.occupied_cost)
+        accepted_points=int(accepted_points.shape[0]),
+        occupied_cells=(
+            int(np.count_nonzero(raw == config.occupied_cost))
+            if raw is not None
+            else 0
+        ),
+        front_points=(
+            int(front_points.shape[0]) if front_points is not None else 0
+        ),
+        front_occupied_cells=(
+            int(np.count_nonzero(front == front_config.occupied_cost))
+            if front is not None and front_config is not None
+            else 0
         ),
     )
-    return raw, inflated, front, stats
 
 
 def filter_obstacle_points(
@@ -363,6 +403,16 @@ def _validate_front_config(config: FrontCostmapConfig) -> None:
         raise ValueError("front inflation radius must be non-negative")
 
 
+def validate_mapping_configs(
+    config: LocalCostmapConfig,
+    front_config: FrontCostmapConfig,
+) -> None:
+    """Validate both map configurations before a selected-output build."""
+
+    _validate_config(config)
+    _validate_front_config(front_config)
+
+
 __all__ = [
     "CostmapStats",
     "FrontCostmapConfig",
@@ -372,11 +422,16 @@ __all__ = [
     "grid_origin_m",
     "inflate_grid",
     "inflate_obstacles",
+    "make_costmap_stats",
+    "make_front_grid",
+    "make_full_raw_grid",
     "make_local_and_front_costmaps",
     "make_local_costmaps",
     "parse_self_filter_boxes",
     "points_in_front_fov",
     "points_in_box",
     "rasterize_points",
+    "select_front_points",
+    "validate_mapping_configs",
     "world_to_cell",
 ]

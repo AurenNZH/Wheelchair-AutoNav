@@ -17,7 +17,12 @@ sys.path.insert(
 )
 
 from wheelchair_shared_control.protocol import EnvelopePacket, encode_envelope
-from wheelchair_teleop.safety_link import SafetyLink, decode_envelope
+from wheelchair_teleop.safety_link import (
+    SafetyLink,
+    decode_envelope,
+    pi_x_to_ros_steering,
+    ros_steering_to_pi_x,
+)
 
 
 class FakeSocket:
@@ -46,6 +51,12 @@ class SafetyLinkTests(unittest.TestCase):
         link = SafetyLink(enabled=False)
         self.assertEqual(link.apply(10, 20, True), (10, 20))
 
+    def test_pi_right_positive_is_ros_right_negative_and_round_trips(self):
+        self.assertEqual(pi_x_to_ros_steering(25), -0.25)
+        self.assertEqual(pi_x_to_ros_steering(-25), 0.25)
+        self.assertEqual(ros_steering_to_pi_x(-0.25), 25)
+        self.assertEqual(ros_steering_to_pi_x(0.25), -25)
+
     def test_enabled_link_fails_closed_until_matching_envelope(self):
         udp = FakeSocket()
         link = SafetyLink(
@@ -68,7 +79,7 @@ class SafetyLinkTests(unittest.TestCase):
                         intent_sequence=sent["seq"],
                         decision=2,
                         permitted_forward=0.5,
-                        permitted_steering=0.1,
+                        permitted_steering=-0.1,
                         reason="clear",
                         map_age_ms=120.0,
                     )
@@ -77,6 +88,7 @@ class SafetyLinkTests(unittest.TestCase):
             )
         )
 
+        self.assertEqual(sent["steering"], -0.1)
         self.assertEqual(link.apply(10, 50, True), (10, 20))
         self.assertEqual(link.get_status()["reason"], "clear")
 

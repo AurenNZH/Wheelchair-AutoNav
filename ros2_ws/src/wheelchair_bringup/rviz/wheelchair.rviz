@@ -59,7 +59,7 @@ Visualization Manager:
     - Alpha: 0.35
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
-      Enabled: true
+      Enabled: false
       Name: Derived Clearance Costmap
       Topic:
         Depth: 5

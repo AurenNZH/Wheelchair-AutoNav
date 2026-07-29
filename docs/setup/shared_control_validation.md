@@ -1,7 +1,7 @@
 # Shared-Control Validation Gates
 
-This checklist validates supervised, low-speed forward motion with gentle
-operator-requested steering. It does not validate autonomous navigation,
+This checklist validates supervised, low-speed forward motion with straight or
+bounded right steering. It does not validate autonomous navigation, left turns,
 reverse assistance, stairs/drop-offs, curbs, outdoor/public operation, or
 operation without an attendant and tested physical power cutoff.
 
@@ -38,19 +38,22 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 ## 2. AIRY mapping acceptance
 
 With drive power physically isolated, run the AIRY mapper and inspect
-`/local_obstacles`, `/local_costmap`, and `/front_costmap` in RViz.
+`/local_obstacles` and `/front_costmap` in RViz. The duplicate derived map is
+disabled while inflation is zero.
 
 Pass only if all of the following hold:
 
 - A measured target appears at the correct distance and size throughout the
   entire forward driving envelope, including beside both footrests.
-- Side/rear obstacles remain in the 360-degree raw map.
+- Right-side obstacles remain in the observed raw map. Do not infer free space
+  in the left-side sector occluded by the chair.
 - Empty-scene footrest ghosts meet the reflection protocol in the navigation
   README; nearby real targets are not removed by the self-filter.
 - Raw obstacle size is credible with inflation set to zero.
 - No unobserved sector is shown or treated as clear.
-- At 10 Hz, 95th-percentile source-stamp-to-map age is below 150 ms, core
-  processing is below 100 ms for representative clouds, and no queue grows.
+- At 10 Hz over ten minutes, processing p95 is below 100 ms, processing maximum
+  and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
+  grows.
 
 Save a short ROS bag for each measured target position and an empty-chair
 reflection capture.
@@ -94,10 +97,10 @@ The UDP protocol is unauthenticated; use only the isolated trusted router LAN.
 
 ## 5. Geometry, speed, and stopping calibration
 
-Measure the chair body, wheel/caster sweep, every supported footrest position,
-AIRY six-degree mount transform, and the maximum intended loaded mass. Replace
-all provisional YAML dimensions. Validate each dimension against measured
-targets in RViz.
+Record the 1.00 m × 0.53 m centred body, then measure the wheel/caster sweep,
+every supported footrest/mount position, AIRY yaw convention, and maximum
+intended loaded mass. AIRY pitch and roll are confirmed zero. Replace
+provisional collision dimensions only with the complete swept envelope.
 
 With wheels raised and an observer at the physical cutoff:
 
@@ -127,8 +130,8 @@ Use a safety observer, physical cutoff, open escape space, and command cap at
 1. Empty corridor: no false intervention.
 2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
    boundary.
-3. Requested gentle left/right curves: stop only when the requested swept
-   footprint is blocked.
+3. Requested gentle right curves: stop only when the requested swept footprint
+   is blocked; every left request must stop with `left_turn_unobserved`.
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
@@ -148,10 +151,9 @@ behavior; do not tune during a live human run.
 
 ## AIRY versus Unitree L2 decision
 
-Keep the single AIRY through the August 31 delivery if it passes the mapping,
-coverage, latency, and controlled-obstacle gates. Its working driver,
-calibrated transform, and measured low processing latency are a schedule
-advantage.
+Keep the single AIRY through the August 31 delivery for forward/right motion if
+it passes the mapping, coverage, latency, and controlled-obstacle gates. Its
+working driver and good observed coverage are a schedule advantage.
 
 Trigger a single-L2 contingency only if the AIRY has a documented,
 safety-relevant blind/reflection sector that cannot be fixed physically or
@@ -160,4 +162,5 @@ later than mid-August; a dual-L2 integration adds power, Ethernet, time
 synchronization, calibration, fusion, mounting, and regression work and should
 not be placed on the August 31 critical path. Consider dual L2 only as a
 post-delivery coverage upgrade after one L2 independently passes the same
-gates.
+gates. Symmetric left/right shared control requires that additional left-side
+coverage.

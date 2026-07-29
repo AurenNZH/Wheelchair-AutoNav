@@ -17,20 +17,20 @@ def test_defaults_are_safe_and_start_both_sensors():
 def test_sensor_mount_transforms_are_siblings_under_base_link():
     assert SENSOR_TRANSFORMS == {
         "rslidar": {
-            "x": "-0.265",
-            "y": "-0.330",
+            "x": "0.330",
+            "y": "-0.265",
             "z": "0.320",
-            "yaw": "-0.78540",
+            "yaw": "1.04720",
             "pitch": "0.0",
             "roll": "0.0",
             "parent": "base_link",
             "child": "rslidar",
         },
         "camera_link": {
-            "x": "0.265",
-            "y": "0.360",
+            "x": "-0.360",
+            "y": "0.265",
             "z": "1.300",
-            "yaw": "-1.5708",
+            "yaw": "0.0",
             "pitch": "0.0",
             "roll": "0.0",
             "parent": "base_link",

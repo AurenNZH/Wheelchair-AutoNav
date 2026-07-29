@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 import time
 
 import numpy as np
@@ -19,9 +20,15 @@ from wheelchair_navigation.local_navigation import (
     CostmapStats,
     FrontCostmapConfig,
     LocalCostmapConfig,
+    filter_obstacle_points,
     grid_origin_m,
-    make_local_and_front_costmaps,
+    inflate_grid,
+    make_costmap_stats,
+    make_front_grid,
+    make_full_raw_grid,
     parse_self_filter_boxes,
+    select_front_points,
+    validate_mapping_configs,
 )
 from wheelchair_navigation.point_cloud import point_cloud_to_arrays, transform_points
 
@@ -38,6 +45,9 @@ class LocalNavigationNode(Node):
         self.declare_parameter("costmap_topic", "/local_costmap")
         self.declare_parameter("front_costmap_topic", "/front_costmap")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
+        self.declare_parameter("publish_raw_obstacles", True)
+        self.declare_parameter("publish_derived_costmap", False)
+        self.declare_parameter("publish_front_costmap", True)
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
         self.declare_parameter("min_height_m", 0.05)
@@ -56,17 +66,46 @@ class LocalNavigationNode(Node):
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("processing_warn_ms", 100.0)
         self.declare_parameter("cloud_age_warn_ms", 150.0)
+        self.declare_parameter("latency_window_samples", 120)
+        self.declare_parameter("lag_spike_ms", 150.0)
 
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
-        self._raw_pub = self.create_publisher(
-            OccupancyGrid, self.get_parameter("raw_obstacles_topic").value, 1
+        self._publish_raw = bool(
+            self.get_parameter("publish_raw_obstacles").value
         )
-        self._costmap_pub = self.create_publisher(
-            OccupancyGrid, self.get_parameter("costmap_topic").value, 1
+        self._publish_derived = bool(
+            self.get_parameter("publish_derived_costmap").value
         )
-        self._front_costmap_pub = self.create_publisher(
-            OccupancyGrid, self.get_parameter("front_costmap_topic").value, 1
+        self._publish_front = bool(
+            self.get_parameter("publish_front_costmap").value
+        )
+        if not (self._publish_raw or self._publish_derived or self._publish_front):
+            raise ValueError("at least one costmap output must be enabled")
+        self._raw_pub = (
+            self.create_publisher(
+                OccupancyGrid,
+                self.get_parameter("raw_obstacles_topic").value,
+                1,
+            )
+            if self._publish_raw
+            else None
+        )
+        self._costmap_pub = (
+            self.create_publisher(
+                OccupancyGrid, self.get_parameter("costmap_topic").value, 1
+            )
+            if self._publish_derived
+            else None
+        )
+        self._front_costmap_pub = (
+            self.create_publisher(
+                OccupancyGrid,
+                self.get_parameter("front_costmap_topic").value,
+                1,
+            )
+            if self._publish_front
+            else None
         )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray, self.get_parameter("diagnostics_topic").value, 10
@@ -89,8 +128,20 @@ class LocalNavigationNode(Node):
         self._started_monotonic = time.monotonic()
         self._last_cloud_stamp_ns = None
         self._last_arrival_monotonic = None
+        latency_window_samples = int(
+            self.get_parameter("latency_window_samples").value
+        )
+        if latency_window_samples < 1:
+            raise ValueError("latency_window_samples must be positive")
+        self._processing_history_ms = deque(maxlen=latency_window_samples)
         self.get_logger().info(
-            "Mapping-only local costmap started; no motion commands are published."
+            "Mapping-only local costmap started; outputs raw=%s derived=%s "
+            "front=%s; no motion commands are published."
+            % (
+                self._publish_raw,
+                self._publish_derived,
+                self._publish_front,
+            )
         )
 
     def _on_lidar(self, msg: PointCloud2) -> None:
@@ -159,19 +210,75 @@ class LocalNavigationNode(Node):
             stage_ms["transform_ms"] = 0.0
 
         try:
-            mapping_started = time.perf_counter()
             map_config = self._map_config()
             front_config = self._front_map_config()
+            validate_mapping_configs(map_config, front_config)
             boxes = parse_self_filter_boxes(
                 self.get_parameter("self_filter_boxes").value,
                 float(self.get_parameter("self_filter_padding_m").value),
             )
-            raw, costmap, front_costmap, stats = make_local_and_front_costmaps(
-                points_base, map_config, front_config, boxes
+
+            filter_started = time.perf_counter()
+            accepted, counts = filter_obstacle_points(
+                points_base, map_config, boxes
             )
-            stage_ms["mapping_ms"] = (
-                time.perf_counter() - mapping_started
+            stage_ms["filter_ms"] = (
+                time.perf_counter() - filter_started
             ) * 1000.0
+
+            raw = None
+            costmap = None
+            if self._publish_raw or self._publish_derived:
+                raw_started = time.perf_counter()
+                raw = make_full_raw_grid(accepted, map_config)
+                stage_ms["raw_raster_ms"] = (
+                    time.perf_counter() - raw_started
+                ) * 1000.0
+            if self._publish_derived:
+                inflation_started = time.perf_counter()
+                costmap = inflate_grid(
+                    raw,
+                    map_config.inflation_radius_m,
+                    map_config.resolution_m,
+                    map_config.occupied_cost,
+                )
+                stage_ms["derived_inflation_ms"] = (
+                    time.perf_counter() - inflation_started
+                ) * 1000.0
+
+            front_points = None
+            front_costmap = None
+            if self._publish_front:
+                front_select_started = time.perf_counter()
+                front_points = select_front_points(accepted, front_config)
+                stage_ms["front_select_ms"] = (
+                    time.perf_counter() - front_select_started
+                ) * 1000.0
+                front_raster_started = time.perf_counter()
+                front_costmap = make_front_grid(front_points, front_config)
+                stage_ms["front_raster_ms"] = (
+                    time.perf_counter() - front_raster_started
+                ) * 1000.0
+
+            stage_ms["mapping_ms"] = sum(
+                stage_ms.get(key, 0.0)
+                for key in (
+                    "filter_ms",
+                    "raw_raster_ms",
+                    "derived_inflation_ms",
+                    "front_select_ms",
+                    "front_raster_ms",
+                )
+            )
+            stats = make_costmap_stats(
+                counts,
+                accepted,
+                raw,
+                map_config,
+                front_points=front_points,
+                front=front_costmap,
+                front_config=front_config,
+            )
         except ValueError as exc:
             self.get_logger().error(
                 "Invalid local-mapping configuration: %s" % exc,
@@ -183,22 +290,45 @@ class LocalNavigationNode(Node):
         header = Header()
         header.stamp = msg.header.stamp
         header.frame_id = target_frame
-        publish_started = time.perf_counter()
-        self._raw_pub.publish(build_occupancy_grid(header, raw, map_config))
-        self._costmap_pub.publish(build_occupancy_grid(header, costmap, map_config))
-        self._front_costmap_pub.publish(
-            build_occupancy_grid(
-                header,
-                front_costmap,
-                front_config,
-                origin_x_m=0.0,
-                origin_y_m=-(front_costmap.shape[0] * front_config.resolution_m)
-                / 2.0,
+        if self._raw_pub is not None:
+            publish_started = time.perf_counter()
+            self._raw_pub.publish(build_occupancy_grid(header, raw, map_config))
+            stage_ms["publish_raw_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        if self._costmap_pub is not None:
+            publish_started = time.perf_counter()
+            self._costmap_pub.publish(
+                build_occupancy_grid(header, costmap, map_config)
+            )
+            stage_ms["publish_derived_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        if self._front_costmap_pub is not None:
+            publish_started = time.perf_counter()
+            self._front_costmap_pub.publish(
+                build_occupancy_grid(
+                    header,
+                    front_costmap,
+                    front_config,
+                    origin_x_m=0.0,
+                    origin_y_m=-(
+                        front_costmap.shape[0] * front_config.resolution_m
+                    )
+                    / 2.0,
+                )
+            )
+            stage_ms["publish_front_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        stage_ms["publish_ms"] = sum(
+            stage_ms.get(key, 0.0)
+            for key in (
+                "publish_raw_ms",
+                "publish_derived_ms",
+                "publish_front_ms",
             )
         )
-        stage_ms["publish_ms"] = (
-            time.perf_counter() - publish_started
-        ) * 1000.0
 
         self._processed_clouds += 1
         processing_ms = (time.perf_counter() - started) * 1000.0
@@ -285,7 +415,28 @@ class LocalNavigationNode(Node):
             "rejected_clouds": str(self._rejected_clouds),
             "source_period_ms": "%.3f" % source_period_ms,
             "arrival_period_ms": "%.3f" % arrival_period_ms,
+            "publish_raw_obstacles": str(self._publish_raw),
+            "publish_derived_costmap": str(self._publish_derived),
+            "publish_front_costmap": str(self._publish_front),
         }
+        if reason == "ok":
+            self._processing_history_ms.append(float(processing_ms))
+        if self._processing_history_ms:
+            history = np.asarray(self._processing_history_ms, dtype=np.float32)
+            lag_spike_ms = float(self.get_parameter("lag_spike_ms").value)
+            values.update(
+                {
+                    "latency_window_count": str(history.size),
+                    "processing_p50_ms": "%.3f"
+                    % float(np.percentile(history, 50)),
+                    "processing_p95_ms": "%.3f"
+                    % float(np.percentile(history, 95)),
+                    "processing_max_ms": "%.3f" % float(np.max(history)),
+                    "lag_spike_count": str(
+                        int(np.count_nonzero(history > lag_spike_ms))
+                    ),
+                }
+            )
         for key, value in (stage_ms or {}).items():
             values[key] = "%.3f" % value
         if stats is not None:
@@ -316,7 +467,7 @@ class LocalNavigationNode(Node):
         diagnostics.status = [status]
         self._diagnostics_pub.publish(diagnostics)
         if stats is not None:
-            self.get_logger().info(
+            self.get_logger().debug(
                 "mapping reason=%s processing_ms=%.3f cloud_age_ms=%.3f "
                 "rate_hz=%.3f input_points=%d accepted_points=%d "
                 "occupied_cells=%d front_points=%d front_occupied_cells=%d "
@@ -333,7 +484,7 @@ class LocalNavigationNode(Node):
                     stats.front_occupied_cells,
                     stats.self_filtered_points,
                 ),
-                throttle_duration_sec=2.0,
+                throttle_duration_sec=5.0,
             )
 
 
@@ -379,7 +530,7 @@ def build_occupancy_grid(
         default_origin if origin_y_m is None else float(origin_y_m)
     )
     msg.info.origin.orientation.w = 1.0
-    msg.data = [int(value) for value in costmap.reshape(-1)]
+    msg.data = costmap.reshape(-1).tolist()
     return msg
 
 

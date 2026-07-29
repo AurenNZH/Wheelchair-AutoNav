@@ -41,7 +41,8 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
-        self.declare_parameter("max_abs_steering", 0.35)
+        self.declare_parameter("min_steering", -0.35)
+        self.declare_parameter("max_steering", 0.0)
         self.declare_parameter("slow_forward_limit", 0.35)
         self.declare_parameter("path_sample_step_m", 0.05)
         self.declare_parameter("max_map_age_s", 0.30)
@@ -108,9 +109,8 @@ class SafetySupervisorNode(Node):
             min_turn_radius_m=float(
                 self.get_parameter("min_turn_radius_m").value
             ),
-            max_abs_steering=float(
-                self.get_parameter("max_abs_steering").value
-            ),
+            min_steering=float(self.get_parameter("min_steering").value),
+            max_steering=float(self.get_parameter("max_steering").value),
             slow_forward_limit=float(
                 self.get_parameter("slow_forward_limit").value
             ),
@@ -246,6 +246,14 @@ class SafetySupervisorNode(Node):
             KeyValue(
                 key="geometry_calibrated",
                 value=str(self._config.geometry_calibrated),
+            ),
+            KeyValue(
+                key="min_steering",
+                value="%.3f" % self._config.min_steering,
+            ),
+            KeyValue(
+                key="max_steering",
+                value="%.3f" % self._config.max_steering,
             ),
         ]
         diagnostics = DiagnosticArray()

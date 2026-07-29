@@ -34,7 +34,8 @@ class SafetyConfig:
     stop_distance_m: float = 0.70
     slow_distance_m: float = 1.20
     min_turn_radius_m: float = 1.20
-    max_abs_steering: float = 0.35
+    min_steering: float = -0.35
+    max_steering: float = 0.0
     slow_forward_limit: float = 0.35
     path_sample_step_m: float = 0.05
     max_map_age_s: float = 0.30
@@ -101,10 +102,12 @@ def evaluate_safety(
         return _stop("invalid_intent")
     if intent.forward == 0.0:
         return _stop("no_forward_intent")
+    if intent.steering > config.max_steering:
+        return _stop("left_turn_unobserved")
+    if intent.steering < config.min_steering:
+        return _stop("right_turn_limit_exceeded")
 
-    steering = float(
-        np.clip(intent.steering, -config.max_abs_steering, config.max_abs_steering)
-    )
+    steering = float(intent.steering)
     if _current_footprint_blocked(full_obstacles_xy, config):
         return _stop("surround_proximity")
 

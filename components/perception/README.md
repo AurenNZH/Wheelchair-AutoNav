@@ -141,9 +141,16 @@ cloud can contribute independent obstacle evidence to the same local costmap.
 The marked sensor mounts are direct children of `base_link`:
 
 ```bash
-base_link -> rslidar:     -0.265 -0.330 0.320 -0.78540 0 0
-base_link -> camera_link:  0.265  0.360 1.300 -1.5708  0 0
+base_link -> rslidar:      0.330 -0.265 0.320 1.04720 0 0
+base_link -> camera_link: -0.360  0.265 1.300 0.00000 0 0
 ```
+
+These poses use the ROS mobile-base convention: `base_link` X points forward,
+Y points left, and Z points up. They were converted from the legacy project
+axes (X left, Y backward) with `x_new=-y_old`, `y_new=x_old`, and
+`yaw_new=yaw_old+pi/2`. A forward-target test refined the AIRY mounting yaw to
+the validated `1.04720` rad (60 degrees). The AIRY data frame retains its
+native axes; the RealSense `camera_link` X axis is forward.
 
 The RealSense driver owns the transforms below `camera_link`. Never publish a
 second parent directly to `camera_color_optical_frame`.

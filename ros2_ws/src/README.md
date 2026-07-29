@@ -3,7 +3,7 @@
 Current packages:
 
 - `wheelchair_msgs`: operator-intent and safety-envelope ROS 2 contracts.
-- `wheelchair_navigation`: 360-degree and front-180 LiDAR obstacle maps.
+- `wheelchair_navigation`: observed raw and robot-forward AIRY obstacle maps.
 - `wheelchair_shared_control`: fail-safe limits for operator-requested motion.
 - `wheelchair_bringup`: top-level sensor, TF, navigation, and RViz launching.
 - `wheelchair_simulation`: isolated Gazebo mapping/shared-control fixtures.

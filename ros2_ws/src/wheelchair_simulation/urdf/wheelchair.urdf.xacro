@@ -2,8 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="wheelchair">
   <link name="base_link">
     <inertial><mass value="80"/><origin xyz="0 0 0.35"/><inertia ixx="8" ixy="0" ixz="0" iyy="8" iyz="0" izz="8"/></inertial>
-    <visual><geometry><box size="0.75 0.65 0.7"/></geometry><origin xyz="0 0 0.35"/></visual>
-    <collision><geometry><box size="0.75 0.65 0.4"/></geometry><origin xyz="0 0 0.45"/></collision>
+    <visual><geometry><box size="1.00 0.53 0.7"/></geometry><origin xyz="0 0 0.35"/></visual>
+    <collision><geometry><box size="1.00 0.53 0.4"/></geometry><origin xyz="0 0 0.45"/></collision>
   </link>
   <link name="left_wheel">
     <inertial><mass value="2"/><origin xyz="0 0 0"/><inertia ixx="0.04" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.04"/></inertial>
@@ -35,7 +35,7 @@
   <link name="rslidar"/>
   <joint name="rslidar_mount" type="fixed">
     <parent link="base_link"/><child link="rslidar"/>
-    <origin xyz="-0.265 -0.330 0.320" rpy="0 0 -0.7854"/>
+    <origin xyz="0.330 -0.265 0.320" rpy="0 0 1.0472"/>
   </joint>
   <gazebo reference="rslidar">
     <sensor name="airy_sim" type="ray">

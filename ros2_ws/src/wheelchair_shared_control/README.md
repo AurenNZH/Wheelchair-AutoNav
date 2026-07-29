@@ -1,8 +1,8 @@
 # Wheelchair Shared Control
 
 Fail-safe supervisor for operator-requested forward motion. It checks the
-requested straight or gently curved swept footprint against `/front_costmap`
-and uses `/local_obstacles` for full-surround proximity vetoes. It never
+requested straight or right-curved swept footprint against `/front_costmap`
+and uses observed `/local_obstacles` cells for proximity vetoes. It never
 selects a path, publishes `cmd_vel`, or accesses CAN.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`. The UDP
@@ -26,8 +26,10 @@ ros2 launch wheelchair_shared_control shared_control.launch.py
 The normal command above reports `live_control_disabled`, even with valid
 maps and intent. The supervisor checks only the straight or gently curved
 swept footprint requested by the operator; it does not choose a direction or
-start movement. It uses the 180-degree map for the requested forward sweep and
-the raw 360-degree obstacle map for a close-surround veto.
+start movement. ROS steering is left-positive. The single-AIRY demo permits
+`-0.35 <= steering <= 0.0`; left steering stops with
+`left_turn_unobserved`, excessive right steering stops with
+`right_turn_limit_exceeded`, and reverse remains disabled.
 
 See the
 [shared-control validation checklist](../../../../docs/setup/shared_control_validation.md)

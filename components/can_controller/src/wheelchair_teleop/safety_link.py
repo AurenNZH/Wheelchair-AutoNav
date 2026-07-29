@@ -19,6 +19,19 @@ SLOW = 1
 CLEAR = 2
 
 
+def pi_x_to_ros_steering(x_pos: int | float) -> float:
+    """Convert Pi joystick right-positive X to ROS left-positive steering."""
+
+    return -max(-1.0, min(1.0, float(x_pos) / 100.0))
+
+
+def ros_steering_to_pi_x(steering: float) -> int:
+    """Convert ROS left-positive steering back to Pi right-positive X."""
+
+    bounded = max(-1.0, min(1.0, float(steering)))
+    return int(round(-bounded * 100.0))
+
+
 class ProtocolError(ValueError):
     pass
 
@@ -102,7 +115,7 @@ class SafetyLink:
             return int(x_pos), int(y_pos)
 
         now = time.monotonic()
-        steering = max(-1.0, min(1.0, float(x_pos) / 100.0))
+        steering = pi_x_to_ros_steering(x_pos)
         forward = max(0.0, min(1.0, float(y_pos) / 100.0))
         command = (steering, forward, bool(deadman))
         if now - self._last_send_monotonic >= self.heartbeat_period_s:
@@ -151,7 +164,7 @@ class SafetyLink:
             min(self.command_cap, envelope.permitted_steering),
         )
         self._reason = envelope.reason
-        return int(round(permitted_steering * 100.0)), int(
+        return ros_steering_to_pi_x(permitted_steering), int(
             round(permitted_forward * 100.0)
         )
 
@@ -284,4 +297,6 @@ __all__ = [
     "STOP",
     "SafetyLink",
     "decode_envelope",
+    "pi_x_to_ros_steering",
+    "ros_steering_to_pi_x",
 ]

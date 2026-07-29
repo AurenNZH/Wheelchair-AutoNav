@@ -64,4 +64,6 @@ link is disabled unless explicitly configured, and then fails closed on
 missing, stale, malformed, or mismatched responses. Simulation motion is
 isolated under `/sim` and also defaults off. Autonomous path selection,
 reverse assistance, stairs/drop-offs, curbs, and public operation are outside
-the current prototype scope.
+the current prototype scope. The single-AIRY demo also vetoes left turns
+because the chair occludes that sensor sector; it supports forward and bounded
+right requests only.

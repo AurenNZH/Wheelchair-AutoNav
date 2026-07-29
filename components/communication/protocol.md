@@ -23,8 +23,10 @@ Envelope packets use the same session and acknowledge one intent sequence:
 ```
 
 Decisions are `0=STOP`, `1=SLOW`, and `2=CLEAR`. A STOP packet is invalid if it
-permits non-zero motion. Normalized steering is `[-1, 1]`; forward and
-permitted forward are `[0, 1]`. Reverse is deliberately absent.
+permits non-zero motion. ROS-normalized steering is left-positive in `[-1, 1]`;
+forward and permitted forward are `[0, 1]`. The Pi keyboard/CAN convention is
+right-positive, so the Pi safety link negates steering when sending intent and
+again when applying an envelope. Reverse is deliberately absent.
 
 Both ends validate version, type, field types, finite bounds, session, sequence,
 packet size, and the configured peer IP. The Pi sends at 20 Hz, stops after

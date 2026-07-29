@@ -48,14 +48,16 @@ Jetson while Ethernet is connected to the LiDAR and Wi-Fi is also active. Use
 it when the driver, mapper, and RViz all run on the Jetson. Leave it unset when
 RViz or another ROS node must run on a different computer.
 
-The measured translations and yaw values are defaults. Pitch and roll are
-temporarily zero and all six values per sensor remain launch arguments for
-calibration overrides. The RealSense driver owns `camera_link`'s optical-frame
-children; do not publish a second optical transform.
+The measured translations and yaw values are defaults. AIRY pitch and roll are
+confirmed zero; the yaw/driver-axis convention still requires the documented
+target-axis check. All six values remain launch arguments for calibration
+overrides. The RealSense driver owns `camera_link`'s optical-frame children; do
+not publish a second optical transform.
 
 The mapper publishes raw returns on `/local_obstacles` and a separately derived
-`/local_costmap`. Inflation is zero by default until the chair footprint is
-measured. The initial filters accept points from `0.30` to `4.00` metres and
+`/local_costmap` when that optional derived output is enabled. It is disabled
+in the default demo profile because inflation is zero until the chair footprint
+is measured. The initial filters accept points from `0.30` to `4.00` metres and
 from `0.05` to `1.50` metres above the `base_link` ground plane.
 
 ## Scope

@@ -6,6 +6,11 @@ local_costmap:
     costmap_topic: /local_costmap
     front_costmap_topic: /front_costmap
     diagnostics_topic: /diagnostics
+    # Demo profile: keep observed raw cells and the robot-forward layer.
+    # The derived layer duplicates raw cells while inflation is zero.
+    publish_raw_obstacles: true
+    publish_derived_costmap: false
+    publish_front_costmap: true
     size_m: 8.0
     resolution_m: 0.1
     min_height_m: 0.05
@@ -21,10 +26,13 @@ local_costmap:
     front_fov_deg: 180.0
     front_inflation_radius_m: 0.0
     # Flat groups: [min_x, max_x, min_y, max_y, min_z, max_z].
-    # Populate only after measuring the chair and footrests in base_link.
+    # Add only tightly measured footrest-mount volumes in base_link. Do not
+    # infer these from the LiDAR height or mask a broader reflection sector.
     self_filter_boxes: []
     self_filter_padding_m: 0.02
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0
     cloud_age_warn_ms: 150.0
+    latency_window_samples: 120
+    lag_spike_ms: 150.0

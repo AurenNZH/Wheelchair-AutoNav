@@ -51,6 +51,10 @@ An automatic STOP stays latched until the operator releases the motion key.
 Five distinct clear heartbeats are required to re-arm, and the default RNET
 command ceiling is 20%.
 
+Pi joystick X is right-positive, while ROS steering is left-positive. The
+safety link converts this sign in both directions so the Jetson evaluates the
+same right-curved path that the Pi eventually applies.
+
 Set the Pi address/allowlist in the Jetson ROS configuration and use fixed IPs
 on the existing router. See the
 [PC-to-Pi protocol](../communication/protocol.md) for the wire format and

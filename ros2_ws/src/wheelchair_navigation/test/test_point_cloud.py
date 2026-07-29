@@ -104,6 +104,16 @@ class PointCloudTests(unittest.TestCase):
 
         np.testing.assert_allclose(result, [[1.0, 3.0, 3.0]], atol=1e-6)
 
+    def test_calibrated_native_minus_y_maps_to_robot_forward_plus_x(self):
+        transform = TransformStamped()
+        transform.transform.rotation.z = np.sqrt(0.5)
+        transform.transform.rotation.w = np.sqrt(0.5)
+        native_forward = np.array([[0.0, -2.0, 0.0]], dtype=np.float32)
+
+        result = transform_points(native_forward, transform)
+
+        np.testing.assert_allclose(result, [[2.0, 0.0, 0.0]], atol=1e-6)
+
     def test_zero_quaternion_returns_identity(self):
         np.testing.assert_array_equal(
             quaternion_to_matrix(0.0, 0.0, 0.0, 0.0),

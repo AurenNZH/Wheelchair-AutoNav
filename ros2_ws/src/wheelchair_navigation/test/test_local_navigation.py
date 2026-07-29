@@ -1,7 +1,9 @@
 import time
 import unittest
+from pathlib import Path
 
 import numpy as np
+import yaml
 
 from wheelchair_navigation.local_navigation import (
     FrontCostmapConfig,
@@ -16,6 +18,21 @@ from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
 
 
 class LocalNavigationTests(unittest.TestCase):
+    def test_demo_profile_skips_duplicate_derived_costmap(self):
+        config_path = (
+            Path(__file__).resolve().parents[1]
+            / "config"
+            / "local_mapping.yaml"
+        )
+        parameters = yaml.safe_load(config_path.read_text())["local_costmap"][
+            "ros__parameters"
+        ]
+
+        self.assertTrue(parameters["publish_raw_obstacles"])
+        self.assertFalse(parameters["publish_derived_costmap"])
+        self.assertTrue(parameters["publish_front_costmap"])
+        self.assertEqual(parameters["front_length_m"], 4.0)
+
     def test_defaults_publish_raw_obstacle_size_without_inflation(self):
         config = LocalCostmapConfig(size_m=4.0, resolution_m=0.1)
         points = np.array([[1.0, 0.0, 0.4]], dtype=np.float32)

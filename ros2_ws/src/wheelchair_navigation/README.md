@@ -11,11 +11,16 @@ midpoint, with X forward, Y left, and Z up. The currently measured AIRY mount
 is:
 
 ```text
-base_link -> rslidar: -0.265 -0.330 0.320 -0.78540 0 0
+base_link -> rslidar: 0.330 -0.265 0.320 1.04720 0 0
 ```
 
-The zero pitch and roll values are provisional. Calibrate them before treating
-the map as collision evidence.
+The measured pitch and roll are both `0.0`. The pose was converted from the
+legacy project axes (X left, Y backward) to the ROS mobile-base convention
+(X forward, Y left) using `x_new=-y_old`, `y_new=x_old`, and
+`yaw_new=yaw_old+pi/2`. That conversion produced the initial `+0.78540`
+estimate; a physical forward-target test refined and validated the final
+AIRY yaw as `+1.04720` rad (60 degrees). A target directly ahead of the AIRY
+now appears ahead of its translated origin and to the right of `base_link`.
 
 ## Build and run
 
@@ -31,38 +36,64 @@ Interfaces:
 
 - Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, best effort, depth 1)
 - Raw obstacle cells: `/local_obstacles`
-- Derived clearance grid: `/local_costmap`
+- Optional derived clearance grid: `/local_costmap`
 - Front 180-degree clearance grid: `/front_costmap`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
-`/local_obstacles` contains rasterized measurements after range, height, and
-measured self-body filtering. `/local_costmap` is a separate copy on which
-optional clearance inflation is applied once. `inflation_radius_m` defaults to
-zero so clearance padding cannot be mistaken for obstacle size during sensor
-validation. `/front_costmap` covers X = 0 to 4 m and Y = -4 to 4 m by default.
-It is derived from the same filtered cloud in the same callback; it does not
-replace the 360-degree map, which remains available for close-range side and
-rear vetoes.
+`/local_obstacles` contains rasterized observed measurements after range,
+height, and measured self-body filtering. It must not be interpreted as proof
+of full 360-degree coverage: the chair body occludes AIRY returns on the left.
+`/local_costmap` is an optional inflated copy and is disabled in the default
+demo profile because inflation is zero. `/front_costmap` covers base-link
+X = 0 to 4 m and Y = -4 to 4 m. Front always means wheelchair-forward
+(`base_link +X`), never an untransformed LiDAR axis.
 
 The mapper rejects invalid, stale, future-dated, empty, or untransformable
 clouds and reports the reason through diagnostics. It does not publish a stop
 command because this milestone has no motion-command interface.
 
-The diagnostics separate point-cloud decoding, TF transformation, map
-generation, and publication time. They also report source/arrival period,
-cloud age, accepted/self-filtered point counts, and full/front occupied-cell
-counts. This makes a driver/network delay distinguishable from costmap
-processing time.
+The diagnostics separate decoding, TF, filtering, raw rasterization, optional
+inflation, front selection/rasterization, and each publication. A rolling
+120-sample window reports processing p50, p95, maximum, and counts above the
+150 ms spike threshold. Source/arrival period, cloud age, and point/cell
+counters distinguish driver/network delay from mapping work.
 
-## Chair and footrest measurement
+## Target-axis check
 
-Do not estimate self-filter boxes from the LiDAR position. Measure them:
+Do not rotate the front grid to compensate for an apparent sensor-axis error.
+Correct the TF so every consumer sees a consistent robot frame:
+
+1. Mark targets at `(2.0, 0.0)`, `(0.0, 2.0)`, and `(0.0, -2.0)` metres in
+   `base_link`.
+2. Record `/rslidar_points`, `/tf`, and `/tf_static`.
+3. Adjust only `base_lidar_yaw` for the driver-native axis convention; retain
+   the measured translation and confirmed zero pitch/roll.
+4. Accept the result only when the forward target has positive X and
+   `abs(Y) <= 0.1 m`, the left target has positive Y, and the right target has
+   negative Y.
+5. Record the accepted yaw and the bag used to derive it.
+
+## Chair body and mount measurement
+
+The measured chair body is 1.00 m long and 0.53 m wide, centred at
+`base_link`. This is not yet the collision footprint: wheels, casters,
+footrests, mounts, and their swept positions must be added before
+`geometry_calibrated` can become true.
+
+Do not mark the body permanently occupied in a sensor obstacle map. That would
+make the supervisor collide with itself and would not remove multipath returns
+reported outside the body. Keep robot geometry and sensor observations
+separate.
+
+The confirmed reflection source is the footrest mounts, approximately 4 cm
+above the AIRY. Use the tested matte covers and measure tight mount-only filter
+boxes:
 
 1. Mark the `base_link` origin on the floor at the centre/rear-axle projection.
-2. Remeasure LiDAR X, Y, Z and yaw; estimate pitch and roll from level floor and
-   wall point planes.
-3. Measure the chair body, wheel/caster swing envelope, and each footrest as
+2. Remeasure LiDAR X, Y, Z and yaw; verify the confirmed zero pitch and roll
+   against level-floor and wall planes.
+3. Measure each mount, wheel/caster swing envelope, and each footrest as
    `[min_x, max_x, min_y, max_y, min_z, max_z]` in `base_link`.
 4. Repeat for every supported footrest adjustment and use the union envelope.
 5. Put the groups into `config/local_mapping.yaml`; the default 0.02 m padding
@@ -90,11 +121,17 @@ cells without losing known targets. If it does not, the affected ray sector
 must be treated as unknown rather than assumed clear; autonomous movement
 remains out of scope until independent sensing covers it.
 
+The AIRY was empirically reliable to 5 m, but the demo decision map remains
+4 m to preserve latency. The current single-sensor scope is level, inspected
+indoor floors and forward/right motion only. Low obstacles, holes, steps,
+curbs, drop-offs, reverse, and left turns are unsupported.
+
 ## Performance acceptance
 
-On the Jetson, representative 86k- and 172k-point clouds must take less than
-100 ms to process. At 10 Hz, the 95th-percentile source-stamp-to-map age must be
-below 150 ms without a growing message backlog. Inspect live values with:
+On the Jetson, a ten-minute static and moving-obstacle run must have processing
+p95 below 100 ms, processing maximum below 150 ms, cloud-age p95 below 150 ms,
+and no repeating lag spikes or growing message backlog. Inspect live values
+with:
 
 ```bash
 ros2 topic echo /diagnostics
