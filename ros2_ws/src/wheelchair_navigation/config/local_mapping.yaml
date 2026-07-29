@@ -7,6 +7,7 @@ local_costmap:
     front_costmap_topic: /front_costmap
     filtered_front_costmap_topic: /front_costmap_filtered
     rejected_front_costmap_topic: /front_costmap_rejected
+    rejected_front_cells_topic: /front_costmap_rejected_cells
     diagnostics_topic: /diagnostics
     # Demo profile: keep observed raw cells and the robot-forward layer.
     # The derived layer duplicates raw cells while inflation is zero.

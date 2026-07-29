@@ -90,8 +90,8 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /front_costmap_filtered
     - Alpha: 0.8
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
+      Class: rviz_default_plugins/GridCells
+      Color: 0; 255; 0
       Enabled: false
       Name: Front Cells Rejected as Flicker
       Topic:
@@ -99,7 +99,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /front_costmap_rejected
+        Value: /front_costmap_rejected_cells
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

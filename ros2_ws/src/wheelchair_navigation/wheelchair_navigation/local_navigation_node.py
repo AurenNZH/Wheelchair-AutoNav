@@ -8,7 +8,8 @@ import time
 import numpy as np
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import Point
+from nav_msgs.msg import GridCells, OccupancyGrid
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -52,6 +53,9 @@ class LocalNavigationNode(Node):
         )
         self.declare_parameter(
             "rejected_front_costmap_topic", "/front_costmap_rejected"
+        )
+        self.declare_parameter(
+            "rejected_front_cells_topic", "/front_costmap_rejected_cells"
         )
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("publish_raw_obstacles", True)
@@ -151,6 +155,15 @@ class LocalNavigationNode(Node):
             self.create_publisher(
                 OccupancyGrid,
                 self.get_parameter("rejected_front_costmap_topic").value,
+                1,
+            )
+            if self._publish_rejected_front
+            else None
+        )
+        self._rejected_front_cells_pub = (
+            self.create_publisher(
+                GridCells,
+                self.get_parameter("rejected_front_cells_topic").value,
                 1,
             )
             if self._publish_rejected_front
@@ -425,6 +438,16 @@ class LocalNavigationNode(Node):
             stage_ms["publish_rejected_front_ms"] = (
                 time.perf_counter() - publish_started
             ) * 1000.0
+        if self._rejected_front_cells_pub is not None:
+            publish_started = time.perf_counter()
+            self._rejected_front_cells_pub.publish(
+                build_front_grid_cells(
+                    header, rejected_front_costmap, front_config
+                )
+            )
+            stage_ms["publish_rejected_cells_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
         stage_ms["publish_ms"] = sum(
             stage_ms.get(key, 0.0)
             for key in (
@@ -433,6 +456,7 @@ class LocalNavigationNode(Node):
                 "publish_front_ms",
                 "publish_filtered_front_ms",
                 "publish_rejected_front_ms",
+                "publish_rejected_cells_ms",
             )
         )
 
@@ -718,6 +742,29 @@ def build_front_occupancy_grid(
         origin_x_m=0.0,
         origin_y_m=-(costmap.shape[0] * config.resolution_m) / 2.0,
     )
+
+
+def build_front_grid_cells(
+    header: Header,
+    costmap: np.ndarray,
+    config: FrontCostmapConfig,
+) -> GridCells:
+    """Build a color-configurable RViz overlay for occupied front cells."""
+    msg = GridCells()
+    msg.header = header
+    msg.cell_width = float(config.resolution_m)
+    msg.cell_height = float(config.resolution_m)
+    origin_y_m = -(costmap.shape[0] * config.resolution_m) / 2.0
+    rows, columns = np.nonzero(costmap >= config.occupied_cost)
+    msg.cells = [
+        Point(
+            x=(float(column) + 0.5) * config.resolution_m,
+            y=origin_y_m + (float(row) + 0.5) * config.resolution_m,
+            z=0.02,
+        )
+        for row, column in zip(rows, columns)
+    ]
+    return msg
 
 
 def main() -> int:

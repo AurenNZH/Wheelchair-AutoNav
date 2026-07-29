@@ -17,7 +17,11 @@ from wheelchair_navigation.local_navigation import (
     parse_self_filter_boxes,
     world_to_cell,
 )
-from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
+from std_msgs.msg import Header
+from wheelchair_navigation.local_navigation_node import (
+    build_front_grid_cells,
+    cloud_timestamp_error,
+)
 
 
 class LocalNavigationTests(unittest.TestCase):
@@ -43,6 +47,10 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(
             parameters["rejected_front_costmap_topic"],
             "/front_costmap_rejected",
+        )
+        self.assertEqual(
+            parameters["rejected_front_cells_topic"],
+            "/front_costmap_rejected_cells",
         )
         self.assertEqual(parameters["front_length_m"], 4.0)
         self.assertEqual(
@@ -237,6 +245,29 @@ class LocalNavigationTests(unittest.TestCase):
                 LocalCostmapConfig(),
                 FrontCostmapConfig(fov_deg=181.0),
             )
+
+    def test_rejected_grid_cells_use_front_map_cell_centres(self):
+        config = FrontCostmapConfig(
+            length_m=0.4,
+            width_m=0.4,
+            resolution_m=0.1,
+        )
+        rejected = np.zeros((4, 4), dtype=np.int8)
+        rejected[0, 0] = 100
+        rejected[3, 2] = 100
+
+        msg = build_front_grid_cells(Header(), rejected, config)
+
+        self.assertEqual(msg.cell_width, 0.1)
+        self.assertEqual(msg.cell_height, 0.1)
+        self.assertEqual(len(msg.cells), 2)
+        np.testing.assert_allclose(
+            [
+                [msg.cells[0].x, msg.cells[0].y, msg.cells[0].z],
+                [msg.cells[1].x, msg.cells[1].y, msg.cells[1].z],
+            ],
+            [[0.05, -0.15, 0.02], [0.25, 0.15, 0.02]],
+        )
 
     def test_measured_self_filter_box_removes_only_points_inside_it(self):
         config = LocalCostmapConfig(size_m=4.0)

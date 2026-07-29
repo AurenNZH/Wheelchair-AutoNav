@@ -40,6 +40,7 @@ Interfaces:
 - Raw front 180-degree grid: `/front_costmap`
 - Shadow-filtered front grid: `/front_costmap_filtered`
 - Cells rejected only from the shadow grid: `/front_costmap_rejected`
+- Green RViz overlay of rejected cells: `/front_costmap_rejected_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -57,7 +58,8 @@ immediately. An isolated cell is retained only after it appears within one
 cell in at least two of three frames. This gives flickering multipath a
 separate evaluation layer without allowing the filtered result to influence
 navigation or actuation. Toggle the three front-map displays individually in
-RViz when comparing them.
+RViz when comparing them. The green rejected-cell overlay is visualization
+only; `/front_costmap_rejected` remains the recordable occupancy grid.
 
 The mapper rejects invalid, stale, future-dated, empty, or untransformable
 clouds and reports the reason through diagnostics. It does not publish a stop
