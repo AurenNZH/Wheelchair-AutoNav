@@ -9,6 +9,7 @@ from wheelchair_navigation.local_navigation import (
     FrontCostmapConfig,
     LocalCostmapConfig,
     SelfFilterBox,
+    filter_obstacle_points,
     make_local_and_front_costmaps,
     make_local_costmaps,
     parse_self_filter_boxes,
@@ -32,6 +33,11 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertFalse(parameters["publish_derived_costmap"])
         self.assertTrue(parameters["publish_front_costmap"])
         self.assertEqual(parameters["front_length_m"], 4.0)
+        self.assertEqual(
+            parameters["self_filter_boxes"],
+            [0.0, 0.53, -0.465, 0.2, 0.32, 0.82],
+        )
+        self.assertEqual(parameters["self_filter_padding_m"], 0.0)
 
     def test_defaults_publish_raw_obstacle_size_without_inflation(self):
         config = LocalCostmapConfig(size_m=4.0, resolution_m=0.1)
@@ -159,6 +165,28 @@ class LocalNavigationTests(unittest.TestCase):
             parse_self_filter_boxes([0.0, 1.0])
         with self.assertRaises(ValueError):
             parse_self_filter_boxes([1.0, 0.0, -1.0, 1.0, 0.0, 1.0])
+
+    def test_provisional_mount_box_keeps_points_beyond_each_open_face(self):
+        box_values = [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
+        boxes = parse_self_filter_boxes(box_values, padding_m=0.0)
+        points = np.array(
+            [
+                [0.30, -0.20, 0.50],  # inside
+                [0.54, -0.20, 0.50],  # beyond front
+                [0.30, -0.475, 0.50],  # beyond right
+                [0.30, 0.21, 0.50],  # beyond left
+                [0.30, -0.20, 0.31],  # below
+                [0.30, -0.20, 0.83],  # above
+            ],
+            dtype=np.float32,
+        )
+
+        accepted, counts = filter_obstacle_points(
+            points, LocalCostmapConfig(), boxes
+        )
+
+        self.assertEqual(counts["self_filtered_points"], 1)
+        self.assertEqual(accepted.shape[0], 5)
 
     def test_vectorized_mapper_handles_representative_dense_cloud_quickly(self):
         rng = np.random.default_rng(7)

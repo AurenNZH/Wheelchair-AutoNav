@@ -87,8 +87,18 @@ reported outside the body. Keep robot geometry and sensor observations
 separate.
 
 The confirmed reflection source is the footrest mounts, approximately 4 cm
-above the AIRY. Use the tested matte covers and measure tight mount-only filter
-boxes:
+above the AIRY. Fuzzy hook-and-loop covering produced only a mediocre
+reduction, so a non-reflective hood remains a future experiment. The current
+provisional exclusion volume was inspected in RViz and is:
+
+```text
+[min_x, max_x, min_y, max_y, min_z, max_z]
+[0.00, 0.53, -0.465, 0.20, 0.32, 0.82]
+```
+
+It uses zero padding, so those are also the effective filter bounds. It must
+still pass the near-boundary target and latency checks before it is accepted.
+For any replacement or additional boxes:
 
 1. Mark the `base_link` origin on the floor at the centre/rear-axle projection.
 2. Remeasure LiDAR X, Y, Z and yaw; verify the confirmed zero pitch and roll
@@ -96,8 +106,8 @@ boxes:
 3. Measure each mount, wheel/caster swing envelope, and each footrest as
    `[min_x, max_x, min_y, max_y, min_z, max_z]` in `base_link`.
 4. Repeat for every supported footrest adjustment and use the union envelope.
-5. Put the groups into `config/local_mapping.yaml`; the default 0.02 m padding
-   is applied on all faces.
+5. Put the groups into `config/local_mapping.yaml`; keep padding explicit and
+   account for it when evaluating the effective exclusion volume.
 6. Verify in RViz that known targets immediately outside every box remain in
    `/local_obstacles`.
 

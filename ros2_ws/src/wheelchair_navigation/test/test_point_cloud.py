@@ -104,11 +104,21 @@ class PointCloudTests(unittest.TestCase):
 
         np.testing.assert_allclose(result, [[1.0, 3.0, 3.0]], atol=1e-6)
 
-    def test_calibrated_native_minus_y_maps_to_robot_forward_plus_x(self):
+    def test_calibrated_native_forward_maps_to_robot_forward_plus_x(self):
         transform = TransformStamped()
-        transform.transform.rotation.z = np.sqrt(0.5)
-        transform.transform.rotation.w = np.sqrt(0.5)
-        native_forward = np.array([[0.0, -2.0, 0.0]], dtype=np.float32)
+        calibrated_yaw_rad = np.deg2rad(60.0)
+        transform.transform.rotation.z = np.sin(calibrated_yaw_rad / 2.0)
+        transform.transform.rotation.w = np.cos(calibrated_yaw_rad / 2.0)
+        native_forward = np.array(
+            [
+                [
+                    2.0 * np.cos(-calibrated_yaw_rad),
+                    2.0 * np.sin(-calibrated_yaw_rad),
+                    0.0,
+                ]
+            ],
+            dtype=np.float32,
+        )
 
         result = transform_points(native_forward, transform)
 

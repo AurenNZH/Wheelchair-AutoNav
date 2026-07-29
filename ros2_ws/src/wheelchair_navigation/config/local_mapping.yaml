@@ -25,11 +25,11 @@ local_costmap:
     front_resolution_m: 0.1
     front_fov_deg: 180.0
     front_inflation_radius_m: 0.0
-    # Flat groups: [min_x, max_x, min_y, max_y, min_z, max_z].
-    # Add only tightly measured footrest-mount volumes in base_link. Do not
-    # infer these from the LiDAR height or mask a broader reflection sector.
-    self_filter_boxes: []
-    self_filter_padding_m: 0.02
+    # Flat groups: [min_x, max_x, min_y, max_y, min_z, max_z] in base_link.
+    # Provisional AIRY/footrest-mount exclusion volume, approved in RViz.
+    # Keep zero padding so the effective filter exactly matches these bounds.
+    self_filter_boxes: [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
+    self_filter_padding_m: 0.0
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0

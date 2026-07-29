@@ -61,7 +61,7 @@ class LocalNavigationNode(Node):
         self.declare_parameter("front_fov_deg", 180.0)
         self.declare_parameter("front_inflation_radius_m", 0.0)
         self.declare_parameter("self_filter_boxes", [])
-        self.declare_parameter("self_filter_padding_m", 0.02)
+        self.declare_parameter("self_filter_padding_m", 0.0)
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("processing_warn_ms", 100.0)
