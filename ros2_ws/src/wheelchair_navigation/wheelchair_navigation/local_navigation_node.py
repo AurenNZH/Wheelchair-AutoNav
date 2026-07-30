@@ -8,7 +8,8 @@ import time
 import numpy as np
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import Point
+from nav_msgs.msg import GridCells, OccupancyGrid
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -19,12 +20,15 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from wheelchair_navigation.local_navigation import (
     CostmapStats,
     FrontCostmapConfig,
+    GhostFilterConfig,
+    GhostFilterStats,
     LocalCostmapConfig,
+    TemporalGhostFilter,
     filter_obstacle_points,
     grid_origin_m,
     inflate_grid,
     make_costmap_stats,
-    make_front_grid,
+    make_front_raw_grid,
     make_full_raw_grid,
     parse_self_filter_boxes,
     select_front_points,
@@ -44,10 +48,21 @@ class LocalNavigationNode(Node):
         self.declare_parameter("raw_obstacles_topic", "/local_obstacles")
         self.declare_parameter("costmap_topic", "/local_costmap")
         self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter(
+            "filtered_front_costmap_topic", "/front_costmap_filtered"
+        )
+        self.declare_parameter(
+            "rejected_front_costmap_topic", "/front_costmap_rejected"
+        )
+        self.declare_parameter(
+            "rejected_front_cells_topic", "/front_costmap_rejected_cells"
+        )
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("publish_raw_obstacles", True)
         self.declare_parameter("publish_derived_costmap", False)
         self.declare_parameter("publish_front_costmap", True)
+        self.declare_parameter("publish_filtered_front_costmap", True)
+        self.declare_parameter("publish_rejected_front_costmap", True)
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
         self.declare_parameter("min_height_m", 0.05)
@@ -62,6 +77,11 @@ class LocalNavigationNode(Node):
         self.declare_parameter("front_inflation_radius_m", 0.0)
         self.declare_parameter("self_filter_boxes", [])
         self.declare_parameter("self_filter_padding_m", 0.0)
+        self.declare_parameter("ghost_filter_min_component_cells", 2)
+        self.declare_parameter("ghost_filter_history_frames", 3)
+        self.declare_parameter("ghost_filter_min_hits", 2)
+        self.declare_parameter("ghost_filter_match_radius_cells", 1)
+        self.declare_parameter("ghost_filter_reset_gap_s", 0.5)
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("processing_warn_ms", 100.0)
@@ -80,7 +100,22 @@ class LocalNavigationNode(Node):
         self._publish_front = bool(
             self.get_parameter("publish_front_costmap").value
         )
-        if not (self._publish_raw or self._publish_derived or self._publish_front):
+        self._publish_filtered_front = bool(
+            self.get_parameter("publish_filtered_front_costmap").value
+        )
+        self._publish_rejected_front = bool(
+            self.get_parameter("publish_rejected_front_costmap").value
+        )
+        self._build_front = (
+            self._publish_front
+            or self._publish_filtered_front
+            or self._publish_rejected_front
+        )
+        if not (
+            self._publish_raw
+            or self._publish_derived
+            or self._build_front
+        ):
             raise ValueError("at least one costmap output must be enabled")
         self._raw_pub = (
             self.create_publisher(
@@ -107,6 +142,38 @@ class LocalNavigationNode(Node):
             if self._publish_front
             else None
         )
+        self._filtered_front_costmap_pub = (
+            self.create_publisher(
+                OccupancyGrid,
+                self.get_parameter("filtered_front_costmap_topic").value,
+                1,
+            )
+            if self._publish_filtered_front
+            else None
+        )
+        self._rejected_front_costmap_pub = (
+            self.create_publisher(
+                OccupancyGrid,
+                self.get_parameter("rejected_front_costmap_topic").value,
+                1,
+            )
+            if self._publish_rejected_front
+            else None
+        )
+        self._rejected_front_cells_pub = (
+            self.create_publisher(
+                GridCells,
+                self.get_parameter("rejected_front_cells_topic").value,
+                1,
+            )
+            if self._publish_rejected_front
+            else None
+        )
+        self._ghost_filter = (
+            TemporalGhostFilter(self._ghost_filter_config())
+            if self._publish_filtered_front or self._publish_rejected_front
+            else None
+        )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray, self.get_parameter("diagnostics_topic").value, 10
         )
@@ -125,7 +192,6 @@ class LocalNavigationNode(Node):
 
         self._processed_clouds = 0
         self._rejected_clouds = 0
-        self._started_monotonic = time.monotonic()
         self._last_cloud_stamp_ns = None
         self._last_arrival_monotonic = None
         latency_window_samples = int(
@@ -134,13 +200,19 @@ class LocalNavigationNode(Node):
         if latency_window_samples < 1:
             raise ValueError("latency_window_samples must be positive")
         self._processing_history_ms = deque(maxlen=latency_window_samples)
+        self._processed_arrival_history = deque(
+            maxlen=latency_window_samples
+        )
         self.get_logger().info(
             "Mapping-only local costmap started; outputs raw=%s derived=%s "
-            "front=%s; no motion commands are published."
+            "front=%s filtered_front=%s rejected_front=%s; shadow filtering "
+            "does not affect raw maps and no motion commands are published."
             % (
                 self._publish_raw,
                 self._publish_derived,
                 self._publish_front,
+                self._publish_filtered_front,
+                self._publish_rejected_front,
             )
         )
 
@@ -247,17 +319,47 @@ class LocalNavigationNode(Node):
                 ) * 1000.0
 
             front_points = None
+            front_raw_grid = None
             front_costmap = None
-            if self._publish_front:
+            filtered_front_costmap = None
+            rejected_front_costmap = None
+            ghost_stats = None
+            if self._build_front:
                 front_select_started = time.perf_counter()
                 front_points = select_front_points(accepted, front_config)
                 stage_ms["front_select_ms"] = (
                     time.perf_counter() - front_select_started
                 ) * 1000.0
                 front_raster_started = time.perf_counter()
-                front_costmap = make_front_grid(front_points, front_config)
+                front_raw_grid = make_front_raw_grid(
+                    front_points, front_config
+                )
+                front_costmap = inflate_grid(
+                    front_raw_grid,
+                    front_config.inflation_radius_m,
+                    front_config.resolution_m,
+                    front_config.occupied_cost,
+                )
                 stage_ms["front_raster_ms"] = (
                     time.perf_counter() - front_raster_started
+                ) * 1000.0
+            if self._ghost_filter is not None:
+                ghost_started = time.perf_counter()
+                filtered_front_raw, rejected_front_costmap, ghost_stats = (
+                    self._ghost_filter.filter(front_raw_grid, stamp_ns)
+                )
+                stage_ms["ghost_filter_ms"] = (
+                    time.perf_counter() - ghost_started
+                ) * 1000.0
+                filtered_inflation_started = time.perf_counter()
+                filtered_front_costmap = inflate_grid(
+                    filtered_front_raw,
+                    front_config.inflation_radius_m,
+                    front_config.resolution_m,
+                    front_config.occupied_cost,
+                )
+                stage_ms["filtered_front_inflation_ms"] = (
+                    time.perf_counter() - filtered_inflation_started
                 ) * 1000.0
 
             stage_ms["mapping_ms"] = sum(
@@ -268,6 +370,8 @@ class LocalNavigationNode(Node):
                     "derived_inflation_ms",
                     "front_select_ms",
                     "front_raster_ms",
+                    "ghost_filter_ms",
+                    "filtered_front_inflation_ms",
                 )
             )
             stats = make_costmap_stats(
@@ -307,18 +411,41 @@ class LocalNavigationNode(Node):
         if self._front_costmap_pub is not None:
             publish_started = time.perf_counter()
             self._front_costmap_pub.publish(
-                build_occupancy_grid(
-                    header,
-                    front_costmap,
-                    front_config,
-                    origin_x_m=0.0,
-                    origin_y_m=-(
-                        front_costmap.shape[0] * front_config.resolution_m
-                    )
-                    / 2.0,
+                build_front_occupancy_grid(
+                    header, front_costmap, front_config
                 )
             )
             stage_ms["publish_front_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        if self._filtered_front_costmap_pub is not None:
+            publish_started = time.perf_counter()
+            self._filtered_front_costmap_pub.publish(
+                build_front_occupancy_grid(
+                    header, filtered_front_costmap, front_config
+                )
+            )
+            stage_ms["publish_filtered_front_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        if self._rejected_front_costmap_pub is not None:
+            publish_started = time.perf_counter()
+            self._rejected_front_costmap_pub.publish(
+                build_front_occupancy_grid(
+                    header, rejected_front_costmap, front_config
+                )
+            )
+            stage_ms["publish_rejected_front_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        if self._rejected_front_cells_pub is not None:
+            publish_started = time.perf_counter()
+            self._rejected_front_cells_pub.publish(
+                build_front_grid_cells(
+                    header, rejected_front_costmap, front_config
+                )
+            )
+            stage_ms["publish_rejected_cells_ms"] = (
                 time.perf_counter() - publish_started
             ) * 1000.0
         stage_ms["publish_ms"] = sum(
@@ -327,10 +454,14 @@ class LocalNavigationNode(Node):
                 "publish_raw_ms",
                 "publish_derived_ms",
                 "publish_front_ms",
+                "publish_filtered_front_ms",
+                "publish_rejected_front_ms",
+                "publish_rejected_cells_ms",
             )
         )
 
         self._processed_clouds += 1
+        self._processed_arrival_history.append(arrival_monotonic)
         processing_ms = (time.perf_counter() - started) * 1000.0
         cloud_age_ms = max(
             0.0,
@@ -341,6 +472,7 @@ class LocalNavigationNode(Node):
             processing_ms,
             cloud_age_ms,
             stats=stats,
+            ghost_stats=ghost_stats,
             stage_ms=stage_ms,
             source_period_ms=source_period_ms,
             arrival_period_ms=arrival_period_ms,
@@ -370,6 +502,25 @@ class LocalNavigationNode(Node):
             ),
         )
 
+    def _ghost_filter_config(self) -> GhostFilterConfig:
+        return GhostFilterConfig(
+            min_component_cells=int(
+                self.get_parameter("ghost_filter_min_component_cells").value
+            ),
+            history_frames=int(
+                self.get_parameter("ghost_filter_history_frames").value
+            ),
+            min_hits=int(
+                self.get_parameter("ghost_filter_min_hits").value
+            ),
+            match_radius_cells=int(
+                self.get_parameter("ghost_filter_match_radius_cells").value
+            ),
+            reset_gap_s=float(
+                self.get_parameter("ghost_filter_reset_gap_s").value
+            ),
+        )
+
     @staticmethod
     def _period_ms(current, previous, scale: float = 1e-6) -> float:
         if previous is None or current <= previous:
@@ -392,6 +543,7 @@ class LocalNavigationNode(Node):
         processing_ms: float,
         cloud_age_ms: float,
         stats: CostmapStats | None = None,
+        ghost_stats: GhostFilterStats | None = None,
         stage_ms: dict[str, float] | None = None,
         source_period_ms: float = 0.0,
         arrival_period_ms: float = 0.0,
@@ -418,6 +570,12 @@ class LocalNavigationNode(Node):
             "publish_raw_obstacles": str(self._publish_raw),
             "publish_derived_costmap": str(self._publish_derived),
             "publish_front_costmap": str(self._publish_front),
+            "publish_filtered_front_costmap": str(
+                self._publish_filtered_front
+            ),
+            "publish_rejected_front_costmap": str(
+                self._publish_rejected_front
+            ),
         }
         if reason == "ok":
             self._processing_history_ms.append(float(processing_ms))
@@ -452,8 +610,44 @@ class LocalNavigationNode(Node):
                     "front_occupied_cells": str(stats.front_occupied_cells),
                 }
             )
-        elapsed_s = max(time.monotonic() - self._started_monotonic, 1e-6)
-        effective_rate_hz = self._processed_clouds / elapsed_s
+        if ghost_stats is not None:
+            values.update(
+                {
+                    "ghost_raw_cells": str(ghost_stats.raw_cells),
+                    "ghost_component_count": str(
+                        ghost_stats.component_count
+                    ),
+                    "ghost_strong_component_cells": str(
+                        ghost_stats.strong_component_cells
+                    ),
+                    "ghost_isolated_cells": str(
+                        ghost_stats.isolated_cells
+                    ),
+                    "ghost_temporal_rescued_cells": str(
+                        ghost_stats.temporal_rescued_cells
+                    ),
+                    "ghost_filtered_cells": str(
+                        ghost_stats.filtered_cells
+                    ),
+                    "ghost_rejected_cells": str(
+                        ghost_stats.rejected_cells
+                    ),
+                    "ghost_history_reset": str(
+                        ghost_stats.history_reset
+                    ),
+                }
+            )
+        if len(self._processed_arrival_history) > 1:
+            elapsed_s = (
+                self._processed_arrival_history[-1]
+                - self._processed_arrival_history[0]
+            )
+            effective_rate_hz = (
+                (len(self._processed_arrival_history) - 1)
+                / max(elapsed_s, 1e-6)
+            )
+        else:
+            effective_rate_hz = 0.0
         values["effective_rate_hz"] = "%.3f" % effective_rate_hz
 
         status = DiagnosticStatus()
@@ -531,6 +725,45 @@ def build_occupancy_grid(
     )
     msg.info.origin.orientation.w = 1.0
     msg.data = costmap.reshape(-1).tolist()
+    return msg
+
+
+def build_front_occupancy_grid(
+    header: Header,
+    costmap: np.ndarray,
+    config: FrontCostmapConfig,
+) -> OccupancyGrid:
+    """Build a front-grid message with the shared robot-forward origin."""
+
+    return build_occupancy_grid(
+        header,
+        costmap,
+        config,
+        origin_x_m=0.0,
+        origin_y_m=-(costmap.shape[0] * config.resolution_m) / 2.0,
+    )
+
+
+def build_front_grid_cells(
+    header: Header,
+    costmap: np.ndarray,
+    config: FrontCostmapConfig,
+) -> GridCells:
+    """Build a color-configurable RViz overlay for occupied front cells."""
+    msg = GridCells()
+    msg.header = header
+    msg.cell_width = float(config.resolution_m)
+    msg.cell_height = float(config.resolution_m)
+    origin_y_m = -(costmap.shape[0] * config.resolution_m) / 2.0
+    rows, columns = np.nonzero(costmap >= config.occupied_cost)
+    msg.cells = [
+        Point(
+            x=(float(column) + 0.5) * config.resolution_m,
+            y=origin_y_m + (float(row) + 0.5) * config.resolution_m,
+            z=0.02,
+        )
+        for row, column in zip(rows, columns)
+    ]
     return msg
 
 

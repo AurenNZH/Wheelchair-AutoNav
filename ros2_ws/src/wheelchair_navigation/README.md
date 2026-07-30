@@ -37,7 +37,10 @@ Interfaces:
 - Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, best effort, depth 1)
 - Raw obstacle cells: `/local_obstacles`
 - Optional derived clearance grid: `/local_costmap`
-- Front 180-degree clearance grid: `/front_costmap`
+- Raw front 180-degree grid: `/front_costmap`
+- Shadow-filtered front grid: `/front_costmap_filtered`
+- Cells rejected only from the shadow grid: `/front_costmap_rejected`
+- Green RViz overlay of rejected cells: `/front_costmap_rejected_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -49,6 +52,15 @@ demo profile because inflation is zero. `/front_costmap` covers base-link
 X = 0 to 4 m and Y = -4 to 4 m. Front always means wheelchair-forward
 (`base_link +X`), never an untransformed LiDAR axis.
 
+The shadow filter never changes `/local_obstacles` or `/front_costmap`. A
+component occupying at least two connected 0.1 m cells is retained
+immediately. An isolated cell is retained only after it appears within one
+cell in at least two of three frames. This gives flickering multipath a
+separate evaluation layer without allowing the filtered result to influence
+navigation or actuation. Toggle the three front-map displays individually in
+RViz when comparing them. The green rejected-cell overlay is visualization
+only; `/front_costmap_rejected` remains the recordable occupancy grid.
+
 The mapper rejects invalid, stale, future-dated, empty, or untransformable
 clouds and reports the reason through diagnostics. It does not publish a stop
 command because this milestone has no motion-command interface.
@@ -58,6 +70,15 @@ inflation, front selection/rasterization, and each publication. A rolling
 120-sample window reports processing p50, p95, maximum, and counts above the
 150 ms spike threshold. Source/arrival period, cloud age, and point/cell
 counters distinguish driver/network delay from mapping work.
+
+Use the compact monitor instead of piping the full diagnostic message:
+
+```bash
+ros2 run wheelchair_navigation mapping_monitor
+```
+
+It prints one line per second and explicitly identifies missing diagnostics
+and duplicate ROS node names.
 
 ## Target-axis check
 
@@ -140,13 +161,16 @@ curbs, drop-offs, reverse, and left turns are unsupported.
 
 On the Jetson, a ten-minute static and moving-obstacle run must have processing
 p95 below 100 ms, processing maximum below 150 ms, cloud-age p95 below 150 ms,
-and no repeating lag spikes or growing message backlog. Inspect live values
-with:
+ghost-filter p95 below 5 ms, and no repeating lag spikes or growing message
+backlog. Inspect live values with:
 
 ```bash
-ros2 topic echo /diagnostics
+ros2 run wheelchair_navigation mapping_monitor
 ros2 topic hz /local_obstacles
 ```
+
+Follow `docs/setup/multipath_filter_validation.md` before considering the
+shadow-filtered map for any downstream use.
 
 ## Test
 

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, label
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,18 @@ class FrontCostmapConfig:
 
 
 @dataclass(frozen=True)
+class GhostFilterConfig:
+    """Conservative shadow-filter settings for a 2D obstacle grid."""
+
+    min_component_cells: int = 2
+    history_frames: int = 3
+    min_hits: int = 2
+    match_radius_cells: int = 1
+    reset_gap_s: float = 0.5
+    occupied_cost: int = 100
+
+
+@dataclass(frozen=True)
 class SelfFilterBox:
     """Axis-aligned exclusion box expressed in ``base_link``."""
 
@@ -54,6 +67,94 @@ class CostmapStats:
     occupied_cells: int
     front_points: int = 0
     front_occupied_cells: int = 0
+
+
+@dataclass(frozen=True)
+class GhostFilterStats:
+    raw_cells: int
+    component_count: int
+    strong_component_cells: int
+    isolated_cells: int
+    temporal_rescued_cells: int
+    filtered_cells: int
+    rejected_cells: int
+    history_reset: bool
+
+
+class TemporalGhostFilter:
+    """Reject only isolated, non-persistent cells from a shadow map."""
+
+    def __init__(self, config: GhostFilterConfig = GhostFilterConfig()) -> None:
+        validate_ghost_filter_config(config)
+        self.config = config
+        self._history = deque(maxlen=max(0, config.history_frames - 1))
+        self._last_stamp_ns: int | None = None
+
+    def reset(self) -> None:
+        self._history.clear()
+        self._last_stamp_ns = None
+
+    def filter(
+        self, raw_grid: np.ndarray, stamp_ns: int
+    ) -> tuple[np.ndarray, np.ndarray, GhostFilterStats]:
+        """Return filtered/rejected grids without modifying ``raw_grid``."""
+
+        grid = np.asarray(raw_grid)
+        if grid.ndim != 2:
+            raise ValueError("ghost filter input must be a 2D grid")
+        if stamp_ns <= 0:
+            raise ValueError("ghost filter timestamp must be positive")
+
+        history_reset = False
+        if self._last_stamp_ns is not None:
+            gap_ns = stamp_ns - self._last_stamp_ns
+            if gap_ns <= 0 or gap_ns > int(self.config.reset_gap_s * 1e9):
+                self._history.clear()
+                history_reset = True
+        self._last_stamp_ns = stamp_ns
+
+        occupied = grid >= self.config.occupied_cost
+        connectivity = np.ones((3, 3), dtype=np.uint8)
+        labels, component_count = label(occupied, structure=connectivity)
+        component_sizes = np.bincount(labels.reshape(-1))
+        strong = occupied & (
+            component_sizes[labels] >= self.config.min_component_cells
+        )
+        isolated = occupied & ~strong
+
+        hit_count = occupied.astype(np.uint8)
+        radius = self.config.match_radius_cells
+        match_structure = np.ones(
+            (2 * radius + 1, 2 * radius + 1), dtype=bool
+        )
+        for previous in self._history:
+            matched = (
+                previous
+                if radius == 0
+                else binary_dilation(previous, structure=match_structure)
+            )
+            hit_count += matched.astype(np.uint8)
+        temporal = isolated & (hit_count >= self.config.min_hits)
+        filtered_mask = strong | temporal
+        rejected_mask = occupied & ~filtered_mask
+
+        filtered = np.zeros_like(grid)
+        rejected = np.zeros_like(grid)
+        filtered[filtered_mask] = self.config.occupied_cost
+        rejected[rejected_mask] = self.config.occupied_cost
+        self._history.append(np.array(occupied, copy=True))
+
+        stats = GhostFilterStats(
+            raw_cells=int(np.count_nonzero(occupied)),
+            component_count=int(component_count),
+            strong_component_cells=int(np.count_nonzero(strong)),
+            isolated_cells=int(np.count_nonzero(isolated)),
+            temporal_rescued_cells=int(np.count_nonzero(temporal)),
+            filtered_cells=int(np.count_nonzero(filtered_mask)),
+            rejected_cells=int(np.count_nonzero(rejected_mask)),
+            history_reset=history_reset,
+        )
+        return filtered, rejected, stats
 
 
 def make_local_costmaps(
@@ -145,10 +246,25 @@ def make_front_grid(
 ) -> np.ndarray:
     """Rasterize selected front points into an X-forward rectangular grid."""
 
+    front = make_front_raw_grid(front_points, config)
+    return inflate_grid(
+        front,
+        config.inflation_radius_m,
+        config.resolution_m,
+        config.occupied_cost,
+    )
+
+
+def make_front_raw_grid(
+    front_points: np.ndarray,
+    config: FrontCostmapConfig,
+) -> np.ndarray:
+    """Rasterize front points without inflating isolated evidence."""
+
     front_width = int(np.ceil(config.length_m / config.resolution_m))
     front_height = int(np.ceil(config.width_m / config.resolution_m))
     front_origin_y = -(front_height * config.resolution_m) / 2.0
-    front = rasterize_points(
+    return rasterize_points(
         front_points,
         origin_x_m=0.0,
         origin_y_m=front_origin_y,
@@ -156,12 +272,6 @@ def make_front_grid(
         height=front_height,
         resolution_m=config.resolution_m,
         occupied_cost=config.occupied_cost,
-    )
-    return inflate_grid(
-        front,
-        config.inflation_radius_m,
-        config.resolution_m,
-        config.occupied_cost,
     )
 
 
@@ -307,7 +417,7 @@ def parse_self_filter_boxes(
     boxes = []
     for start in range(0, len(values), 6):
         min_x, max_x, min_y, max_y, min_z, max_z = (
-            float(value) for value in values[start : start + 6]
+            float(value) for value in values[start:start + 6]
         )
         if min_x > max_x or min_y > max_y or min_z > max_z:
             raise ValueError("self-filter box minimum exceeds maximum")
@@ -413,17 +523,38 @@ def validate_mapping_configs(
     _validate_front_config(front_config)
 
 
+def validate_ghost_filter_config(config: GhostFilterConfig) -> None:
+    """Reject settings that cannot produce a bounded temporal filter."""
+
+    if config.min_component_cells < 1:
+        raise ValueError("ghost-filter component size must be positive")
+    if config.history_frames < 1:
+        raise ValueError("ghost-filter history length must be positive")
+    if config.min_hits < 1 or config.min_hits > config.history_frames:
+        raise ValueError("ghost-filter minimum hits must be within history")
+    if config.match_radius_cells < 0:
+        raise ValueError("ghost-filter match radius must be non-negative")
+    if config.reset_gap_s <= 0.0:
+        raise ValueError("ghost-filter reset gap must be positive")
+    if config.occupied_cost <= 0:
+        raise ValueError("ghost-filter occupied cost must be positive")
+
+
 __all__ = [
     "CostmapStats",
     "FrontCostmapConfig",
+    "GhostFilterConfig",
+    "GhostFilterStats",
     "LocalCostmapConfig",
     "SelfFilterBox",
+    "TemporalGhostFilter",
     "filter_obstacle_points",
     "grid_origin_m",
     "inflate_grid",
     "inflate_obstacles",
     "make_costmap_stats",
     "make_front_grid",
+    "make_front_raw_grid",
     "make_full_raw_grid",
     "make_local_and_front_costmaps",
     "make_local_costmaps",
@@ -432,6 +563,7 @@ __all__ = [
     "points_in_box",
     "rasterize_points",
     "select_front_points",
+    "validate_ghost_filter_config",
     "validate_mapping_configs",
     "world_to_cell",
 ]

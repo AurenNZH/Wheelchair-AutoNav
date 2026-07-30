@@ -38,8 +38,9 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 ## 2. AIRY mapping acceptance
 
 With drive power physically isolated, run the AIRY mapper and inspect
-`/local_obstacles` and `/front_costmap` in RViz. The duplicate derived map is
-disabled while inflation is zero.
+`/local_obstacles` and the raw `/front_costmap` in RViz. The duplicate derived
+map is disabled while inflation is zero. The multipath-filtered front map is a
+shadow evaluation topic and must not feed shared control.
 
 Pass only if all of the following hold:
 
