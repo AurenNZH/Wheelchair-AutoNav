@@ -20,10 +20,11 @@ class MappingMonitorTests(unittest.TestCase):
         status.values = [
             KeyValue(key="effective_rate_hz", value="10.0"),
             KeyValue(key="processing_ms", value="12.3"),
-            KeyValue(key="ghost_filter_ms", value="0.4"),
-            KeyValue(key="ghost_raw_cells", value="8"),
-            KeyValue(key="ghost_filtered_cells", value="6"),
-            KeyValue(key="ghost_rejected_cells", value="2"),
+            KeyValue(key="cloud_age_ms", value="12.0"),
+            KeyValue(key="occupied_cells", value="8"),
+            KeyValue(key="front_occupied_cells", value="6"),
+            KeyValue(key="self_filtered_points", value="3"),
+            KeyValue(key="rejected_clouds", value="0"),
         ]
         msg = DiagnosticArray()
         other = DiagnosticStatus()
@@ -37,8 +38,10 @@ class MappingMonitorTests(unittest.TestCase):
         self.assertEqual(diagnostic_values(status)["processing_ms"], "12.3")
         self.assertIn("state=OK", line)
         self.assertIn("process=12.3ms", line)
-        self.assertIn("ghost_filter=0.4ms", line)
-        self.assertIn("raw=8 filtered=6 rejected=2", line)
+        self.assertIn("cloud_age=12.0ms", line)
+        self.assertIn("raw_cells=8 front_cells=6", line)
+        self.assertIn("self_filtered_points=3", line)
+        self.assertIn("rejected_clouds=0", line)
 
     def test_missing_mapper_status_returns_none(self):
         self.assertIsNone(find_mapping_status(DiagnosticArray()))

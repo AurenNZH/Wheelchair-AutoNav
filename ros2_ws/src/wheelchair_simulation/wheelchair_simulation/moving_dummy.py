@@ -1,6 +1,7 @@
 """Move the Gazebo padded dummy across the test corridor."""
 
 import math
+import time
 
 from gazebo_msgs.msg import EntityState
 from gazebo_msgs.srv import SetEntityState
@@ -16,8 +17,8 @@ class MovingDummyNode(Node):
         self.declare_parameter("centre_y_m", 0.0)
         self.declare_parameter("amplitude_m", 1.5)
         self.declare_parameter("crossing_speed_mps", 0.5)
-        self._client = self.create_client(SetEntityState, "/gazebo/set_entity_state")
-        self._started_s = self.get_clock().now().nanoseconds / 1e9
+        self._client = self.create_client(SetEntityState, "/set_entity_state")
+        self._started_s = time.monotonic()
         self.create_timer(0.1, self._move)
 
     def _move(self) -> None:
@@ -28,7 +29,7 @@ class MovingDummyNode(Node):
         if amplitude <= 0.0 or speed <= 0.0:
             return
         angular_rate = speed / amplitude
-        elapsed = self.get_clock().now().nanoseconds / 1e9 - self._started_s
+        elapsed = time.monotonic() - self._started_s
         phase = angular_rate * elapsed
 
         state = EntityState()

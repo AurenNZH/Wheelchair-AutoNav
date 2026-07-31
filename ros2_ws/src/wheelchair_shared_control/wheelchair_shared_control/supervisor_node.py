@@ -219,6 +219,7 @@ class SafetySupervisorNode(Node):
             decision.decision,
             envelope.map_age_ms,
             (time.perf_counter() - started) * 1000.0,
+            decision.nearest_path_distance_m,
         )
 
     @staticmethod
@@ -228,7 +229,12 @@ class SafetySupervisorNode(Node):
         return SafetyDecision(STOP, 0.0, 0.0, reason)
 
     def _publish_diagnostics(
-        self, reason: str, decision: int, map_age_ms: float, processing_ms: float
+        self,
+        reason: str,
+        decision: int,
+        map_age_ms: float,
+        processing_ms: float,
+        nearest_path_distance_m: float | None,
     ) -> None:
         status = DiagnosticStatus()
         status.name = "wheelchair_shared_control/safety_supervisor"
@@ -255,13 +261,29 @@ class SafetySupervisorNode(Node):
                 key="max_steering",
                 value="%.3f" % self._config.max_steering,
             ),
+            KeyValue(
+                key="nearest_path_distance_m",
+                value=(
+                    "none"
+                    if nearest_path_distance_m is None
+                    else "%.3f" % nearest_path_distance_m
+                ),
+            ),
         ]
         diagnostics = DiagnosticArray()
         diagnostics.header.stamp = self.get_clock().now().to_msg()
         diagnostics.status = [status]
         self._diagnostics_pub.publish(diagnostics)
         if reason != self._last_reason:
-            self.get_logger().info("Safety decision changed: %s" % reason)
+            self.get_logger().info(
+                "Safety decision changed: %s (nearest=%s)"
+                % (
+                    reason,
+                    "none"
+                    if nearest_path_distance_m is None
+                    else "%.3f m" % nearest_path_distance_m,
+                )
+            )
             self._last_reason = reason
 
 

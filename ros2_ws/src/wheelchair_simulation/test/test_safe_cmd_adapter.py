@@ -5,6 +5,13 @@ from wheelchair_simulation.safe_cmd_adapter import (
     SimIntent,
     safe_sim_velocity,
 )
+from wheelchair_simulation.sim_operator_intent import command_for_key
+from wheelchair_simulation.sim_scenario_runner import (
+    ScenarioObservation,
+    scenario_command,
+    scenario_passes,
+)
+from wheelchair_msgs.msg import SafetyEnvelope
 
 
 class SafeSimulationCommandTests(unittest.TestCase):
@@ -51,6 +58,29 @@ class SafeSimulationCommandTests(unittest.TestCase):
                 intent, envelope, **parameters
             )
             self.assertEqual((linear, angular), (0.0, 0.0))
+
+    def test_keyboard_commands_are_bounded_and_fail_deadman_on_stop(self):
+        self.assertEqual(command_for_key("w").forward, 0.5)
+        self.assertEqual(command_for_key("d").steering, -0.2)
+        self.assertEqual(command_for_key("a").steering, 0.2)
+        self.assertLess(command_for_key("s").forward, 0.0)
+        self.assertFalse(command_for_key(" ").deadman)
+        self.assertTrue(command_for_key("q").quit_requested)
+        self.assertIsNone(command_for_key("?"))
+
+    def test_scenarios_require_the_expected_safe_outputs(self):
+        clear = ScenarioObservation(
+            SafetyEnvelope.CLEAR, "clear", 0.1, 0.0, 0.02
+        )
+        stopped = ScenarioObservation(
+            SafetyEnvelope.STOP, "obstacle_stop", 0.0, 0.0, 0.0
+        )
+
+        self.assertTrue(scenario_passes("clear_forward", clear))
+        self.assertTrue(scenario_passes("obstacle_stop", stopped))
+        self.assertFalse(scenario_passes("clear_forward", stopped))
+        self.assertEqual(scenario_command("right_sweep_blocked")[0], -0.2)
+        self.assertIsNone(scenario_command("missing_intent"))
 
 
 if __name__ == "__main__":

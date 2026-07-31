@@ -1,5 +1,9 @@
 # Wheelchair Teleoperation Package - Delivery Summary
 
+> Historical document for the original Pi-only keyboard prototype. Paths,
+> readiness statements, and future-work lists below are not current. Use the
+> repository root README and `docs/setup/start_here.md` for the active system.
+
 ## Overview
 
 A complete **keyboard-based teleoperation package** for your powered wheelchair, designed to work over SSH from your PC to your Raspberry Pi 3 with Pi CAN DUO shield.

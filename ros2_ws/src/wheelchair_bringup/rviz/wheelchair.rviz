@@ -33,7 +33,7 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: RGB8
-      Enabled: true
+      Enabled: false
       Name: RealSense RGB-D
       Position Transformer: XYZ
       Size (Pixels): 2
@@ -56,17 +56,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /local_obstacles
-    - Alpha: 0.35
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
-      Enabled: false
-      Name: Derived Clearance Costmap
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_costmap
     - Alpha: 0.55
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
@@ -78,28 +67,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /front_costmap
-    - Alpha: 0.65
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
-      Enabled: false
-      Name: Front 180 Costmap (Shadow Filtered)
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /front_costmap_filtered
-    - Alpha: 0.8
-      Class: rviz_default_plugins/GridCells
-      Color: 0; 255; 0
-      Enabled: false
-      Name: Front Cells Rejected as Flicker
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /front_costmap_rejected_cells
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

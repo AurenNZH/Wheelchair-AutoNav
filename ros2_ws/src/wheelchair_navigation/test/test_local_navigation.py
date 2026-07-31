@@ -7,25 +7,20 @@ import yaml
 
 from wheelchair_navigation.local_navigation import (
     FrontCostmapConfig,
-    GhostFilterConfig,
     LocalCostmapConfig,
     SelfFilterBox,
-    TemporalGhostFilter,
     filter_obstacle_points,
     make_local_and_front_costmaps,
     make_local_costmaps,
     parse_self_filter_boxes,
     world_to_cell,
 )
-from std_msgs.msg import Header
-from wheelchair_navigation.local_navigation_node import (
-    build_front_grid_cells,
-    cloud_timestamp_error,
-)
+from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
+from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 
 
 class LocalNavigationTests(unittest.TestCase):
-    def test_demo_profile_skips_duplicate_derived_costmap(self):
+    def test_runtime_profile_exposes_only_two_obstacle_maps(self):
         config_path = (
             Path(__file__).resolve().parents[1]
             / "config"
@@ -35,22 +30,11 @@ class LocalNavigationTests(unittest.TestCase):
             "ros__parameters"
         ]
 
-        self.assertTrue(parameters["publish_raw_obstacles"])
-        self.assertFalse(parameters["publish_derived_costmap"])
-        self.assertTrue(parameters["publish_front_costmap"])
-        self.assertTrue(parameters["publish_filtered_front_costmap"])
-        self.assertTrue(parameters["publish_rejected_front_costmap"])
-        self.assertEqual(
-            parameters["filtered_front_costmap_topic"],
-            "/front_costmap_filtered",
-        )
-        self.assertEqual(
-            parameters["rejected_front_costmap_topic"],
-            "/front_costmap_rejected",
-        )
-        self.assertEqual(
-            parameters["rejected_front_cells_topic"],
-            "/front_costmap_rejected_cells",
+        self.assertEqual(parameters["raw_obstacles_topic"], "/local_obstacles")
+        self.assertEqual(parameters["front_costmap_topic"], "/front_costmap")
+        self.assertNotIn("costmap_topic", parameters)
+        self.assertFalse(
+            any("filtered" in key or "rejected" in key for key in parameters)
         )
         self.assertEqual(parameters["front_length_m"], 4.0)
         self.assertEqual(
@@ -58,25 +42,18 @@ class LocalNavigationTests(unittest.TestCase):
             [0.0, 0.53, -0.465, 0.2, 0.32, 0.82],
         )
         self.assertEqual(parameters["self_filter_padding_m"], 0.0)
-        self.assertEqual(parameters["ghost_filter_min_component_cells"], 2)
-        self.assertEqual(parameters["ghost_filter_history_frames"], 3)
-        self.assertEqual(parameters["ghost_filter_min_hits"], 2)
-        self.assertEqual(parameters["ghost_filter_match_radius_cells"], 1)
-        self.assertEqual(parameters["ghost_filter_reset_gap_s"], 0.5)
 
-    def test_defaults_publish_raw_obstacle_size_without_inflation(self):
+    def test_defaults_publish_raw_obstacle_size(self):
         config = LocalCostmapConfig(size_m=4.0, resolution_m=0.1)
         points = np.array([[1.0, 0.0, 0.4]], dtype=np.float32)
 
-        raw, costmap, stats = make_local_costmaps(points, config)
+        raw, stats = make_local_costmaps(points, config)
 
-        self.assertEqual(config.inflation_radius_m, 0.0)
         self.assertEqual(np.count_nonzero(raw == 100), 1)
-        np.testing.assert_array_equal(costmap, raw)
         self.assertEqual(stats.occupied_cells, 1)
 
     def test_range_height_and_nonfinite_returns_are_filtered(self):
-        config = LocalCostmapConfig(size_m=12.0, inflation_radius_m=0.0)
+        config = LocalCostmapConfig(size_m=12.0)
         points = np.array(
             [
                 [-2.0, 0.0, 0.04],
@@ -87,7 +64,7 @@ class LocalNavigationTests(unittest.TestCase):
             dtype=np.float32,
         )
 
-        raw, _, stats = make_local_costmaps(points, config)
+        raw, stats = make_local_costmaps(points, config)
 
         obstacle_cell = world_to_cell(1.0, 0.0, config, raw.shape[0])
         self.assertEqual(raw[obstacle_cell[1], obstacle_cell[0]], 100)
@@ -95,19 +72,6 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(stats.input_points, 4)
         self.assertEqual(stats.finite_points, 3)
         self.assertEqual(stats.height_range_points, 1)
-
-    def test_inflation_is_separate_and_applied_once(self):
-        config = LocalCostmapConfig(
-            size_m=4.0,
-            resolution_m=0.1,
-            inflation_radius_m=0.2,
-        )
-        points = np.array([[1.0, 0.0, 0.4]], dtype=np.float32)
-
-        raw, costmap, _ = make_local_costmaps(points, config)
-
-        self.assertEqual(np.count_nonzero(raw == 100), 1)
-        self.assertEqual(np.count_nonzero(costmap == 100), 13)
 
     def test_front_map_contains_only_forward_sector(self):
         points = np.array(
@@ -119,13 +83,12 @@ class LocalNavigationTests(unittest.TestCase):
             dtype=np.float32,
         )
 
-        raw, costmap, front, stats = make_local_and_front_costmaps(
+        raw, front, stats = make_local_and_front_costmaps(
             points,
             LocalCostmapConfig(size_m=4.0, resolution_m=0.1),
             FrontCostmapConfig(length_m=2.0, width_m=4.0, resolution_m=0.1),
         )
 
-        np.testing.assert_array_equal(raw, costmap)
         self.assertEqual(front.shape, (40, 20))
         self.assertEqual(np.count_nonzero(raw == 100), 3)
         self.assertEqual(np.count_nonzero(front == 100), 2)
@@ -137,7 +100,7 @@ class LocalNavigationTests(unittest.TestCase):
             [[1.0, 0.0, 0.4], [1.0, 1.0, 0.4]], dtype=np.float32
         )
 
-        raw, _, front, _ = make_local_and_front_costmaps(
+        raw, front, _ = make_local_and_front_costmaps(
             points,
             LocalCostmapConfig(size_m=4.0),
             FrontCostmapConfig(length_m=2.0, width_m=4.0, fov_deg=60.0),
@@ -145,98 +108,6 @@ class LocalNavigationTests(unittest.TestCase):
 
         self.assertEqual(np.count_nonzero(raw == 100), 2)
         self.assertEqual(np.count_nonzero(front == 100), 1)
-
-    def test_multi_cell_component_is_kept_immediately(self):
-        ghost_filter = TemporalGhostFilter()
-        raw = np.zeros((6, 6), dtype=np.int8)
-        raw[2, 2:4] = 100
-
-        filtered, rejected, stats = ghost_filter.filter(
-            raw, stamp_ns=1_000_000_000
-        )
-
-        np.testing.assert_array_equal(filtered, raw)
-        self.assertEqual(np.count_nonzero(rejected), 0)
-        self.assertEqual(stats.strong_component_cells, 2)
-        self.assertEqual(stats.rejected_cells, 0)
-
-    def test_isolated_cell_requires_two_temporally_matched_hits(self):
-        ghost_filter = TemporalGhostFilter()
-        raw = np.zeros((6, 6), dtype=np.int8)
-        raw[2, 2] = 100
-
-        first_filtered, first_rejected, first_stats = ghost_filter.filter(
-            raw, stamp_ns=1_000_000_000
-        )
-        second_filtered, second_rejected, second_stats = ghost_filter.filter(
-            raw, stamp_ns=1_100_000_000
-        )
-
-        self.assertEqual(np.count_nonzero(first_filtered), 0)
-        np.testing.assert_array_equal(first_rejected, raw)
-        self.assertEqual(first_stats.rejected_cells, 1)
-        np.testing.assert_array_equal(second_filtered, raw)
-        self.assertEqual(np.count_nonzero(second_rejected), 0)
-        self.assertEqual(second_stats.temporal_rescued_cells, 1)
-
-    def test_isolated_cell_can_move_one_cell_between_frames(self):
-        ghost_filter = TemporalGhostFilter()
-        first = np.zeros((6, 6), dtype=np.int8)
-        first[2, 2] = 100
-        second = np.zeros((6, 6), dtype=np.int8)
-        second[2, 3] = 100
-
-        ghost_filter.filter(first, stamp_ns=1_000_000_000)
-        filtered, _, stats = ghost_filter.filter(
-            second, stamp_ns=1_100_000_000
-        )
-
-        np.testing.assert_array_equal(filtered, second)
-        self.assertEqual(stats.temporal_rescued_cells, 1)
-
-    def test_isolated_cell_outside_match_radius_remains_rejected(self):
-        ghost_filter = TemporalGhostFilter()
-        first = np.zeros((6, 6), dtype=np.int8)
-        first[2, 1] = 100
-        second = np.zeros((6, 6), dtype=np.int8)
-        second[2, 4] = 100
-
-        ghost_filter.filter(first, stamp_ns=1_000_000_000)
-        filtered, rejected, stats = ghost_filter.filter(
-            second, stamp_ns=1_100_000_000
-        )
-
-        self.assertEqual(np.count_nonzero(filtered), 0)
-        np.testing.assert_array_equal(rejected, second)
-        self.assertEqual(stats.rejected_cells, 1)
-
-    def test_ghost_history_resets_after_cloud_gap(self):
-        ghost_filter = TemporalGhostFilter()
-        raw = np.zeros((6, 6), dtype=np.int8)
-        raw[2, 2] = 100
-        original = np.array(raw, copy=True)
-
-        ghost_filter.filter(raw, stamp_ns=1_000_000_000)
-        filtered, rejected, stats = ghost_filter.filter(
-            raw, stamp_ns=1_600_000_000
-        )
-
-        np.testing.assert_array_equal(raw, original)
-        self.assertEqual(np.count_nonzero(filtered), 0)
-        np.testing.assert_array_equal(rejected, raw)
-        self.assertTrue(stats.history_reset)
-
-    def test_invalid_ghost_filter_configuration_is_rejected(self):
-        with self.assertRaises(ValueError):
-            TemporalGhostFilter(GhostFilterConfig(min_component_cells=0))
-        with self.assertRaises(ValueError):
-            TemporalGhostFilter(
-                GhostFilterConfig(history_frames=2, min_hits=3)
-            )
-        with self.assertRaises(ValueError):
-            TemporalGhostFilter(GhostFilterConfig(match_radius_cells=-1))
-        with self.assertRaises(ValueError):
-            TemporalGhostFilter(GhostFilterConfig(reset_gap_s=0.0))
 
     def test_invalid_front_geometry_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -246,28 +117,20 @@ class LocalNavigationTests(unittest.TestCase):
                 FrontCostmapConfig(fov_deg=181.0),
             )
 
-    def test_rejected_grid_cells_use_front_map_cell_centres(self):
-        config = FrontCostmapConfig(
-            length_m=0.4,
-            width_m=0.4,
-            resolution_m=0.1,
-        )
-        rejected = np.zeros((4, 4), dtype=np.int8)
-        rejected[0, 0] = 100
-        rejected[3, 2] = 100
+    def test_mapping_metrics_report_window_rate_and_latency(self):
+        metrics = MappingMetrics(3)
+        metrics.record(10.0, 1.0)
+        metrics.record(20.0, 1.1)
+        metrics.record(30.0, 1.2)
 
-        msg = build_front_grid_cells(Header(), rejected, config)
+        values = metrics.values(lag_spike_ms=25.0)
 
-        self.assertEqual(msg.cell_width, 0.1)
-        self.assertEqual(msg.cell_height, 0.1)
-        self.assertEqual(len(msg.cells), 2)
-        np.testing.assert_allclose(
-            [
-                [msg.cells[0].x, msg.cells[0].y, msg.cells[0].z],
-                [msg.cells[1].x, msg.cells[1].y, msg.cells[1].z],
-            ],
-            [[0.05, -0.15, 0.02], [0.25, 0.15, 0.02]],
-        )
+        self.assertEqual(values["latency_window_count"], "3")
+        self.assertEqual(values["processing_p50_ms"], "20.000")
+        self.assertEqual(values["processing_p95_ms"], "29.000")
+        self.assertEqual(values["processing_max_ms"], "30.000")
+        self.assertEqual(values["lag_spike_count"], "1")
+        self.assertEqual(values["effective_rate_hz"], "10.000")
 
     def test_measured_self_filter_box_removes_only_points_inside_it(self):
         config = LocalCostmapConfig(size_m=4.0)
@@ -276,7 +139,7 @@ class LocalNavigationTests(unittest.TestCase):
             [[0.5, 0.0, 0.3], [1.0, 0.0, 0.3]], dtype=np.float32
         )
 
-        raw, _, stats = make_local_costmaps(points, config, (box,))
+        raw, stats = make_local_costmaps(points, config, (box,))
 
         masked_cell = world_to_cell(0.5, 0.0, config, raw.shape[0])
         obstacle_cell = world_to_cell(1.0, 0.0, config, raw.shape[0])

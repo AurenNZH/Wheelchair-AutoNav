@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default="yolov8m-pose.pt",
+        default="models/weights/yolov8m-pose.pt",
         help="YOLO pose model path or Ultralytics model name.",
     )
     parser.add_argument(

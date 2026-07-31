@@ -13,6 +13,12 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "validate_cloud_timestamps", default_value="true"
+            ),
+            DeclareLaunchArgument(
+                "restamp_output_with_node_time", default_value="false"
+            ),
             Node(
                 package="wheelchair_navigation",
                 executable="local_costmap",
@@ -20,7 +26,15 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     parameters,
-                    {"use_sim_time": LaunchConfiguration("use_sim_time")},
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "validate_cloud_timestamps": LaunchConfiguration(
+                            "validate_cloud_timestamps"
+                        ),
+                        "restamp_output_with_node_time": LaunchConfiguration(
+                            "restamp_output_with_node_time"
+                        ),
+                    },
                 ],
             )
         ]

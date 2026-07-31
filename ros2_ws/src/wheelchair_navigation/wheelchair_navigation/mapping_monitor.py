@@ -53,8 +53,8 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
     }
     return (
         "state=%s message=%s rate=%sHz process=%sms p95=%sms max=%sms "
-        "point_filter=%sms ghost_filter=%sms raw=%s filtered=%s rejected=%s "
-        "self_filtered_points=%s lag_spikes=%s"
+        "cloud_age=%sms point_filter=%sms raw_cells=%s front_cells=%s "
+        "self_filtered_points=%s rejected_clouds=%s lag_spikes=%s"
         % (
             level_names.get(status.level, str(status.level)),
             status.message or "-",
@@ -62,12 +62,12 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
             values.get("processing_ms", "-"),
             values.get("processing_p95_ms", "-"),
             values.get("processing_max_ms", "-"),
+            values.get("cloud_age_ms", "-"),
             values.get("filter_ms", "-"),
-            values.get("ghost_filter_ms", "-"),
-            values.get("ghost_raw_cells", "-"),
-            values.get("ghost_filtered_cells", "-"),
-            values.get("ghost_rejected_cells", "-"),
+            values.get("occupied_cells", "-"),
+            values.get("front_occupied_cells", "-"),
             values.get("self_filtered_points", "-"),
+            values.get("rejected_clouds", "-"),
             values.get("lag_spike_count", "-"),
         )
     )

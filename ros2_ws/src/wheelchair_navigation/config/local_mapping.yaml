@@ -3,46 +3,24 @@ local_costmap:
     lidar_topic: /rslidar_points
     target_frame: base_link
     raw_obstacles_topic: /local_obstacles
-    costmap_topic: /local_costmap
     front_costmap_topic: /front_costmap
-    filtered_front_costmap_topic: /front_costmap_filtered
-    rejected_front_costmap_topic: /front_costmap_rejected
-    rejected_front_cells_topic: /front_costmap_rejected_cells
     diagnostics_topic: /diagnostics
-    # Demo profile: keep observed raw cells and the robot-forward layer.
-    # The derived layer duplicates raw cells while inflation is zero.
-    publish_raw_obstacles: true
-    publish_derived_costmap: false
-    publish_front_costmap: true
-    # Shadow-only outputs. No supervisor consumes either topic.
-    publish_filtered_front_costmap: true
-    publish_rejected_front_costmap: true
     size_m: 8.0
     resolution_m: 0.1
     min_height_m: 0.05
     max_height_m: 1.5
     min_range_m: 0.30
     max_range_m: 4.00
-    # Clearance inflation is deliberately off during geometry validation.
-    inflation_radius_m: 0.0
-    # Forward planning layer. The full-surround layers above remain unchanged.
+    # Forward planning layer in base_link +X.
     front_length_m: 4.0
     front_width_m: 8.0
     front_resolution_m: 0.1
     front_fov_deg: 180.0
-    front_inflation_radius_m: 0.0
     # Flat groups: [min_x, max_x, min_y, max_y, min_z, max_z] in base_link.
     # Provisional AIRY/footrest-mount exclusion volume, approved in RViz.
     # Keep zero padding so the effective filter exactly matches these bounds.
     self_filter_boxes: [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
     self_filter_padding_m: 0.0
-    # Preserve multi-cell objects immediately. A single isolated cell must
-    # recur within one cell in at least two of three frames.
-    ghost_filter_min_component_cells: 2
-    ghost_filter_history_frames: 3
-    ghost_filter_min_hits: 2
-    ghost_filter_match_radius_cells: 1
-    ghost_filter_reset_gap_s: 0.5
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0

@@ -1,69 +1,54 @@
-# Remote Wheelchair Shared-Control Monorepo
+# Wheelchair Supervised Navigation
 
-This repository hosts software for a shared-control, obstacle-aware powered
-wheelchair project. It now includes the Raspberry Pi CAN teleoperation
-controller, RoboSense AIRY local mapping, fail-safe operator-intent
-supervision, an opt-in Jetson-to-Pi safety link, and isolated Gazebo fixtures.
-Physical shared-control remains disabled until the documented validation gates
-pass.
+This monorepo contains a LiDAR-first, fail-closed shared-control prototype for
+a powered wheelchair. The August 31 MVP allows an operator to request
+low-speed forward or bounded-right movement while a Jetson safety supervisor
+may permit, slow, or stop it.
 
-## Repository Layout
+Autonomous route selection, reverse assistance, left turns, drop-off
+detection, outdoor/public use, and operation without an attendant are outside
+the current milestone.
+
+## Layout
 
 ```text
 components/
-  can_controller/       Raspberry Pi CAN/RNET teleoperation runtime
-  perception/           Host-PC YOLOv8 perception and velocity component
-  human_avoidance/      Host-PC pose estimation and human avoidance
-  shared_control/       Arbitration between user input, perception, and safety
-  communication/        PC-to-Pi command and telemetry protocol code
+  can_controller/       Raspberry Pi keyboard, CAN/RNET, and safety-link runtime
+  perception/           Standalone camera/pose experiments, not in the MVP loop
 
-configs/
-  wheelchair/           Wheelchair and CAN controller configuration
-  ros2/                 ROS2 node and sensor configuration
-  safety/               Shared-control safety policy configuration
+configs/wheelchair/     Raspberry Pi wheelchair configuration
+docs/                   Current architecture, protocols, setup, history, roadmap
 
-docs/
-  architecture/         System architecture and ROS2 graph notes
-  protocols/            CAN/RNET and PC-to-Pi protocol notes
-  setup/                Setup guides and quick-start material
-  history/              Historical delivery notes
-
-ros2_ws/src/            ROS2 packages, including wheelchair local mapping
-launch/                 System launch scripts for Pi and host PC
-scripts/                Setup, deployment, and developer utility scripts
-tests/                  Cross-component integration and hardware-in-loop tests
-experiments/            Notebooks, logs, and archived experiments
+ros2_ws/src/
+  wheelchair_msgs/          OperatorIntent and SafetyEnvelope contracts
+  wheelchair_navigation/    AIRY raw local and robot-forward obstacle maps
+  wheelchair_shared_control/Fail-closed supervised-motion decisions
+  wheelchair_bringup/       Sensors, calibrated TF, mapping, and RViz
+  wheelchair_simulation/    Gazebo-only motion and scenario fixtures
+  rslidar_sdk, rslidar_msg/ Pinned RoboSense vendor submodules
 ```
 
-## Current Working Component
+ROS packages remain in `ros2_ws/src` so they build, install, and launch with
+normal ROS 2 tooling. Non-ROS Pi and experimental programs remain under
+`components`.
 
-The existing teleoperation package now lives in:
+## Start Here
 
-```text
-components/can_controller/
-```
+- [Current setup and test order](docs/setup/start_here.md)
+- [System architecture](docs/architecture/system_architecture.md)
+- [AIRY local mapping](ros2_ws/src/wheelchair_navigation/README.md)
+- [Shared-control validation gates](docs/setup/shared_control_validation.md)
+- [Post-MVP roadmap](docs/roadmap.md)
 
-Run the keyboard teleoperation entry point from that component:
+## Safety Boundary
 
-```bash
-cd components/can_controller
-python scripts/teleoperate_keyboard.py --config ../../configs/wheelchair/default.yaml
-```
+Physical motion is disabled by default at three independent gates:
 
-See [components/can_controller/README.md](components/can_controller/README.md) for Raspberry Pi, CAN interface, and keyboard-control details.
+- Jetson `enable_motion: false`
+- Jetson `enable_udp: false`
+- Pi `shared_control.enabled: false`
 
-The local mapping instructions are in
-[ros2_ws/src/wheelchair_navigation/README.md](ros2_ws/src/wheelchair_navigation/README.md).
-The staged shared-control acceptance checklist is in
-[docs/setup/shared_control_validation.md](docs/setup/shared_control_validation.md).
-
-## Current safety boundary
-
-The Jetson supervisor publishes limits, not `cmd_vel` or CAN. The Pi safety
-link is disabled unless explicitly configured, and then fails closed on
-missing, stale, malformed, or mismatched responses. Simulation motion is
-isolated under `/sim` and also defaults off. Autonomous path selection,
-reverse assistance, stairs/drop-offs, curbs, and public operation are outside
-the current prototype scope. The single-AIRY demo also vetoes left turns
-because the chair occludes that sensor sector; it supports forward and bounded
-right requests only.
+The ordinary mapper never publishes motion. Gazebo commands are confined to
+`/sim/safe_cmd_vel`. Do not enable physical gates before the documented
+geometry, network, raised-wheel, stopping-distance, and controlled-obstacle
+checks pass.

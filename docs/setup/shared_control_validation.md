@@ -38,9 +38,8 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 ## 2. AIRY mapping acceptance
 
 With drive power physically isolated, run the AIRY mapper and inspect
-`/local_obstacles` and the raw `/front_costmap` in RViz. The duplicate derived
-map is disabled while inflation is zero. The multipath-filtered front map is a
-shadow evaluation topic and must not feed shared control.
+`/local_obstacles` and `/front_costmap` in RViz. These are the only obstacle
+maps published by the operational profile.
 
 Pass only if all of the following hold:
 
@@ -48,9 +47,10 @@ Pass only if all of the following hold:
   entire forward driving envelope, including beside both footrests.
 - Right-side obstacles remain in the observed raw map. Do not infer free space
   in the left-side sector occluded by the chair.
-- Empty-scene footrest ghosts meet the reflection protocol in the navigation
-  README; nearby real targets are not removed by the self-filter.
-- Raw obstacle size is credible with inflation set to zero.
+- The AIRY dome is clean, the hood is secure, and empty-scene chassis returns
+  are absent or confined to the measured self-filter.
+- Nearby real targets are not removed by the hood or self-filter.
+- Raw obstacle size is credible.
 - No unobserved sector is shown or treated as clear.
 - At 10 Hz over ten minutes, processing p95 is below 100 ms, processing maximum
   and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
@@ -66,17 +66,19 @@ Build the workspace, then run:
 ```bash
 source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
+export ROS_DOMAIN_ID=91
 ros2 launch wheelchair_simulation shared_control_sim.launch.py \
-  gui:=false move_dummy:=false enable_sim_motion:=false
+  gui:=false enable_sim_motion:=true operator_mode:=scenario scenario:=all
 ```
 
-Confirm the simulated AIRY produces both maps, the supervisor remains STOP
-without fresh intent, and `/sim/safe_cmd_vel` stays zero. Then test, in
-simulation only, each case: clear corridor, one-metre doorway, obstacle in the
-straight sweep, obstacle in a requested curved sweep, narrow pole, low block,
-side/rear proximity, stale map, stale intent, sequence mismatch, and moving
-dummy up to 0.5 m/s. `enable_sim_motion:=true` must never affect a non-`/sim`
-topic.
+The full suite must eventually pass, but `clear_forward` currently exposes a
+known Gazebo fixed-joint self-return. Keep this as a visible blocker; do not
+disable the physical surround check to make the simulation pass. Meanwhile,
+launch
+`operator_mode:=keyboard gui:=true` and inspect straight, bounded-right,
+unsupported-left, reverse-disabled, deadman-release, doorway, narrow-pole,
+and moving-dummy behaviour. `enable_sim_motion:=true` must never affect a
+non-`/sim` velocity topic.
 
 ## 4. Network and Pi bench test
 

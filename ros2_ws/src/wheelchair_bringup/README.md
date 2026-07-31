@@ -1,74 +1,35 @@
 # Wheelchair Bringup
 
-Top-level ROS2 launch package for repeatable sensor and local-mapping testing. It
-does not command the wheelchair.
+Top-level sensor, calibrated-TF, mapping, and RViz launch package. It does not
+command the wheelchair.
 
-## Build and Source
-
-The AIRY driver and packet messages are pinned as Git submodules in this
-workspace. Initialize them after cloning the repository:
+The default profile is LiDAR-first: AIRY is enabled, RealSense is disabled,
+mapping is disabled, and RViz is disabled. Start the mapping view with:
 
 ```bash
-git submodule update --init --recursive
+cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
 source /opt/ros/foxy/setup.bash
-cd ~/Wheelchair-AutoNav/ros2_ws
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
-source install/setup.bash
-```
-
-The project-owned `config/rslidar_airy.yaml` preserves the RSAIRY settings
-without modifying the vendor submodule.
-
-## Launch
-
-Start both sensors and publish their measured transforms beneath `base_link`:
-
-```bash
-ros2 launch wheelchair_bringup wheelchair.launch.py
-```
-
-Add the installed RViz view:
-
-```bash
-ros2 launch wheelchair_bringup wheelchair.launch.py use_rviz:=true
-```
-
-Mapping remains disabled by default. Start the non-actuating LiDAR-only mapper
-with:
-
-```bash
+source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_camera:=false use_mapping:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
 ```
 
-`ROS_LOCALHOST_ONLY=1` avoids ROS 2 Foxy discovery problems observed on the
-Jetson while Ethernet is connected to the LiDAR and Wi-Fi is also active. Use
-it when the driver, mapper, and RViz all run on the Jetson. Leave it unset when
-RViz or another ROS node must run on a different computer.
+`ROS_LOCALHOST_ONLY=1` avoids Foxy discovery problems when the Jetson uses
+Ethernet for AIRY and Wi-Fi for the router. Leave it unset when another
+computer must join the ROS graph.
 
-The measured translations and yaw values are defaults. AIRY pitch and roll are
-confirmed zero; the yaw/driver-axis convention still requires the documented
-target-axis check. All six values remain launch arguments for calibration
-overrides. The RealSense driver owns `camera_link`'s optical-frame children; do
-not publish a second optical transform.
+The installed RViz profile shows AIRY points, `/local_obstacles`, and
+`/front_costmap`. Its RealSense display is disabled by default.
 
-The mapper publishes raw returns on `/local_obstacles` and a separately derived
-`/local_costmap` when that optional derived output is enabled. It is disabled
-in the default demo profile because inflation is zero until the chair footprint
-is measured. The initial filters accept points from `0.30` to `4.00` metres and
-from `0.05` to `1.50` metres above the `base_link` ground plane.
+The measured AIRY transform defaults to:
 
-## Scope
+```text
+base_link -> rslidar: 0.330 -0.265 0.320 1.04720 0 0
+```
 
-This package starts sensor drivers, static sensor transforms, optional local
-mapping, and optional RViz. It does not perform calibration, sensor fusion,
-Nav2 planning, localization, shared control, CAN communication, or wheelchair
-actuation. It starts `rslidar_sdk_node` directly so the vendor package does not
-create a second RViz process.
-
-List all launch options with:
+All transform values remain launch arguments for controlled calibration.
+List every option with:
 
 ```bash
 ros2 launch wheelchair_bringup wheelchair.launch.py --show-args

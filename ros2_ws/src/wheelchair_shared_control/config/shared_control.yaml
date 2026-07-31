@@ -34,5 +34,3 @@
     envelope_port: 45451
     pi_address: ""
     allowed_pi_address: ""
-    operator_intent_topic: /operator_intent
-    safety_envelope_topic: /safety_envelope

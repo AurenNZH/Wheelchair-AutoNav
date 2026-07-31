@@ -3,10 +3,10 @@
 
 LAUNCH_DEFAULTS = {
     "use_lidar": "true",
-    "use_camera": "true",
+    "use_camera": "false",
     "use_mapping": "false",
     "use_rviz": "false",
-    "publish_camera_tf": "true",
+    "publish_camera_tf": "false",
     "publish_base_lidar_tf": "true",
     # Sensor poses converted from the legacy base axes (X left, Y backward)
     # to REP-103 base axes (X forward, Y left): x_new=-y_old, y_new=x_old,

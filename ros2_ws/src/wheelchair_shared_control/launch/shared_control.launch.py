@@ -15,6 +15,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_motion", default_value="false"),
             DeclareLaunchArgument("geometry_calibrated", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument("max_map_age_s", default_value="0.30"),
             Node(
                 package="wheelchair_shared_control",
                 executable="safety_supervisor",
@@ -28,6 +29,9 @@ def generate_launch_description():
                             "geometry_calibrated"
                         ),
                         "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "max_map_age_s": LaunchConfiguration(
+                            "max_map_age_s"
+                        ),
                     },
                 ],
             ),

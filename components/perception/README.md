@@ -38,19 +38,19 @@ pip install -r requirements.txt
 ## Run With Camera
 
 ```bash
-python scripts/velocity_overlay.py --model yolov8m-pose.pt --source 0
+python scripts/velocity_overlay.py --source 0
 ```
 
 For a different camera index:
 
 ```bash
-python scripts/velocity_overlay.py --model yolov8m-pose.pt --source 2
+python scripts/velocity_overlay.py --source 2
 ```
 
 For a video file:
 
 ```bash
-python scripts/velocity_overlay.py --model yolov8m-pose.pt --source path/to/video.mp4
+python scripts/velocity_overlay.py --source path/to/video.mp4
 ```
 
 Press `q` in the OpenCV window to quit.
@@ -60,7 +60,7 @@ Press `q` in the OpenCV window to quit.
 Use this when testing through SSH or on a headless machine:
 
 ```bash
-python scripts/velocity_overlay.py --model yolov8m-pose.pt --source 0 --no-window
+python scripts/velocity_overlay.py --source 0 --no-window
 ```
 
 This prints values like:

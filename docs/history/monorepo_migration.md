@@ -1,4 +1,8 @@
-# Monorepo Migration TODO
+# Historical Monorepo Migration Plan
+
+> Archived for provenance. It describes the intended structure before the
+> ROS 2 mapping, shared-control, and simulation packages were implemented.
+> Use the root README and `docs/file_reference.md` for the current layout.
 
 This checklist tracks the planned evolution from the current Raspberry Pi CAN teleoperation package into a larger shared-control wheelchair monorepo.
 

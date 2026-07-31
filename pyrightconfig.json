@@ -5,10 +5,7 @@
   ],
   "extraPaths": [
     "components/can_controller/src",
-    "components/communication/src",
-    "components/human_avoidance/src",
-    "components/perception/src",
-    "components/shared_control/src"
+    "components/perception/src"
   ],
   "exclude": [
     "**/__pycache__",
