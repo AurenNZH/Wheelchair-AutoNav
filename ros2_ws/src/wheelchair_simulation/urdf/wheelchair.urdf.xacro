@@ -1,67 +1,200 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="wheelchair">
+  <xacro:include filename="wheelchair_components.xacro"/>
+
+  <!-- Coordinate convention has X forward, Y left, and Z up from the floor. -->
+  <xacro:property name="chassis_length" value="0.75"/>
+  <xacro:property name="chassis_width" value="0.37"/>
+  <xacro:property name="chassis_height" value="0.30"/>
+  <xacro:property name="chassis_z" value="0.25"/>
+
+  <xacro:property name="seat_support_length" value="0.60"/>
+  <xacro:property name="seat_support_width" value="0.45"/>
+  <xacro:property name="seat_support_height" value="0.06"/>
+  <xacro:property name="seat_support_z" value="0.43"/>
+
+  <xacro:property name="seat_length" value="0.50"/>
+  <xacro:property name="seat_width" value="0.48"/>
+  <xacro:property name="seat_height" value="0.12"/>
+  <xacro:property name="seat_z" value="0.52"/>
+
+  <!-- Provisional masses keep Gazebo's unconstrained joints well-defined. -->
+  <xacro:property name="chair_body_mass" value="5.0"/>
+  <xacro:property name="drive_wheel_mass" value="0.75"/>
+  <xacro:property name="caster_fork_mass" value="0.20"/>
+  <xacro:property name="caster_wheel_mass" value="0.25"/>
+  <xacro:property name="occupant_mass" value="75.0"/>
+
+  <xacro:property name="drive_wheel_radius" value="0.165"/>
+  <xacro:property name="drive_wheel_width" value="0.070"/>
+  <xacro:property name="drive_wheel_y" value="0.225"/>
+
+  <xacro:property name="caster_wheel_radius" value="0.090"/>
+  <xacro:property name="caster_wheel_width" value="0.060"/>
+  <xacro:property name="caster_swivel_z" value="0.230"/>
+  <xacro:property name="caster_drop" value="0.140"/>
+
+  <material name="chassis_black">
+    <color rgba="0.06 0.06 0.06 1.0"/>
+  </material>
+  <material name="support_grey">
+    <color rgba="0.18 0.18 0.18 1.0"/>
+  </material>
+  <material name="seat_black">
+    <color rgba="0.03 0.03 0.03 1.0"/>
+  </material>
+  <material name="tire_grey">
+    <color rgba="0.38 0.38 0.34 1.0"/>
+  </material>
+  <material name="sensor_black">
+    <color rgba="0.02 0.02 0.02 1.0"/>
+  </material>
+
   <link name="base_link">
-    <inertial><mass value="80"/><origin xyz="0 0 0.35"/><inertia ixx="8" ixy="0" ixz="0" iyy="8" iyz="0" izz="8"/></inertial>
-    <visual><geometry><box size="1.00 0.53 0.7"/></geometry><origin xyz="0 0 0.35"/></visual>
-    <collision><geometry><box size="1.00 0.53 0.4"/></geometry><origin xyz="0 0 0.45"/></collision>
+    <xacro:box_inertial
+      mass="${chair_body_mass}"
+      size_x="${chassis_length}"
+      size_y="${chassis_width}"
+      size_z="${chassis_height}"
+      origin_x="0.0"
+      origin_y="0.0"
+      origin_z="${chassis_z}"/>
+
+    <visual name="lower_chassis_visual">
+      <origin xyz="0 0 ${chassis_z}"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="chassis_black"/>
+    </visual>
+    <collision name="lower_chassis_collision">
+      <origin xyz="0 0 ${chassis_z}"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+
+    <visual name="seat_support_visual">
+      <origin xyz="0 0 ${seat_support_z}"/>
+      <geometry>
+        <box size="${seat_support_length} ${seat_support_width} ${seat_support_height}"/>
+      </geometry>
+      <material name="support_grey"/>
+    </visual>
+    <collision name="seat_support_collision">
+      <origin xyz="0 0 ${seat_support_z}"/>
+      <geometry>
+        <box size="${seat_support_length} ${seat_support_width} ${seat_support_height}"/>
+      </geometry>
+    </collision>
+
+    <visual name="seat_cushion_visual">
+      <origin xyz="0 0 ${seat_z}"/>
+      <geometry>
+        <box size="${seat_length} ${seat_width} ${seat_height}"/>
+      </geometry>
+      <material name="seat_black"/>
+    </visual>
+    <collision name="seat_cushion_collision">
+      <origin xyz="0 0 ${seat_z}"/>
+      <geometry>
+        <box size="${seat_length} ${seat_width} ${seat_height}"/>
+      </geometry>
+    </collision>
   </link>
-  <link name="left_wheel">
-    <inertial><mass value="2"/><origin xyz="0 0 0"/><inertia ixx="0.04" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.04"/></inertial>
-    <visual><geometry><cylinder radius="0.25" length="0.05"/></geometry><origin rpy="1.5708 0 0"/></visual>
-    <collision><geometry><cylinder radius="0.25" length="0.05"/></geometry><origin rpy="1.5708 0 0"/></collision>
+
+  <xacro:drive_wheel
+    name="left_drive_wheel"
+    x="0.0"
+    y="${drive_wheel_y}"
+    z="${drive_wheel_radius}"
+    radius="${drive_wheel_radius}"
+    width="${drive_wheel_width}"
+    mass="${drive_wheel_mass}"/>
+  <xacro:drive_wheel
+    name="right_drive_wheel"
+    x="0.0"
+    y="${-drive_wheel_y}"
+    z="${drive_wheel_radius}"
+    radius="${drive_wheel_radius}"
+    width="${drive_wheel_width}"
+    mass="${drive_wheel_mass}"/>
+
+  <xacro:caster
+    prefix="front_left"
+    swivel_x="0.320"
+    swivel_y="0.220"
+    swivel_z="${caster_swivel_z}"
+    trail="0.020"
+    drop="${caster_drop}"
+    wheel_radius="${caster_wheel_radius}"
+    wheel_width="${caster_wheel_width}"
+    fork_mass="${caster_fork_mass}"
+    wheel_mass="${caster_wheel_mass}"/>
+  <xacro:caster
+    prefix="front_right"
+    swivel_x="0.320"
+    swivel_y="-0.220"
+    swivel_z="${caster_swivel_z}"
+    trail="0.020"
+    drop="${caster_drop}"
+    wheel_radius="${caster_wheel_radius}"
+    wheel_width="${caster_wheel_width}"
+    fork_mass="${caster_fork_mass}"
+    wheel_mass="${caster_wheel_mass}"/>
+  <xacro:caster
+    prefix="rear_left"
+    swivel_x="-0.375"
+    swivel_y="0.160"
+    swivel_z="${caster_swivel_z}"
+    trail="0.025"
+    drop="${caster_drop}"
+    wheel_radius="${caster_wheel_radius}"
+    wheel_width="${caster_wheel_width}"
+    fork_mass="${caster_fork_mass}"
+    wheel_mass="${caster_wheel_mass}"/>
+  <xacro:caster
+    prefix="rear_right"
+    swivel_x="-0.375"
+    swivel_y="-0.160"
+    swivel_z="${caster_swivel_z}"
+    trail="0.025"
+    drop="${caster_drop}"
+    wheel_radius="${caster_wheel_radius}"
+    wheel_width="${caster_wheel_width}"
+    fork_mass="${caster_fork_mass}"
+    wheel_mass="${caster_wheel_mass}"/>
+
+  <!-- Invisible seated payload; location and inertia are provisional. -->
+  <link name="occupant_payload">
+    <xacro:box_inertial
+      mass="${occupant_mass}"
+      size_x="0.35"
+      size_y="0.45"
+      size_z="0.70"
+      origin_x="0.0"
+      origin_y="0.0"
+      origin_z="0.0"/>
   </link>
-  <link name="right_wheel">
-    <inertial><mass value="2"/><origin xyz="0 0 0"/><inertia ixx="0.04" ixy="0" ixz="0" iyy="0.02" iyz="0" izz="0.04"/></inertial>
-    <visual><geometry><cylinder radius="0.25" length="0.05"/></geometry><origin rpy="1.5708 0 0"/></visual>
-    <collision><geometry><cylinder radius="0.25" length="0.05"/></geometry><origin rpy="1.5708 0 0"/></collision>
-  </link>
-  <joint name="left_wheel_joint" type="continuous">
-    <parent link="base_link"/><child link="left_wheel"/>
-    <origin xyz="0 0.375 0.25"/><axis xyz="0 1 0"/>
+  <joint name="occupant_payload_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="occupant_payload"/>
+    <origin xyz="0 0 0.85" rpy="0 0 0"/>
   </joint>
-  <joint name="right_wheel_joint" type="continuous">
-    <parent link="base_link"/><child link="right_wheel"/>
-    <origin xyz="0 -0.375 0.25"/><axis xyz="0 1 0"/>
-  </joint>
-  <link name="front_caster">
-    <inertial><mass value="1"/><origin xyz="0 0 0"/><inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/></inertial>
-    <visual><geometry><sphere radius="0.08"/></geometry></visual>
-    <collision><geometry><sphere radius="0.08"/></geometry></collision>
+
+  <!-- The frame is physically validated; visual origin assumes the frame is at the mount. -->
+  <link name="rslidar">
+    <visual name="airy_visual">
+      <origin xyz="0 0 0.0315"/>
+      <geometry>
+        <cylinder radius="0.030" length="0.063"/>
+      </geometry>
+      <material name="sensor_black"/>
+    </visual>
   </link>
-  <joint name="front_caster_joint" type="fixed">
-    <parent link="base_link"/><child link="front_caster"/>
-    <origin xyz="0.32 0 0.08"/>
-  </joint>
-  <link name="rslidar"/>
   <joint name="rslidar_mount" type="fixed">
-    <parent link="base_link"/><child link="rslidar"/>
+    <parent link="base_link"/>
+    <child link="rslidar"/>
     <origin xyz="0.330 -0.265 0.320" rpy="0 0 1.0472"/>
   </joint>
-  <gazebo reference="rslidar">
-    <sensor name="airy_sim" type="ray">
-      <always_on>true</always_on><visualize>false</visualize><update_rate>5</update_rate>
-      <ray><scan><horizontal><samples>180</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal><vertical><samples>8</samples><resolution>1</resolution><min_angle>-0.7854</min_angle><max_angle>0.7854</max_angle></vertical></scan><range><min>0.2</min><max>8.0</max><resolution>0.02</resolution></range></ray>
-      <plugin name="airy_pointcloud" filename="libgazebo_ros_ray_sensor.so"><ros><namespace>/sim</namespace><remapping>~/out:=/rslidar_points</remapping></ros><output_type>sensor_msgs/PointCloud2</output_type><frame_name>rslidar</frame_name></plugin>
-    </sensor>
-  </gazebo>
-  <gazebo>
-    <plugin name="safe_diff_drive" filename="libgazebo_ros_diff_drive.so">
-      <ros>
-        <namespace>/sim</namespace>
-        <remapping>cmd_vel:=safe_cmd_vel</remapping>
-        <remapping>odom:=odom</remapping>
-      </ros>
-      <update_rate>50</update_rate>
-      <left_joint>left_wheel_joint</left_joint>
-      <right_joint>right_wheel_joint</right_joint>
-      <wheel_separation>0.75</wheel_separation>
-      <wheel_diameter>0.50</wheel_diameter>
-      <max_wheel_torque>20</max_wheel_torque>
-      <max_wheel_acceleration>0.5</max_wheel_acceleration>
-      <publish_odom>true</publish_odom>
-      <publish_odom_tf>true</publish_odom_tf>
-      <odometry_frame>odom</odometry_frame>
-      <robot_base_frame>base_link</robot_base_frame>
-    </plugin>
-  </gazebo>
 </robot>
