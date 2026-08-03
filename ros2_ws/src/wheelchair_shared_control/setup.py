@@ -25,7 +25,13 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
+            "operator_intent_injector = "
+            "wheelchair_shared_control.intent_injector:main",
+            "replay_map_restamper = "
+            "wheelchair_shared_control.replay_map_restamper:main",
             "safety_supervisor = wheelchair_shared_control.supervisor_node:main",
+            "safety_envelope_monitor = "
+            "wheelchair_shared_control.envelope_monitor:main",
             "udp_bridge = wheelchair_shared_control.udp_bridge_node:main",
         ],
     },

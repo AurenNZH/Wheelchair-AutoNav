@@ -1,0 +1,48 @@
+Operator Intent Injector Decision Log
+=====================================
+
+2026-08-01T20:36:27+01:00 — Design milestone
+The injector is deliberately placed in wheelchair_shared_control and not in
+wheelchair_simulation. Its only output is the existing OperatorIntent contract,
+so it remains independent of Gazebo, robot geometry, simulated sensors, and
+motion. The first version exposes only released and straight-forward presets:
+SLOW and STOP remain safety-supervisor decisions rather than commands that a
+test tool can claim. A finite 30-second wall-time lease retains deadman meaning
+and prevents an unattended preset from remaining active indefinitely.
+
+The installed ROS 2 Foxy bag player does not publish /clock. Changing the
+production supervisor to accept old timestamps would add a replay exception to
+safety-critical code, so a replay-only adapter instead republishes recorded
+occupancy grids with receipt timestamps. It forwards maps only when bag data
+arrives, preserving stale-map failure when playback pauses or ends.
+
+2026-08-01T20:39:03+01:00 — Implementation milestone
+The implementation uses three small nodes rather than combining replay,
+intent, and reporting into one scenario runner. This keeps the production
+supervisor as the system under test and makes each failure attributable: the
+injector owns operator intent, the restamper owns the Foxy compatibility
+boundary, and the monitor owns human-readable output. The replay launch starts
+the supervisor directly instead of including the normal UDP bridge, and it
+does not import or modify the Gazebo package. Configuration values that affect
+message identity, cadence, or lease semantics require a restart; only the
+released/forward command changes dynamically during a run.
+
+2026-08-01T20:51:38+01:00 — Testing milestone
+Verification was layered so a passing unit test could not hide wiring errors.
+The two affected ROS packages built successfully and all 21 shared-control
+tests passed, including seven new injector/replay tests. An isolated live ROS
+graph then demonstrated CLEAR for empty maps, SLOW with the configured 0.35
+forward limit for an obstacle in the slow region, and STOP for a closer
+obstacle. Stopping map publication produced stale_map, and a shortened
+three-second lease produced deadman_released. Graph inspection showed only the
+injector, restamper, supervisor, and monitor, with no velocity topics. Static
+diff and style checks also confirmed that no Gazebo-owned file was modified.
+
+2026-08-01T20:52:17+01:00 — Handoff milestone
+The operator workflow is intentionally three explicit terminal actions: start
+the decision-only launch, play only the two remapped map topics, and set the
+injector command. Keeping the bag process outside the launch makes the bag
+path, playback rate, looping, and stopping visible to the tester and avoids
+embedding external process lifecycle policy in ROS launch. The installed
+package exposes the three new executables and the replay launch arguments, and
+the repository remains uncommitted so the owner can review the complete diff.
