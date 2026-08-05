@@ -29,13 +29,18 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "max_map_age_s",
-                default_value="0.30",
-                description="Supervisor timeout for restamped replay maps",
+                default_value="2.0",
+                description="Supervisor timeout for the restamped front map",
+            ),
+            DeclareLaunchArgument(
+                "internal_log_level",
+                default_value="warn",
+                description="Log level for injector, restamper, and supervisor",
             ),
             LogInfo(
                 msg=(
-                    "Recorded-map decision replay only: UDP, CAN, Gazebo, and "
-                    "velocity adapters are not launched."
+                    "Recorded front-costmap decision replay only: UDP, CAN, "
+                    "Gazebo, and velocity adapters are not launched."
                 )
             ),
             Node(
@@ -55,6 +60,12 @@ def generate_launch_description():
                         "use_sim_time": False,
                     }
                 ],
+                arguments=[
+                    "--ros-args",
+                    "--log-level",
+                    LaunchConfiguration("internal_log_level"),
+                    "--",
+                ],
             ),
             Node(
                 package="wheelchair_shared_control",
@@ -62,6 +73,12 @@ def generate_launch_description():
                 name="replay_map_restamper",
                 output="screen",
                 parameters=[{"use_sim_time": False}],
+                arguments=[
+                    "--ros-args",
+                    "--log-level",
+                    LaunchConfiguration("internal_log_level"),
+                    "--",
+                ],
             ),
             Node(
                 package="wheelchair_shared_control",
@@ -79,13 +96,26 @@ def generate_launch_description():
                         "use_sim_time": False,
                     },
                 ],
+                arguments=[
+                    "--ros-args",
+                    "--log-level",
+                    LaunchConfiguration("internal_log_level"),
+                    "--",
+                ],
             ),
             Node(
                 package="wheelchair_shared_control",
                 executable="safety_envelope_monitor",
                 name="safety_envelope_monitor",
                 output="screen",
-                parameters=[{"use_sim_time": False}],
+                parameters=[
+                    {
+                        "map_timeout_s": LaunchConfiguration(
+                            "max_map_age_s"
+                        ),
+                        "use_sim_time": False,
+                    }
+                ],
             ),
         ]
     )

@@ -106,7 +106,7 @@ class OperatorIntentInjectorNode(Node):
         self._publisher = self.create_publisher(
             OperatorIntent,
             str(self.get_parameter("intent_topic").value),
-            10,
+            1,
         )
         self._session_id = "replay-injector-" + str(uuid.uuid4())
         self._sequence = 0
@@ -116,7 +116,7 @@ class OperatorIntentInjectorNode(Node):
         self._last_published_command = None
         self.add_on_set_parameters_callback(self._on_set_parameters)
         self.create_timer(1.0 / self._publish_rate_hz, self._tick)
-        self.get_logger().warn(
+        self.get_logger().info(
             "Recorded-map intent injector started. It publishes OperatorIntent "
             "only and has no actuator interface. command=%s lease=%.1f s"
             % (self._command, self._motion_timeout_s)
@@ -167,7 +167,7 @@ class OperatorIntentInjectorNode(Node):
                 [Parameter("command", Parameter.Type.STRING, RELEASED)]
             )[0]
             if result.successful:
-                self.get_logger().warn(
+                self.get_logger().info(
                     "Motion intent lease expired; returned to released."
                 )
             else:

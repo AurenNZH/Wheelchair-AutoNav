@@ -1,10 +1,75 @@
-"""Human-readable transition monitor for recorded-map safety decisions."""
+"""Concise pipeline-state monitor for recorded-map safety decisions."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+import math
+import time
+
+from nav_msgs.msg import OccupancyGrid
 import rclpy
 from rclpy.node import Node
-from wheelchair_msgs.msg import SafetyEnvelope
+from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
+
+
+WAITING = "WAITING"
+READY = "READY"
+STALE = "STALE"
+
+
+@dataclass(frozen=True)
+class MapPipelineState:
+    status: str
+    age_s: float | None = None
+
+    @property
+    def signature(self) -> str:
+        """Return stable fields so increasing ages do not create log spam."""
+
+        return self.status
+
+
+def map_pipeline_state(
+    *,
+    front_received_s: float | None,
+    now_s: float,
+    timeout_s: float,
+) -> MapPipelineState:
+    """Classify front-map receipt without inspecting production timestamps."""
+
+    if not math.isfinite(timeout_s) or timeout_s <= 0.0:
+        raise ValueError("map timeout must be finite and positive")
+    if front_received_s is None:
+        return MapPipelineState(WAITING)
+
+    front_age_s = max(0.0, now_s - front_received_s)
+    return MapPipelineState(
+        STALE if front_age_s > timeout_s else READY,
+        front_age_s,
+    )
+
+
+def format_map_state(state: MapPipelineState) -> str:
+    if state.status == WAITING:
+        return "[MAP] WAITING for front_costmap"
+    if state.status == READY:
+        return "[MAP] READY"
+    return "[MAP] STALE front_costmap age=%.2fs" % state.age_s
+
+
+def intent_signature(msg: OperatorIntent) -> tuple[bool, float, float]:
+    """Ignore timestamp and sequence heartbeats when identifying intent changes."""
+
+    return bool(msg.deadman), float(msg.forward), float(msg.steering)
+
+
+def format_intent(msg: OperatorIntent) -> str:
+    if not msg.deadman or msg.forward <= 0.0:
+        return "[INTENT] RELEASED"
+    return "[INTENT] FORWARD request=%.3f steering=%.3f" % (
+        msg.forward,
+        msg.steering,
+    )
 
 
 def decision_name(decision: int) -> str:
@@ -28,44 +93,91 @@ def envelope_signature(msg: SafetyEnvelope) -> tuple[int, str, float, float]:
 
 
 def format_envelope(msg: SafetyEnvelope) -> str:
-    return (
-        "%s reason=%s permitted_forward=%.3f permitted_steering=%.3f "
-        "map_age_ms=%.1f session=%s sequence=%d"
-        % (
-            decision_name(msg.decision),
-            msg.reason,
-            msg.permitted_forward,
-            msg.permitted_steering,
-            msg.map_age_ms,
-            msg.session_id,
-            msg.intent_sequence,
-        )
+    return "[DECISION] %s reason=%s permitted_forward=%.3f" % (
+        decision_name(msg.decision),
+        msg.reason,
+        msg.permitted_forward,
     )
 
 
 class SafetyEnvelopeMonitorNode(Node):
-    """Log safety-envelope state changes without producing control output."""
+    """Report semantic intent, map health, and decision changes only."""
 
     def __init__(self) -> None:
         super().__init__("safety_envelope_monitor")
+        self.declare_parameter("intent_topic", "/operator_intent")
         self.declare_parameter("envelope_topic", "/safety_envelope")
-        self._last_signature = None
+        self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter("map_timeout_s", 2.0)
+        self.declare_parameter("status_rate_hz", 5.0)
+
+        self._map_timeout_s = float(
+            self.get_parameter("map_timeout_s").value
+        )
+        status_rate_hz = float(self.get_parameter("status_rate_hz").value)
+        if (
+            not math.isfinite(self._map_timeout_s)
+            or not math.isfinite(status_rate_hz)
+            or self._map_timeout_s <= 0.0
+            or status_rate_hz <= 0.0
+        ):
+            raise ValueError(
+                "monitor timeout and status rate must be finite and positive"
+            )
+
+        self._last_intent_signature = None
+        self._last_envelope_signature = None
+        self._last_map_signature = None
+        self._front_received_s = None
+        self.create_subscription(
+            OperatorIntent,
+            str(self.get_parameter("intent_topic").value),
+            self._on_intent,
+            1,
+        )
         self.create_subscription(
             SafetyEnvelope,
             str(self.get_parameter("envelope_topic").value),
             self._on_envelope,
             10,
         )
-        self.get_logger().info(
-            "Safety-envelope transition monitor started; no commands are published."
+        self.create_subscription(
+            OccupancyGrid,
+            str(self.get_parameter("front_costmap_topic").value),
+            self._on_front_map,
+            1,
         )
+        self.create_timer(1.0 / status_rate_hz, self._publish_map_state)
+        self.get_logger().info("[INTENT] WAITING")
+
+    def _on_intent(self, msg: OperatorIntent) -> None:
+        signature = intent_signature(msg)
+        if signature == self._last_intent_signature:
+            return
+        self.get_logger().info(format_intent(msg))
+        self._last_intent_signature = signature
 
     def _on_envelope(self, msg: SafetyEnvelope) -> None:
         signature = envelope_signature(msg)
-        if signature == self._last_signature:
+        if signature == self._last_envelope_signature:
             return
         self.get_logger().info(format_envelope(msg))
-        self._last_signature = signature
+        self._last_envelope_signature = signature
+
+    def _on_front_map(self, _msg: OccupancyGrid) -> None:
+        self._front_received_s = time.monotonic()
+        self._publish_map_state()
+
+    def _publish_map_state(self) -> None:
+        state = map_pipeline_state(
+            front_received_s=self._front_received_s,
+            now_s=time.monotonic(),
+            timeout_s=self._map_timeout_s,
+        )
+        if state.signature == self._last_map_signature:
+            return
+        self.get_logger().info(format_map_state(state))
+        self._last_map_signature = state.signature
 
 
 def main() -> int:
