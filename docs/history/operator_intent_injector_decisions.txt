@@ -46,3 +46,53 @@ path, playback rate, looping, and stopping visible to the tester and avoids
 embedding external process lifecycle policy in ROS launch. The installed
 package exposes the three new executables and the replay launch arguments, and
 the repository remains uncommitted so the owner can review the complete diff.
+
+2026-08-03T19:38:11+01:00 — Replay diagnosis milestone
+Testing with the three recorded bags showed that intent changes are delivered:
+forward intent changed the supervisor output to surround_proximity and lease
+expiry changed it to deadman_released. The apparent lack of response came from
+two copies of each decision log and prerequisite failures dominating the
+console. The bags average about 4.3 Hz but contain individual map gaps between
+1.1 and 1.7 seconds, so the production-oriented 0.30-second timeout repeatedly
+reported stale_map. Replay uses a 2.0-second decision-inspection tolerance while
+the production default remains unchanged. The console separately shows semantic
+intent, map health, and decision states so a blocked decision no longer hides
+whether a new intent arrived.
+
+2026-08-03T19:53:50+01:00 — Replay diagnostics verification milestone
+The operator-facing monitor now treats sequence and timestamp updates as
+heartbeats, logging only semantic intent and decision changes. It watches map
+receipt independently so map readiness remains visible even when the supervisor
+is stopped for another reason. Intent publisher and subscriber history were
+reduced to one sample to prevent startup backlog from appearing as stale input.
+The package rebuilt successfully and all 24 tests passed. A looped clear bag
+then produced MAPS READY, showed FORWARD followed by surround_proximity, and
+showed the five-second diagnostic lease return to RELEASED and deadman_released.
+No intermittent stale-map transition or duplicate internal decision appeared.
+
+2026-08-03T22:09:15+01:00 — Front-only scope milestone
+The supervisor contract is intentionally narrowed to /front_costmap. The full
+/local_obstacles grid remains valuable for RViz, lidar-reflection, self-filter,
+and future coverage work, but rear and side cells no longer veto a forward
+operator request. Keeping one obstacle input makes production and replay test
+the same policy and removes surround_proximity rather than hiding it in replay.
+This accepts that obstacles initially beside or behind the chair are outside
+the current project scope. Straight and bounded-right policy remain unchanged;
+left/right injector expansion is deferred to a separately calibrated change.
+
+Applying the proposed front-only policy to the existing clear bag still yielded
+obstacle_stop at a swept distance of zero in all 113 frames. The recording also
+contains forward-sector self-returns, so eliminating the rear-map dependency is
+not expected to make that bag CLEAR. A shielded, stationary re-recording will
+separate the map-quality issue from the supervisor-policy issue before a fixed
+lidar hood is designed.
+
+2026-08-03T22:16:27+01:00 — Front-only verification milestone
+The shared-control package rebuilt successfully and all 24 tests passed after
+removing the full-surround input. An isolated live replay published only the
+recorded /front_costmap through the restamper: the monitor reached MAP READY
+without /local_obstacles, forward intent produced obstacle_stop from the known
+near-field returns, and the five-second lease returned to deadman_released.
+Stopping that single map stream produced stale_map and MAP STALE after the
+two-second replay timeout. No surround_proximity decision was emitted, and no
+Gazebo-owned file was changed.
