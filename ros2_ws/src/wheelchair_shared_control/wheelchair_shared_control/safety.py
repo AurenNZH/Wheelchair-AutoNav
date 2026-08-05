@@ -30,7 +30,6 @@ class SafetyConfig:
     front_extent_m: float = 0.80
     rear_extent_m: float = 0.40
     lateral_margin_m: float = 0.15
-    proximity_margin_m: float = 0.15
     stop_distance_m: float = 0.70
     slow_distance_m: float = 1.20
     min_turn_radius_m: float = 1.20
@@ -78,7 +77,6 @@ def occupied_points_from_grid(
 def evaluate_safety(
     intent: OperatorIntentData,
     front_obstacles_xy: np.ndarray,
-    full_obstacles_xy: np.ndarray,
     map_age_s: float,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
@@ -108,9 +106,6 @@ def evaluate_safety(
         return _stop("right_turn_limit_exceeded")
 
     steering = float(intent.steering)
-    if _current_footprint_blocked(full_obstacles_xy, config):
-        return _stop("surround_proximity")
-
     nearest = nearest_swept_obstacle_distance(
         front_obstacles_xy, steering, config
     )
@@ -175,22 +170,6 @@ def nearest_swept_obstacle_distance(
         if np.any(collision):
             return float(distance)
     return None
-
-
-def _current_footprint_blocked(
-    obstacles_xy: np.ndarray, config: SafetyConfig
-) -> bool:
-    obstacles = np.asarray(obstacles_xy, dtype=np.float32)
-    if obstacles.size == 0:
-        return False
-    half_width = config.chair_width_m / 2.0 + config.proximity_margin_m
-    return bool(
-        np.any(
-            (obstacles[:, 0] >= -config.rear_extent_m - config.proximity_margin_m)
-            & (obstacles[:, 0] <= config.front_extent_m + config.proximity_margin_m)
-            & (np.abs(obstacles[:, 1]) <= half_width)
-        )
-    )
 
 
 def _stop(reason: str, nearest: float | None = None) -> SafetyDecision:

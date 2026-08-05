@@ -3,7 +3,6 @@
     operator_intent_topic: /operator_intent
     safety_envelope_topic: /safety_envelope
     front_costmap_topic: /front_costmap
-    full_obstacles_topic: /local_obstacles
     diagnostics_topic: /shared_control/diagnostics
     decision_rate_hz: 20.0
     max_intent_age_s: 0.20
@@ -17,7 +16,6 @@
     front_extent_m: 0.80
     rear_extent_m: 0.40
     lateral_margin_m: 0.15
-    proximity_margin_m: 0.15
     stop_distance_m: 0.70
     slow_distance_m: 1.20
     min_turn_radius_m: 1.20

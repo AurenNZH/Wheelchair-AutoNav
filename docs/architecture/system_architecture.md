@@ -7,12 +7,12 @@ AIRY /rslidar_points
         |
         v
 Jetson wheelchair_navigation
-  /local_obstacles ---- nearby proximity evidence
+  /local_obstacles ---- mapper diagnostics / RViz
   /front_costmap ------ forward/right swept-path evidence
         |
         v
 Jetson wheelchair_shared_control
-  OperatorIntent + fresh maps
+  OperatorIntent + fresh /front_costmap
         |
         v
   SafetyEnvelope: STOP / SLOW / CLEAR
@@ -35,8 +35,8 @@ a route and never publishes a physical `Twist` or CAN frame.
 - `wheelchair_bringup` owns sensor launch and calibrated static transforms.
 - `wheelchair_navigation` decodes AIRY clouds, transforms them to
   `base_link`, applies range/height/self filtering, and publishes two raw maps.
-- `wheelchair_shared_control` checks the requested swept footprint and emits a
-  normalized safety envelope.
+- `wheelchair_shared_control` checks the requested swept footprint against the
+  forward map and emits a normalized safety envelope.
 - `wheelchair_teleop` owns keyboard input, CAN timing, command ramping, the
   physical deadman, and the fail-closed UDP client.
 - `wheelchair_simulation` substitutes Gazebo differential drive for CAN and
@@ -57,8 +57,9 @@ steps, curbs, reverse, or low hazards beneath its observed height.
 
 ## Fail-Closed Layers
 
-Motion is zero when any required map, intent, timestamp, sequence, peer,
-session, or heartbeat is invalid or stale. STOP latches on the Pi until the
+Motion is zero when the required front map, intent, timestamp, sequence, peer,
+session, or heartbeat is invalid or stale. Side and rear obstacles are outside
+the current forward-only supervisor contract. STOP latches on the Pi until the
 operator releases the motion key. Gazebo uses the same intent and envelope
 contracts but can publish velocity only to `/sim/safe_cmd_vel`.
 

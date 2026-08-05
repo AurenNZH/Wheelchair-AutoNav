@@ -38,8 +38,9 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 ## 2. AIRY mapping acceptance
 
 With drive power physically isolated, run the AIRY mapper and inspect
-`/local_obstacles` and `/front_costmap` in RViz. These are the only obstacle
-maps published by the operational profile.
+`/local_obstacles` and `/front_costmap` in RViz. Shared control consumes only
+the forward map; the full local map remains diagnostic evidence for reflections
+and blind side/rear coverage.
 
 Pass only if all of the following hold:
 
@@ -73,8 +74,8 @@ ros2 launch wheelchair_simulation shared_control_sim.launch.py \
 
 The full suite must eventually pass, but `clear_forward` currently exposes a
 known Gazebo fixed-joint self-return. Keep this as a visible blocker; do not
-disable the physical surround check to make the simulation pass. Meanwhile,
-launch
+weaken the forward swept-footprint check to make the simulation pass.
+Meanwhile, launch
 `operator_mode:=keyboard gui:=true` and inspect straight, bounded-right,
 unsupported-left, reverse-disabled, deadman-release, doorway, narrow-pole,
 and moving-dummy behaviour. `enable_sim_motion:=true` must never affect a

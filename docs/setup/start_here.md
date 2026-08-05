@@ -40,7 +40,9 @@ export ROS_LOCALHOST_ONLY=1
 ros2 run wheelchair_navigation mapping_monitor
 ```
 
-The operational maps are `/local_obstacles` and `/front_costmap`.
+The mapper publishes `/local_obstacles` and `/front_costmap`. Shared control
+uses only `/front_costmap`; `/local_obstacles` remains useful for RViz and
+self-filter diagnostics.
 
 ## 3. Run Gazebo Before Hardware
 

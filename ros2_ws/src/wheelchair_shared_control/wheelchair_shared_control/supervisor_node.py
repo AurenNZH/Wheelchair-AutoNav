@@ -27,7 +27,6 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("operator_intent_topic", "/operator_intent")
         self.declare_parameter("safety_envelope_topic", "/safety_envelope")
         self.declare_parameter("front_costmap_topic", "/front_costmap")
-        self.declare_parameter("full_obstacles_topic", "/local_obstacles")
         self.declare_parameter("diagnostics_topic", "/shared_control/diagnostics")
         self.declare_parameter("decision_rate_hz", 20.0)
         self.declare_parameter("max_intent_age_s", 0.20)
@@ -37,7 +36,6 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("front_extent_m", 0.80)
         self.declare_parameter("rear_extent_m", 0.40)
         self.declare_parameter("lateral_margin_m", 0.15)
-        self.declare_parameter("proximity_margin_m", 0.15)
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
@@ -50,9 +48,7 @@ class SafetySupervisorNode(Node):
         self._config = self._load_config()
         self._intent = None
         self._front_points = None
-        self._full_points = None
         self._front_stamp_ns = 0
-        self._full_stamp_ns = 0
         self._last_reason = None
 
         self._envelope_pub = self.create_publisher(
@@ -65,18 +61,12 @@ class SafetySupervisorNode(Node):
             OperatorIntent,
             self.get_parameter("operator_intent_topic").value,
             self._on_intent,
-            10,
+            1,
         )
         self.create_subscription(
             OccupancyGrid,
             self.get_parameter("front_costmap_topic").value,
             self._on_front_map,
-            1,
-        )
-        self.create_subscription(
-            OccupancyGrid,
-            self.get_parameter("full_obstacles_topic").value,
-            self._on_full_map,
             1,
         )
         rate_hz = float(self.get_parameter("decision_rate_hz").value)
@@ -100,9 +90,6 @@ class SafetySupervisorNode(Node):
             rear_extent_m=float(self.get_parameter("rear_extent_m").value),
             lateral_margin_m=float(
                 self.get_parameter("lateral_margin_m").value
-            ),
-            proximity_margin_m=float(
-                self.get_parameter("proximity_margin_m").value
             ),
             stop_distance_m=float(self.get_parameter("stop_distance_m").value),
             slow_distance_m=float(self.get_parameter("slow_distance_m").value),
@@ -134,18 +121,6 @@ class SafetySupervisorNode(Node):
             )
             self._front_points = None
             self._front_stamp_ns = 0
-
-    def _on_full_map(self, msg: OccupancyGrid) -> None:
-        try:
-            self._full_points = self._grid_points(msg)
-            self._full_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
-        except ValueError as exc:
-            self.get_logger().error(
-                "Rejected invalid full obstacle map: %s" % exc,
-                throttle_duration_sec=5.0,
-            )
-            self._full_points = None
-            self._full_stamp_ns = 0
 
     @staticmethod
     def _grid_points(msg: OccupancyGrid):
@@ -179,15 +154,12 @@ class SafetySupervisorNode(Node):
                 self.get_parameter("max_intent_age_s").value
             ):
                 decision = self._stop("stale_intent")
-            elif self._front_points is None or self._full_points is None:
+            elif self._front_points is None:
                 decision = self._stop("missing_map")
-            elif self._front_stamp_ns <= 0 or self._full_stamp_ns <= 0:
+            elif self._front_stamp_ns <= 0:
                 decision = self._stop("invalid_map_timestamp")
             else:
-                map_age_s = max(
-                    (now_ns - self._front_stamp_ns) / 1e9,
-                    (now_ns - self._full_stamp_ns) / 1e9,
-                )
+                map_age_s = (now_ns - self._front_stamp_ns) / 1e9
                 intent = OperatorIntentData(
                     session_id=session_id,
                     sequence=intent_sequence,
@@ -198,7 +170,6 @@ class SafetySupervisorNode(Node):
                 decision = evaluate_safety(
                     intent,
                     self._front_points,
-                    self._full_points,
                     map_age_s,
                     self._config,
                 )
