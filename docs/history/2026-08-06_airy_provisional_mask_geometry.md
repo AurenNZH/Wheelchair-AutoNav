@@ -53,3 +53,11 @@ threshold directly addresses the observed rasterization effect with a smaller
 blind-volume expansion. The default of two points is provisional and must pass
 the recorded real-obstacle gates before the shadow can be considered for any
 future safety use.
+
+RViz also exposes the scope directly before further geometry changes are made.
+Each mask has a bright green `XY HALO` footprint showing the continuous
+sensor-frame comparison geometry. `/artifact_filter/threshold_cells` shows the
+exact base-frame 10 cm cells evaluated on the current cloud: cyan for all
+candidate cells and yellow for the subset cleared by insufficient support.
+This diagnostic does not alter mask membership, thresholding, or either raw
+map.

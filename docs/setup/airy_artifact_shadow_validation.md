@@ -50,11 +50,12 @@ ros2 bag play BAG_DIRECTORY --clock
 ```
 
 Use identical saved RViz viewpoints for raw, **SHADOW ONLY**, prism-rejected
-(magenta), low-support (yellow), and mask overlays. Confirm `/diagnostics`
-records mask count, each mask's count, unique prism-rejected points, raw/shadow
-front cells, prism-touched/mixed/removed cells, threshold candidates,
-low-support cells/points, artifact filter time, processing p95/maximum, and
-cloud-age p95.
+(magenta), low-support (yellow), mask/XY-halo, and threshold-cell overlays.
+Confirm the cyan threshold cells match the intended halo coverage and the
+yellow cells match low-support removals. Confirm `/diagnostics` records mask
+count, each mask's count, unique prism-rejected points, raw/shadow front cells,
+prism-touched/mixed/removed cells, threshold candidates, low-support
+cells/points, artifact filter time, processing p95/maximum, and cloud-age p95.
 
 ## Acceptance gates
 

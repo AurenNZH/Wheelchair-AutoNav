@@ -112,13 +112,22 @@ Visualization Manager:
       Use Fixed Frame: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Artifact Pancake Masks
+      Name: Artifact Masks + XY Halo
       Topic:
         Depth: 1
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /artifact_filter/masks
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Threshold Scope Cells (Cyan/Yellow)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /artifact_filter/threshold_cells
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

@@ -23,7 +23,8 @@ convention.
 - Diagnostic artifact shadow: `/front_costmap_artifact_filtered`
 - Sensor-frame points removed from the shadow: `/artifact_filter/rejected_points`
 - Low-support points removed from halo cells: `/artifact_filter/low_support_points`
-- Configured mask boxes: `/artifact_filter/masks`
+- Configured mask boxes and XY halo outlines: `/artifact_filter/masks`
+- Exact grid cells evaluated by thresholding: `/artifact_filter/threshold_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -91,9 +92,14 @@ ros2 param set /local_costmap artifact_min_points_per_cell 1
 ros2 param set /local_costmap artifact_min_points_per_cell 2
 ```
 
-Prism-rejected points are magenta in RViz; low-support points are yellow. The
-raw Front 180 display defaults off so it cannot show through cells removed from
-the shadow, but remains available as a comparison checkbox.
+Prism-rejected points are magenta in RViz; low-support points are yellow. A
+bright green outline labelled `XY HALO` shows the continuous sensor-frame halo
+footprint. The grid-aligned threshold-scope display paints every cell evaluated
+by the minimum-support rule cyan and overlays cells that failed the rule in
+yellow. Because candidate cells depend on points in the current cloud, this
+cell display can change from frame to frame. The raw Front 180 display defaults
+off so it cannot show through cells removed from the shadow, but remains
+available as a comparison checkbox.
 
 ## Chassis Reflections
 

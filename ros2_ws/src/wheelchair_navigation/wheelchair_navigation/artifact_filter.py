@@ -58,6 +58,8 @@ class ArtifactCellSupportResult:
 
     shadow_mask: np.ndarray
     low_support_mask: np.ndarray
+    candidate_cell_ids: np.ndarray
+    low_support_cell_ids: np.ndarray
     stats: ArtifactCellSupportStats
 
 
@@ -285,6 +287,8 @@ def minimum_cell_support_filter(
     return ArtifactCellSupportResult(
         shadow_mask=shadow,
         low_support_mask=low_support,
+        candidate_cell_ids=candidate_cells,
+        low_support_cell_ids=low_support_cells,
         stats=ArtifactCellSupportStats(
             min_points_per_cell=minimum,
             halo_m=float(halo_m),

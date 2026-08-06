@@ -45,6 +45,10 @@ class LocalNavigationTests(unittest.TestCase):
             parameters["artifact_low_support_points_topic"],
             "/artifact_filter/low_support_points",
         )
+        self.assertEqual(
+            parameters["artifact_threshold_cells_topic"],
+            "/artifact_filter/threshold_cells",
+        )
         self.assertEqual(parameters["artifact_filter_frame"], "rslidar")
         self.assertTrue(parameters["publish_artifact_shadow"])
         self.assertEqual(len(parameters["artifact_pancake_masks"]), 21)

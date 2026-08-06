@@ -79,6 +79,10 @@ class LocalNavigationNode(Node):
         self.declare_parameter(
             "artifact_masks_topic", "/artifact_filter/masks"
         )
+        self.declare_parameter(
+            "artifact_threshold_cells_topic",
+            "/artifact_filter/threshold_cells",
+        )
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
@@ -146,6 +150,15 @@ class LocalNavigationNode(Node):
         self._artifact_masks_pub = self.create_publisher(
             MarkerArray,
             str(self.get_parameter("artifact_masks_topic").value),
+            marker_qos,
+        )
+        self._artifact_threshold_cells_pub = self.create_publisher(
+            MarkerArray,
+            str(
+                self.get_parameter(
+                    "artifact_threshold_cells_topic"
+                ).value
+            ),
             marker_qos,
         )
         self._diagnostics_pub = self.create_publisher(
@@ -421,7 +434,22 @@ class LocalNavigationNode(Node):
                 marker_header.stamp = msg.header.stamp
                 marker_header.frame_id = artifact_frame
                 self._artifact_masks_pub.publish(
-                    build_artifact_mask_markers(marker_header, masks)
+                    build_artifact_mask_markers(
+                        marker_header,
+                        masks,
+                        halo_m=threshold_halo_m,
+                    )
+                )
+                threshold_header = Header()
+                threshold_header.stamp = msg.header.stamp
+                threshold_header.frame_id = target_frame
+                self._artifact_threshold_cells_pub.publish(
+                    build_artifact_threshold_cell_markers(
+                        threshold_header,
+                        front_config,
+                        support_result.candidate_cell_ids,
+                        support_result.low_support_cell_ids,
+                    )
                 )
                 stage_ms["publish_artifact_ms"] = (
                     time.perf_counter() - publish_started
@@ -661,8 +689,13 @@ def artifact_shadow_error_reason(exc: Exception) -> str:
 def build_artifact_mask_markers(
     header: Header,
     masks: tuple[ArtifactPancakeMask, ...],
+    *,
+    halo_m: float = 0.0,
 ) -> MarkerArray:
-    """Visualize each pancake as a filled prism, outline, and label."""
+    """Visualize each pancake and its Z-independent XY halo footprint."""
+
+    if not np.isfinite(halo_m) or halo_m < 0.0:
+        raise ValueError("artifact marker halo must be finite and non-negative")
 
     result = MarkerArray()
     colors = (
@@ -738,7 +771,136 @@ def build_artifact_mask_markers(
         label.text = "MASK %d" % index
         label.frame_locked = True
         result.markers.append(label)
+
+        halo_outline = Marker()
+        halo_outline.header = header
+        halo_outline.ns = "artifact_threshold_halo_outlines"
+        halo_outline.id = index
+        halo_outline.type = Marker.LINE_LIST
+        halo_outline.action = Marker.ADD
+        halo_outline.pose = marker.pose
+        halo_outline.scale.x = 0.018
+        halo_outline.color.r = 0.25
+        halo_outline.color.g = 1.0
+        halo_outline.color.b = 0.25
+        halo_outline.color.a = 1.0
+        halo_outline.frame_locked = True
+        halo_outline.points = _rectangle_outline_points(
+            half_length + halo_m,
+            mask.half_width_m + halo_m,
+            half_height + 0.025,
+        )
+        result.markers.append(halo_outline)
+
+        halo_label = Marker()
+        halo_label.header = header
+        halo_label.ns = "artifact_threshold_halo_labels"
+        halo_label.id = index
+        halo_label.type = Marker.TEXT_VIEW_FACING
+        halo_label.action = Marker.ADD
+        halo_label.pose.position.x = center_x
+        halo_label.pose.position.y = center_y
+        halo_label.pose.position.z = mask.max_z_m + 0.16
+        halo_label.pose.orientation.w = 1.0
+        halo_label.scale.z = 0.07
+        halo_label.color.r = 0.25
+        halo_label.color.g = 1.0
+        halo_label.color.b = 0.25
+        halo_label.color.a = 1.0
+        halo_label.text = "XY HALO %d: +%.2f m" % (index, halo_m)
+        halo_label.frame_locked = True
+        result.markers.append(halo_label)
     return result
+
+
+def build_artifact_threshold_cell_markers(
+    header: Header,
+    config: FrontCostmapConfig,
+    candidate_cell_ids: np.ndarray,
+    low_support_cell_ids: np.ndarray,
+) -> MarkerArray:
+    """Show exact base-frame cells evaluated by the support threshold."""
+
+    geometry = np.asarray(
+        [config.length_m, config.width_m, config.resolution_m],
+        dtype=np.float64,
+    )
+    if not np.isfinite(geometry).all() or np.any(geometry <= 0.0):
+        raise ValueError("artifact threshold marker grid must be positive")
+    width = int(np.ceil(config.length_m / config.resolution_m))
+    height = int(np.ceil(config.width_m / config.resolution_m))
+    origin_y_m = -(height * config.resolution_m) / 2.0
+    result = MarkerArray()
+    result.markers.append(
+        _cell_list_marker(
+            header,
+            "artifact_threshold_candidate_cells",
+            candidate_cell_ids,
+            width,
+            height,
+            origin_y_m,
+            config.resolution_m,
+            color=(0.05, 0.75, 1.0, 0.22),
+            z_m=0.02,
+        )
+    )
+    result.markers.append(
+        _cell_list_marker(
+            header,
+            "artifact_threshold_low_support_cells",
+            low_support_cell_ids,
+            width,
+            height,
+            origin_y_m,
+            config.resolution_m,
+            color=(1.0, 0.85, 0.0, 0.48),
+            z_m=0.035,
+        )
+    )
+    return result
+
+
+def _cell_list_marker(
+    header: Header,
+    namespace: str,
+    cell_ids: np.ndarray,
+    width: int,
+    height: int,
+    origin_y_m: float,
+    resolution_m: float,
+    *,
+    color: tuple[float, float, float, float],
+    z_m: float,
+) -> Marker:
+    """Build one efficient cube-list marker from flat front-grid IDs."""
+
+    ids = np.asarray(cell_ids, dtype=np.int64)
+    if ids.ndim != 1:
+        raise ValueError("artifact threshold cell IDs must have shape (N,)")
+    if np.any((ids < 0) | (ids >= width * height)):
+        raise ValueError("artifact threshold marker cell ID is outside the grid")
+
+    marker = Marker()
+    marker.header = header
+    marker.ns = namespace
+    marker.id = 0
+    marker.type = Marker.CUBE_LIST
+    marker.action = Marker.ADD if ids.size else Marker.DELETE
+    marker.pose.orientation.w = 1.0
+    marker.scale.x = resolution_m * 0.96
+    marker.scale.y = resolution_m * 0.96
+    marker.scale.z = 0.02
+    marker.color.r, marker.color.g, marker.color.b, marker.color.a = color
+    marker.frame_locked = True
+    rows = ids // width
+    cols = ids % width
+    for row, col in zip(rows, cols):
+        point = Point()
+        point.x = (float(col) + 0.5) * resolution_m
+        point.y = origin_y_m + (float(row) + 0.5) * resolution_m
+        point.z = z_m
+        marker.points.append(point)
+    return marker
 
 
 def _box_outline_points(
@@ -765,6 +927,28 @@ def _box_outline_points(
     )
     points = []
     for start, end in edges:
+        for corner in (corners[start], corners[end]):
+            point = Point()
+            point.x, point.y, point.z = corner
+            points.append(point)
+    return points
+
+
+def _rectangle_outline_points(
+    half_length: float,
+    half_width: float,
+    z_m: float,
+) -> list[Point]:
+    """Return line-list endpoints for a rectangle in local mask axes."""
+
+    corners = (
+        (-half_length, -half_width, z_m),
+        (half_length, -half_width, z_m),
+        (half_length, half_width, z_m),
+        (-half_length, half_width, z_m),
+    )
+    points = []
+    for start, end in ((0, 1), (1, 2), (2, 3), (3, 0)):
         for corner in (corners[start], corners[end]):
             point = Point()
             point.x, point.y, point.z = corner

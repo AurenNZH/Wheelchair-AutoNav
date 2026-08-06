@@ -8,6 +8,7 @@ local_costmap:
     artifact_rejected_points_topic: /artifact_filter/rejected_points
     artifact_low_support_points_topic: /artifact_filter/low_support_points
     artifact_masks_topic: /artifact_filter/masks
+    artifact_threshold_cells_topic: /artifact_filter/threshold_cells
     diagnostics_topic: /diagnostics
     size_m: 8.0
     resolution_m: 0.1

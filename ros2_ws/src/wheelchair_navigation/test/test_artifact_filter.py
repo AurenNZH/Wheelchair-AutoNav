@@ -22,6 +22,7 @@ from wheelchair_navigation.local_navigation import (
 from wheelchair_navigation.local_navigation_node import (
     artifact_shadow_error_reason,
     build_artifact_mask_markers,
+    build_artifact_threshold_cell_markers,
 )
 
 
@@ -149,6 +150,8 @@ class ArtifactFilterTests(unittest.TestCase):
         self.assertEqual(result.stats.threshold_candidate_cells, 3)
         self.assertEqual(result.stats.low_support_cells, 2)
         self.assertEqual(result.stats.low_support_points, 2)
+        np.testing.assert_array_equal(result.candidate_cell_ids, [0, 1, 2])
+        np.testing.assert_array_equal(result.low_support_cell_ids, [0, 1])
 
     def test_minimum_one_and_empty_scope_leave_points_unchanged(self):
         common = {
@@ -295,10 +298,12 @@ class ArtifactFilterTests(unittest.TestCase):
         header.frame_id = "rslidar"
         mask = ArtifactPancakeMask(1.0, 2.0, 1.0, 4.0, 0.15, 0.2, 0.3)
 
-        markers = build_artifact_mask_markers(header, (mask,)).markers
+        markers = build_artifact_mask_markers(
+            header, (mask,), halo_m=0.1
+        ).markers
         marker = markers[0]
 
-        self.assertEqual(len(markers), 3)
+        self.assertEqual(len(markers), 5)
         self.assertEqual(marker.header.frame_id, "rslidar")
         self.assertAlmostEqual(marker.pose.position.x, 1.0)
         self.assertAlmostEqual(marker.pose.position.y, 3.0)
@@ -312,6 +317,51 @@ class ArtifactFilterTests(unittest.TestCase):
         self.assertEqual(markers[1].type, markers[1].LINE_LIST)
         self.assertEqual(len(markers[1].points), 24)
         self.assertEqual(markers[2].text, "MASK 0")
+        self.assertEqual(markers[3].ns, "artifact_threshold_halo_outlines")
+        self.assertEqual(markers[3].type, markers[3].LINE_LIST)
+        self.assertEqual(len(markers[3].points), 8)
+        halo_xy = [(point.x, point.y) for point in markers[3].points]
+        self.assertIn((-1.1, -0.25), halo_xy)
+        self.assertIn((1.1, 0.25), halo_xy)
+        self.assertEqual(markers[4].text, "XY HALO 0: +0.10 m")
+
+    def test_threshold_cell_markers_match_front_grid_cell_centres(self):
+        header = Header()
+        header.frame_id = "base_link"
+        config = FrontCostmapConfig(
+            length_m=2.0, width_m=2.0, resolution_m=0.5
+        )
+
+        markers = build_artifact_threshold_cell_markers(
+            header,
+            config,
+            candidate_cell_ids=np.array([0, 5, 15]),
+            low_support_cell_ids=np.array([5]),
+        ).markers
+
+        self.assertEqual(len(markers), 2)
+        self.assertEqual(markers[0].ns, "artifact_threshold_candidate_cells")
+        self.assertEqual(markers[0].type, markers[0].CUBE_LIST)
+        self.assertAlmostEqual(markers[0].scale.x, 0.48)
+        self.assertAlmostEqual(markers[0].scale.y, 0.48)
+        self.assertEqual(
+            [(point.x, point.y) for point in markers[0].points],
+            [(0.25, -0.75), (0.75, -0.25), (1.75, 0.75)],
+        )
+        self.assertEqual(markers[1].ns, "artifact_threshold_low_support_cells")
+        self.assertEqual(
+            [(point.x, point.y) for point in markers[1].points],
+            [(0.75, -0.25)],
+        )
+
+        cleared = build_artifact_threshold_cell_markers(
+            header,
+            config,
+            candidate_cell_ids=np.array([], dtype=np.int64),
+            low_support_cell_ids=np.array([], dtype=np.int64),
+        ).markers
+        self.assertEqual(cleared[0].action, cleared[0].DELETE)
+        self.assertEqual(cleared[1].action, cleared[1].DELETE)
 
 
 if __name__ == "__main__":
