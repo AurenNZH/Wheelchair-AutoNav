@@ -7,6 +7,7 @@ import time
 import numpy as np
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from geometry_msgs.msg import Point
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from rclpy.qos import (
@@ -19,22 +20,38 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformException, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 
+from wheelchair_navigation.artifact_filter import (
+    ArtifactCellSupportStats,
+    ArtifactFilterStats,
+    ArtifactPancakeMask,
+    artifact_pancake_membership,
+    artifact_xy_halo_membership,
+    minimum_cell_support_filter,
+    parse_artifact_pancake_masks,
+    validate_artifact_filter_frame,
+)
 from wheelchair_navigation.local_navigation import (
     CostmapStats,
     FrontCostmapConfig,
     LocalCostmapConfig,
-    filter_obstacle_points,
+    front_point_cell_ids,
     grid_origin_m,
     make_costmap_stats,
     make_front_grid,
     make_full_raw_grid,
+    obstacle_point_mask,
     parse_self_filter_boxes,
     select_front_points,
     validate_mapping_configs,
 )
 from wheelchair_navigation.mapping_diagnostics import MappingMetrics
-from wheelchair_navigation.point_cloud import point_cloud_to_arrays, transform_points
+from wheelchair_navigation.point_cloud import (
+    point_cloud_to_arrays,
+    transform_points,
+    xyz_to_point_cloud,
+)
 
 
 class LocalNavigationNode(Node):
@@ -47,6 +64,21 @@ class LocalNavigationNode(Node):
         self.declare_parameter("target_frame", "base_link")
         self.declare_parameter("raw_obstacles_topic", "/local_obstacles")
         self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter(
+            "artifact_filtered_front_topic",
+            "/front_costmap_artifact_filtered",
+        )
+        self.declare_parameter(
+            "artifact_rejected_points_topic",
+            "/artifact_filter/rejected_points",
+        )
+        self.declare_parameter(
+            "artifact_low_support_points_topic",
+            "/artifact_filter/low_support_points",
+        )
+        self.declare_parameter(
+            "artifact_masks_topic", "/artifact_filter/masks"
+        )
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
@@ -60,6 +92,11 @@ class LocalNavigationNode(Node):
         self.declare_parameter("front_fov_deg", 180.0)
         self.declare_parameter("self_filter_boxes", [])
         self.declare_parameter("self_filter_padding_m", 0.0)
+        self.declare_parameter("artifact_filter_frame", "rslidar")
+        self.declare_parameter("artifact_pancake_masks", [])
+        self.declare_parameter("artifact_min_points_per_cell", 2)
+        self.declare_parameter("artifact_threshold_halo_m", 0.10)
+        self.declare_parameter("publish_artifact_shadow", True)
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("validate_cloud_timestamps", True)
@@ -80,6 +117,36 @@ class LocalNavigationNode(Node):
             OccupancyGrid,
             str(self.get_parameter("front_costmap_topic").value),
             1,
+        )
+        self._artifact_front_pub = self.create_publisher(
+            OccupancyGrid,
+            str(self.get_parameter("artifact_filtered_front_topic").value),
+            1,
+        )
+        self._artifact_rejected_pub = self.create_publisher(
+            PointCloud2,
+            str(self.get_parameter("artifact_rejected_points_topic").value),
+            1,
+        )
+        self._artifact_low_support_pub = self.create_publisher(
+            PointCloud2,
+            str(
+                self.get_parameter(
+                    "artifact_low_support_points_topic"
+                ).value
+            ),
+            1,
+        )
+        marker_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._artifact_masks_pub = self.create_publisher(
+            MarkerArray,
+            str(self.get_parameter("artifact_masks_topic").value),
+            marker_qos,
         )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray,
@@ -196,9 +263,10 @@ class LocalNavigationNode(Node):
             )
 
             filter_started = time.perf_counter()
-            accepted, counts = filter_obstacle_points(
+            accepted_mask, counts = obstacle_point_mask(
                 points_base, map_config, boxes
             )
+            accepted = points_base[accepted_mask]
             stage_ms["filter_ms"] = (
                 time.perf_counter() - filter_started
             ) * 1000.0
@@ -272,9 +340,106 @@ class LocalNavigationNode(Node):
             stage_ms["publish_raw_ms"] + stage_ms["publish_front_ms"]
         )
 
+        artifact_stats = None
+        artifact_support_stats = None
+        artifact_front_cells = None
+        diagnostic_reason = "ok"
+        if bool(self.get_parameter("publish_artifact_shadow").value):
+            artifact_started = time.perf_counter()
+            try:
+                artifact_frame = str(
+                    self.get_parameter("artifact_filter_frame").value
+                )
+                masks = parse_artifact_pancake_masks(
+                    self.get_parameter("artifact_pancake_masks").value
+                )
+                validate_artifact_filter_frame(
+                    msg.header.frame_id, artifact_frame
+                )
+                prism_rejected_mask, artifact_stats = (
+                    artifact_pancake_membership(
+                        cloud.xyz, masks, accepted_mask
+                    )
+                )
+                threshold_halo_m = float(
+                    self.get_parameter("artifact_threshold_halo_m").value
+                )
+                halo_mask = artifact_xy_halo_membership(
+                    cloud.xyz,
+                    masks,
+                    threshold_halo_m,
+                    accepted_mask,
+                )
+                front_valid_mask, cell_ids, cell_count = (
+                    front_point_cell_ids(points_base, front_config)
+                )
+                support_result = minimum_cell_support_filter(
+                    cell_ids,
+                    front_valid_mask,
+                    accepted_mask,
+                    prism_rejected_mask,
+                    halo_mask,
+                    cell_count=cell_count,
+                    min_points_per_cell=self.get_parameter(
+                        "artifact_min_points_per_cell"
+                    ).value,
+                    halo_m=threshold_halo_m,
+                )
+                artifact_support_stats = support_result.stats
+                shadow_front_points = points_base[
+                    support_result.shadow_mask & front_valid_mask
+                ]
+                artifact_front = make_front_grid(
+                    shadow_front_points, front_config
+                )
+                rejected_sensor = cloud.xyz[prism_rejected_mask]
+                low_support_sensor = cloud.xyz[
+                    support_result.low_support_mask
+                ]
+                artifact_front_cells = int(
+                    np.count_nonzero(
+                        artifact_front == front_config.occupied_cost
+                    )
+                )
+                stage_ms["artifact_filter_ms"] = (
+                    time.perf_counter() - artifact_started
+                ) * 1000.0
+
+                publish_started = time.perf_counter()
+                self._artifact_front_pub.publish(
+                    build_front_occupancy_grid(
+                        header, artifact_front, front_config
+                    )
+                )
+                self._artifact_rejected_pub.publish(
+                    xyz_to_point_cloud(rejected_sensor, msg.header)
+                )
+                self._artifact_low_support_pub.publish(
+                    xyz_to_point_cloud(low_support_sensor, msg.header)
+                )
+                marker_header = Header()
+                marker_header.stamp = msg.header.stamp
+                marker_header.frame_id = artifact_frame
+                self._artifact_masks_pub.publish(
+                    build_artifact_mask_markers(marker_header, masks)
+                )
+                stage_ms["publish_artifact_ms"] = (
+                    time.perf_counter() - publish_started
+                ) * 1000.0
+                stage_ms["publish_ms"] += stage_ms["publish_artifact_ms"]
+            except (TypeError, ValueError) as exc:
+                diagnostic_reason = artifact_shadow_error_reason(exc)
+                stage_ms["artifact_filter_ms"] = (
+                    time.perf_counter() - artifact_started
+                ) * 1000.0
+                self.get_logger().error(
+                    "Artifact shadow suppressed; raw maps remain active: %s"
+                    % exc,
+                    throttle_duration_sec=5.0,
+                )
+
         self._processed_clouds += 1
         processing_ms = (time.perf_counter() - started) * 1000.0
-        self._metrics.record(processing_ms, arrival_monotonic)
         cloud_age_ms = (
             max(
                 0.0,
@@ -283,14 +448,23 @@ class LocalNavigationNode(Node):
             if validate_timestamps
             else 0.0
         )
+        self._metrics.record(
+            processing_ms,
+            arrival_monotonic,
+            cloud_age_ms=cloud_age_ms,
+            mapping_ms=stage_ms["mapping_ms"],
+        )
         self._publish_diagnostics(
-            "ok",
+            diagnostic_reason,
             processing_ms,
             cloud_age_ms,
             stats=stats,
             stage_ms=stage_ms,
             source_period_ms=source_period_ms,
             arrival_period_ms=arrival_period_ms,
+            artifact_stats=artifact_stats,
+            artifact_support_stats=artifact_support_stats,
+            artifact_front_cells=artifact_front_cells,
         )
 
     def _map_config(self) -> LocalCostmapConfig:
@@ -343,6 +517,9 @@ class LocalNavigationNode(Node):
         stage_ms: dict[str, float] | None = None,
         source_period_ms: float = 0.0,
         arrival_period_ms: float = 0.0,
+        artifact_stats: ArtifactFilterStats | None = None,
+        artifact_support_stats: ArtifactCellSupportStats | None = None,
+        artifact_front_cells: int | None = None,
     ) -> None:
         processing_warn = float(
             self.get_parameter("processing_warn_ms").value
@@ -388,6 +565,56 @@ class LocalNavigationNode(Node):
                     "front_occupied_cells": str(
                         stats.front_occupied_cells
                     ),
+                    "raw_front_cells": str(stats.front_occupied_cells),
+                }
+            )
+        values["artifact_shadow_enabled"] = str(
+            bool(self.get_parameter("publish_artifact_shadow").value)
+        ).lower()
+        if artifact_stats is not None:
+            values.update(
+                {
+                    "artifact_mask_count": str(artifact_stats.mask_count),
+                    "artifact_unique_rejected_points": str(
+                        artifact_stats.unique_rejected_points
+                    ),
+                    "artifact_filtered_front_cells": str(
+                        artifact_front_cells
+                    ),
+                }
+            )
+            for index, count in enumerate(
+                artifact_stats.per_mask_rejected_points
+            ):
+                values["artifact_mask_%d_rejected_points" % index] = str(
+                    count
+                )
+        if artifact_support_stats is not None:
+            values.update(
+                {
+                    "artifact_min_points_per_cell": str(
+                        artifact_support_stats.min_points_per_cell
+                    ),
+                    "artifact_threshold_halo_m": "%.3f"
+                    % artifact_support_stats.halo_m,
+                    "artifact_prism_touched_cells": str(
+                        artifact_support_stats.prism_touched_cells
+                    ),
+                    "artifact_prism_removed_cells": str(
+                        artifact_support_stats.prism_removed_cells
+                    ),
+                    "artifact_prism_mixed_cells": str(
+                        artifact_support_stats.prism_mixed_cells
+                    ),
+                    "artifact_threshold_candidate_cells": str(
+                        artifact_support_stats.threshold_candidate_cells
+                    ),
+                    "artifact_low_support_cells": str(
+                        artifact_support_stats.low_support_cells
+                    ),
+                    "artifact_low_support_points": str(
+                        artifact_support_stats.low_support_points
+                    ),
                 }
             )
 
@@ -421,6 +648,128 @@ def cloud_timestamp_error(
     if age_ns < -int(max_future_offset_s * 1e9):
         return "future_lidar"
     return None
+
+
+def artifact_shadow_error_reason(exc: Exception) -> str:
+    """Map shadow-only failures to stable diagnostic messages."""
+
+    if "frame mismatch" in str(exc):
+        return "artifact_shadow_frame_mismatch"
+    return "invalid_artifact_shadow_configuration"
+
+
+def build_artifact_mask_markers(
+    header: Header,
+    masks: tuple[ArtifactPancakeMask, ...],
+) -> MarkerArray:
+    """Visualize each pancake as a filled prism, outline, and label."""
+
+    result = MarkerArray()
+    colors = (
+        (0.10, 0.85, 1.00),
+        (1.00, 0.55, 0.05),
+        (0.85, 0.20, 1.00),
+    )
+    for index, mask in enumerate(masks):
+        dx = mask.end_x_m - mask.start_x_m
+        dy = mask.end_y_m - mask.start_y_m
+        yaw = float(np.arctan2(dy, dx))
+        red, green, blue = colors[index % len(colors)]
+        center_x = (mask.start_x_m + mask.end_x_m) / 2.0
+        center_y = (mask.start_y_m + mask.end_y_m) / 2.0
+        center_z = (mask.min_z_m + mask.max_z_m) / 2.0
+        half_length = mask.length_m / 2.0
+        half_height = (mask.max_z_m - mask.min_z_m) / 2.0
+
+        marker = Marker()
+        marker.header = header
+        marker.ns = "artifact_pancake_masks"
+        marker.id = index * 3
+        marker.type = Marker.CUBE
+        marker.action = Marker.ADD
+        marker.pose.position.x = center_x
+        marker.pose.position.y = center_y
+        marker.pose.position.z = center_z
+        marker.pose.orientation.z = float(np.sin(yaw / 2.0))
+        marker.pose.orientation.w = float(np.cos(yaw / 2.0))
+        marker.scale.x = mask.length_m
+        marker.scale.y = 2.0 * mask.half_width_m
+        marker.scale.z = mask.max_z_m - mask.min_z_m
+        marker.color.r = red
+        marker.color.g = green
+        marker.color.b = blue
+        marker.color.a = 0.34
+        marker.frame_locked = True
+        result.markers.append(marker)
+
+        outline = Marker()
+        outline.header = header
+        outline.ns = "artifact_pancake_outlines"
+        outline.id = index * 3 + 1
+        outline.type = Marker.LINE_LIST
+        outline.action = Marker.ADD
+        outline.pose = marker.pose
+        outline.scale.x = 0.012
+        outline.color.r = red
+        outline.color.g = green
+        outline.color.b = blue
+        outline.color.a = 1.0
+        outline.frame_locked = True
+        outline.points = _box_outline_points(
+            half_length, mask.half_width_m, half_height
+        )
+        result.markers.append(outline)
+
+        label = Marker()
+        label.header = header
+        label.ns = "artifact_pancake_labels"
+        label.id = index * 3 + 2
+        label.type = Marker.TEXT_VIEW_FACING
+        label.action = Marker.ADD
+        label.pose.position.x = center_x
+        label.pose.position.y = center_y
+        label.pose.position.z = mask.max_z_m + 0.08
+        label.pose.orientation.w = 1.0
+        label.scale.z = 0.08
+        label.color.r = red
+        label.color.g = green
+        label.color.b = blue
+        label.color.a = 1.0
+        label.text = "MASK %d" % index
+        label.frame_locked = True
+        result.markers.append(label)
+    return result
+
+
+def _box_outline_points(
+    half_length: float,
+    half_width: float,
+    half_height: float,
+) -> list[Point]:
+    """Return line-list endpoints for all twelve edges of a local box."""
+
+    corners = [
+        (-half_length, -half_width, -half_height),
+        (half_length, -half_width, -half_height),
+        (half_length, half_width, -half_height),
+        (-half_length, half_width, -half_height),
+        (-half_length, -half_width, half_height),
+        (half_length, -half_width, half_height),
+        (half_length, half_width, half_height),
+        (-half_length, half_width, half_height),
+    ]
+    edges = (
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7),
+    )
+    points = []
+    for start, end in edges:
+        for corner in (corners[start], corners[end]):
+            point = Point()
+            point.x, point.y, point.z = corner
+            points.append(point)
+    return points
 
 
 def build_occupancy_grid(

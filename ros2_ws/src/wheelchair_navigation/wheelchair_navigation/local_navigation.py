@@ -123,6 +123,46 @@ def select_front_points(
     return accepted_points[points_in_front_fov(accepted_points, config.fov_deg)]
 
 
+def front_point_cell_ids(
+    points_base: np.ndarray,
+    config: FrontCostmapConfig,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Return front-grid validity, flat cell IDs, and total cell count."""
+
+    _validate_front_config(config)
+    points = np.asarray(points_base, dtype=np.float32)
+    if points.size == 0:
+        points = np.empty((0, 3), dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("points_base must have shape (N, 3)")
+
+    width = int(np.ceil(config.length_m / config.resolution_m))
+    height = int(np.ceil(config.width_m / config.resolution_m))
+    origin_y_m = -(height * config.resolution_m) / 2.0
+    finite_xy = np.isfinite(points[:, :2]).all(axis=1)
+    cols = np.full(points.shape[0], -1, dtype=np.int32)
+    rows = np.full(points.shape[0], -1, dtype=np.int32)
+    finite_indices = np.flatnonzero(finite_xy)
+    cols[finite_indices] = np.floor(
+        points[finite_indices, 0] / config.resolution_m
+    ).astype(np.int32)
+    rows[finite_indices] = np.floor(
+        (points[finite_indices, 1] - origin_y_m) / config.resolution_m
+    ).astype(np.int32)
+    with np.errstate(invalid="ignore"):
+        in_fov = points_in_front_fov(points, config.fov_deg)
+    valid = (
+        finite_xy
+        & in_fov
+        & (cols >= 0)
+        & (cols < width)
+        & (rows >= 0)
+        & (rows < height)
+    )
+    cell_ids = rows.astype(np.int64) * width + cols.astype(np.int64)
+    return valid, cell_ids, width * height
+
+
 def make_front_grid(
     front_points: np.ndarray,
     config: FrontCostmapConfig,
@@ -185,6 +225,20 @@ def filter_obstacle_points(
     """Filter obstacle points once so multiple map layers can reuse them."""
 
     points = np.asarray(points_base, dtype=np.float32)
+    accepted_mask, counts = obstacle_point_mask(
+        points, config, self_filter_boxes
+    )
+    return points[accepted_mask], counts
+
+
+def obstacle_point_mask(
+    points_base: np.ndarray,
+    config: LocalCostmapConfig,
+    self_filter_boxes: tuple[SelfFilterBox, ...] = (),
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Return the shared height/range/self acceptance mask and counters."""
+
+    points = np.asarray(points_base, dtype=np.float32)
     if points.size == 0:
         points = np.empty((0, 3), dtype=np.float32)
     if points.ndim != 2 or points.shape[1] != 3:
@@ -193,7 +247,6 @@ def filter_obstacle_points(
     input_points = int(points.shape[0])
     finite_mask = np.isfinite(points).all(axis=1)
     finite_points = int(np.count_nonzero(finite_mask))
-
     ranges = np.linalg.norm(points[:, :2], axis=1)
     with np.errstate(invalid="ignore"):
         filtered_mask = (
@@ -209,8 +262,7 @@ def filter_obstacle_points(
     for box in self_filter_boxes:
         self_mask |= points_in_box(points, box)
     self_filtered_points = int(np.count_nonzero(filtered_mask & self_mask))
-    accepted = points[filtered_mask & ~self_mask]
-    return accepted, {
+    return filtered_mask & ~self_mask, {
         "input_points": input_points,
         "finite_points": finite_points,
         "height_range_points": height_range_points,
@@ -260,14 +312,15 @@ def rasterize_points(
 def points_in_box(points: np.ndarray, box: SelfFilterBox) -> np.ndarray:
     """Return a vectorized mask for points inside a closed 3D box."""
 
-    return (
-        (points[:, 0] >= box.min_x_m)
-        & (points[:, 0] <= box.max_x_m)
-        & (points[:, 1] >= box.min_y_m)
-        & (points[:, 1] <= box.max_y_m)
-        & (points[:, 2] >= box.min_z_m)
-        & (points[:, 2] <= box.max_z_m)
-    )
+    with np.errstate(invalid="ignore"):
+        return (
+            (points[:, 0] >= box.min_x_m)
+            & (points[:, 0] <= box.max_x_m)
+            & (points[:, 1] >= box.min_y_m)
+            & (points[:, 1] <= box.max_y_m)
+            & (points[:, 2] >= box.min_z_m)
+            & (points[:, 2] <= box.max_z_m)
+        )
 
 
 def parse_self_filter_boxes(
@@ -358,12 +411,14 @@ __all__ = [
     "LocalCostmapConfig",
     "SelfFilterBox",
     "filter_obstacle_points",
+    "front_point_cell_ids",
     "grid_origin_m",
     "make_costmap_stats",
     "make_front_grid",
     "make_full_raw_grid",
     "make_local_and_front_costmaps",
     "make_local_costmaps",
+    "obstacle_point_mask",
     "parse_self_filter_boxes",
     "points_in_front_fov",
     "points_in_box",

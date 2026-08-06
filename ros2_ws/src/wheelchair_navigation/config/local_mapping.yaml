@@ -4,6 +4,10 @@ local_costmap:
     target_frame: base_link
     raw_obstacles_topic: /local_obstacles
     front_costmap_topic: /front_costmap
+    artifact_filtered_front_topic: /front_costmap_artifact_filtered
+    artifact_rejected_points_topic: /artifact_filter/rejected_points
+    artifact_low_support_points_topic: /artifact_filter/low_support_points
+    artifact_masks_topic: /artifact_filter/masks
     diagnostics_topic: /diagnostics
     size_m: 8.0
     resolution_m: 0.1
@@ -21,6 +25,20 @@ local_costmap:
     # Keep zero padding so the effective filter exactly matches these bounds.
     self_filter_boxes: [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
     self_filter_padding_m: 0.0
+    # Diagnostic shadow only. Shared control continues to consume /front_costmap.
+    publish_artifact_shadow: true
+    artifact_filter_frame: rslidar
+    # Flat groups: [start_x, start_y, end_x, end_y, half_width, min_z, max_z].
+    # Provisional visual-debug masks measured from a live sensor-frame cloud on
+    # 2026-08-06. Keep these shadow-only until recorded obstacle gates pass.
+    artifact_pancake_masks: [
+      0.02, -0.21, 0.16, -0.52, 0.04, 0.03, 0.10,
+      -0.28, 0.08, -0.48, 0.14, 0.035, 0.03, 0.10,
+      0.39, -0.07, 0.56, 0.02, 0.035, 0.03, 0.10
+    ]
+    # Runtime-tunable provisional support rule. Set minimum to 1 to disable.
+    artifact_min_points_per_cell: 2
+    artifact_threshold_halo_m: 0.10
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0

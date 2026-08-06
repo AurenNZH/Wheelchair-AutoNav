@@ -10,6 +10,7 @@ from wheelchair_navigation.local_navigation import (
     LocalCostmapConfig,
     SelfFilterBox,
     filter_obstacle_points,
+    front_point_cell_ids,
     make_local_and_front_costmaps,
     make_local_costmaps,
     parse_self_filter_boxes,
@@ -20,7 +21,7 @@ from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 
 
 class LocalNavigationTests(unittest.TestCase):
-    def test_runtime_profile_exposes_only_two_obstacle_maps(self):
+    def test_runtime_profile_keeps_raw_topics_and_adds_shadow_only_outputs(self):
         config_path = (
             Path(__file__).resolve().parents[1]
             / "config"
@@ -32,10 +33,27 @@ class LocalNavigationTests(unittest.TestCase):
 
         self.assertEqual(parameters["raw_obstacles_topic"], "/local_obstacles")
         self.assertEqual(parameters["front_costmap_topic"], "/front_costmap")
-        self.assertNotIn("costmap_topic", parameters)
-        self.assertFalse(
-            any("filtered" in key or "rejected" in key for key in parameters)
+        self.assertEqual(
+            parameters["artifact_filtered_front_topic"],
+            "/front_costmap_artifact_filtered",
         )
+        self.assertEqual(
+            parameters["artifact_rejected_points_topic"],
+            "/artifact_filter/rejected_points",
+        )
+        self.assertEqual(
+            parameters["artifact_low_support_points_topic"],
+            "/artifact_filter/low_support_points",
+        )
+        self.assertEqual(parameters["artifact_filter_frame"], "rslidar")
+        self.assertTrue(parameters["publish_artifact_shadow"])
+        self.assertEqual(len(parameters["artifact_pancake_masks"]), 21)
+        self.assertEqual(
+            parameters["artifact_pancake_masks"][:7],
+            [0.02, -0.21, 0.16, -0.52, 0.04, 0.03, 0.10],
+        )
+        self.assertEqual(parameters["artifact_min_points_per_cell"], 2)
+        self.assertEqual(parameters["artifact_threshold_halo_m"], 0.10)
         self.assertEqual(parameters["front_length_m"], 4.0)
         self.assertEqual(
             parameters["self_filter_boxes"],
@@ -109,6 +127,30 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(np.count_nonzero(raw == 100), 2)
         self.assertEqual(np.count_nonzero(front == 100), 1)
 
+    def test_front_cell_ids_match_raster_geometry_and_reject_nonfinite(self):
+        config = FrontCostmapConfig(
+            length_m=2.0, width_m=2.0, resolution_m=0.5
+        )
+        points = np.array(
+            [
+                [0.0, -1.0, 0.4],
+                [0.49, -0.51, 0.4],
+                [1.99, 0.99, 0.4],
+                [-0.01, 0.0, 0.4],
+                [2.0, 0.0, 0.4],
+                [np.nan, 0.0, 0.4],
+            ],
+            dtype=np.float32,
+        )
+
+        valid, cell_ids, cell_count = front_point_cell_ids(points, config)
+
+        np.testing.assert_array_equal(
+            valid, [True, True, True, False, False, False]
+        )
+        np.testing.assert_array_equal(cell_ids[:3], [0, 0, 15])
+        self.assertEqual(cell_count, 16)
+
     def test_invalid_front_geometry_is_rejected(self):
         with self.assertRaises(ValueError):
             make_local_and_front_costmaps(
@@ -129,6 +171,8 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(values["processing_p50_ms"], "20.000")
         self.assertEqual(values["processing_p95_ms"], "29.000")
         self.assertEqual(values["processing_max_ms"], "30.000")
+        self.assertEqual(values["mapping_p95_ms"], "29.000")
+        self.assertEqual(values["cloud_age_p95_ms"], "0.000")
         self.assertEqual(values["lag_spike_count"], "1")
         self.assertEqual(values["effective_rate_hz"], "10.000")
 

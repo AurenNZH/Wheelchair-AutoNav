@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
 
 
 @dataclass(frozen=True)
@@ -130,9 +131,37 @@ def quaternion_to_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
     )
 
 
+def xyz_to_point_cloud(points: np.ndarray, header: Header) -> PointCloud2:
+    """Build a compact XYZ cloud while preserving the supplied header."""
+
+    xyz = np.asarray(points, dtype=np.float32)
+    if xyz.size == 0:
+        xyz = np.empty((0, 3), dtype=np.float32)
+    if xyz.ndim != 2 or xyz.shape[1] != 3:
+        raise ValueError("points must have shape (N, 3)")
+    little_endian = xyz.astype("<f4", copy=False)
+
+    msg = PointCloud2()
+    msg.header = header
+    msg.height = 1
+    msg.width = int(xyz.shape[0])
+    msg.fields = [
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+    ]
+    msg.is_bigendian = False
+    msg.point_step = 12
+    msg.row_step = msg.width * msg.point_step
+    msg.data = little_endian.tobytes(order="C")
+    msg.is_dense = bool(np.isfinite(xyz).all())
+    return msg
+
+
 __all__ = [
     "PointCloudArrays",
     "point_cloud_to_arrays",
     "quaternion_to_matrix",
     "transform_points",
+    "xyz_to_point_cloud",
 ]

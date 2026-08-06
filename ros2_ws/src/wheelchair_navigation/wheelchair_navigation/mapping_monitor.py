@@ -53,7 +53,10 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
     }
     return (
         "state=%s message=%s rate=%sHz process=%sms p95=%sms max=%sms "
-        "cloud_age=%sms point_filter=%sms raw_cells=%s front_cells=%s "
+        "mapping_p95=%sms cloud_age=%sms age_p95=%sms point_filter=%sms "
+        "raw_cells=%s front_cells=%s "
+        "shadow_cells=%s prism_rejected=%s low_support=%s mixed_cells=%s "
+        "min_points=%s artifact_filter=%sms "
         "self_filtered_points=%s rejected_clouds=%s lag_spikes=%s"
         % (
             level_names.get(status.level, str(status.level)),
@@ -62,10 +65,18 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
             values.get("processing_ms", "-"),
             values.get("processing_p95_ms", "-"),
             values.get("processing_max_ms", "-"),
+            values.get("mapping_p95_ms", "-"),
             values.get("cloud_age_ms", "-"),
+            values.get("cloud_age_p95_ms", "-"),
             values.get("filter_ms", "-"),
             values.get("occupied_cells", "-"),
             values.get("front_occupied_cells", "-"),
+            values.get("artifact_filtered_front_cells", "-"),
+            values.get("artifact_unique_rejected_points", "-"),
+            values.get("artifact_low_support_points", "-"),
+            values.get("artifact_prism_mixed_cells", "-"),
+            values.get("artifact_min_points_per_cell", "-"),
+            values.get("artifact_filter_ms", "-"),
             values.get("self_filtered_points", "-"),
             values.get("rejected_clouds", "-"),
             values.get("lag_spike_count", "-"),

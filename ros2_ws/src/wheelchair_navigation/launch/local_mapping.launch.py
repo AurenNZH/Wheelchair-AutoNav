@@ -19,6 +19,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "restamp_output_with_node_time", default_value="false"
             ),
+            DeclareLaunchArgument(
+                "publish_artifact_shadow", default_value="true"
+            ),
             Node(
                 package="wheelchair_navigation",
                 executable="local_costmap",
@@ -33,6 +36,9 @@ def generate_launch_description():
                         ),
                         "restamp_output_with_node_time": LaunchConfiguration(
                             "restamp_output_with_node_time"
+                        ),
+                        "publish_artifact_shadow": LaunchConfiguration(
+                            "publish_artifact_shadow"
                         ),
                     },
                 ],

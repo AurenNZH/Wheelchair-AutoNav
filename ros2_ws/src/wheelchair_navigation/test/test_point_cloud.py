@@ -9,6 +9,7 @@ from wheelchair_navigation.point_cloud import (
     point_cloud_to_arrays,
     quaternion_to_matrix,
     transform_points,
+    xyz_to_point_cloud,
 )
 
 
@@ -129,6 +130,22 @@ class PointCloudTests(unittest.TestCase):
             quaternion_to_matrix(0.0, 0.0, 0.0, 0.0),
             np.eye(3, dtype=np.float32),
         )
+
+    def test_rejected_xyz_cloud_preserves_input_header(self):
+        header = PointCloud2().header
+        header.frame_id = "rslidar"
+        header.stamp.sec = 123
+        header.stamp.nanosec = 456
+
+        msg = xyz_to_point_cloud(
+            np.array([[1.0, 2.0, 3.0]], dtype=np.float32), header
+        )
+
+        self.assertEqual(msg.header.frame_id, "rslidar")
+        self.assertEqual(msg.header.stamp.sec, 123)
+        self.assertEqual(msg.header.stamp.nanosec, 456)
+        self.assertEqual(msg.width, 1)
+        np.testing.assert_allclose(point_cloud_to_arrays(msg).xyz, [[1, 2, 3]])
 
     @staticmethod
     def _xyz_fields():
