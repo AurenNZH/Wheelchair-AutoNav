@@ -28,7 +28,7 @@ class MappingMonitorTests(unittest.TestCase):
             KeyValue(key="artifact_filtered_front_cells", value="4"),
             KeyValue(key="artifact_unique_rejected_points", value="7"),
             KeyValue(key="artifact_low_support_points", value="2"),
-            KeyValue(key="artifact_prism_mixed_cells", value="1"),
+            KeyValue(key="artifact_mask_mixed_cells", value="1"),
             KeyValue(key="artifact_min_points_per_cell", value="2"),
             KeyValue(key="artifact_filter_ms", value="0.8"),
             KeyValue(key="self_filtered_points", value="3"),
@@ -50,7 +50,7 @@ class MappingMonitorTests(unittest.TestCase):
         self.assertIn("cloud_age=12.0ms", line)
         self.assertIn("age_p95=24.0ms", line)
         self.assertIn("raw_cells=8 front_cells=6", line)
-        self.assertIn("shadow_cells=4 prism_rejected=7", line)
+        self.assertIn("shadow_cells=4 mask_rejected=7", line)
         self.assertIn("low_support=2 mixed_cells=1 min_points=2", line)
         self.assertIn("artifact_filter=0.8ms", line)
         self.assertIn("self_filtered_points=3", line)

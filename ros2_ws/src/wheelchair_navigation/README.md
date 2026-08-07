@@ -23,7 +23,8 @@ convention.
 - Diagnostic artifact shadow: `/front_costmap_artifact_filtered`
 - Sensor-frame points removed from the shadow: `/artifact_filter/rejected_points`
 - Low-support points removed from halo cells: `/artifact_filter/low_support_points`
-- Configured mask boxes and XY halo outlines: `/artifact_filter/masks`
+- Configured staircase regions and cell-aligned halo outlines:
+  `/artifact_filter/masks`
 - Exact grid cells evaluated by thresholding: `/artifact_filter/threshold_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
@@ -34,9 +35,10 @@ swept-path checks. Both are raw occupied cells with no inflation; wheelchair
 geometry is handled by the shared-control supervisor.
 
 The artifact-filtered map is explicitly a **SHADOW ONLY** diagnostic. Neither
-shared control nor the safety supervisor consumes it. A mask error or a cloud
-whose native frame is not `artifact_filter_frame` suppresses shadow products,
-reports an error on `/diagnostics`, and leaves both raw maps operational.
+shared control nor the safety supervisor consumes it. A mask error or an
+`artifact_filter_frame` that differs from the target frame suppresses shadow
+products, reports an error on `/diagnostics`, and leaves both raw maps
+operational.
 
 The former temporal 2D multipath filter remains retired. The current filter is
 a narrower 3D experiment for repeatable, flat near-sensor traces. See
@@ -65,41 +67,47 @@ chassis-filtered and artifact-rejected points, rejected clouds, and lag spikes.
 
 ## Artifact Shadow Calibration
 
-`artifact_pancake_masks` contains flat groups in native `rslidar` coordinates:
+`artifact_grid_mask_cells` contains flat groups in `base_link`:
 
 ```text
-[start_x, start_y, end_x, end_y, half_width, min_z, max_z]
+[region_id, forward_cell, lateral_cell, min_z_m, max_z_m]
 ```
 
-Each group is an oriented rectangular prism centred on the XY segment, with a
-fixed Z band. The checked-in list contains three provisional visual-debug
-prisms measured from a live sensor-frame cloud on 2026-08-06. RViz renders each
-as a translucent box, bright outline, and label. These values demonstrate and
-tune the filter; they are not approved safety geometry. Calibrate them from
-recorded `/rslidar_points` bags by following
-`docs/setup/airy_artifact_shadow_validation.md`. Do not widen a volume just to
-make an overlay look clean.
+Each XY index names one exact 10 cm front-costmap cell. Forward index zero is
+X `0.0..0.1 m`; lateral index zero is Y `0.0..0.1 m`, with negative values to
+the wheelchair's right. The checked-in 54 records form three provisional
+regions with per-cell Z bands. RViz renders three consolidated translucent
+staircase meshes and their exterior outlines without labels. These values are
+not approved safety geometry. Calibrate them from recorded `/rslidar_points`
+bags by following `docs/setup/airy_artifact_shadow_validation.md`.
 
-After prism rejection, the shadow counts remaining points in each 10 cm front
-cell. Within `artifact_threshold_halo_m` of a prism, a cell must contain at
-least `artifact_min_points_per_cell` unmasked points. The provisional defaults
-are 0.10 m and two points. The rule is local: cells outside the halo retain
-one-point sensitivity. Set the minimum to one at runtime to compare against
-the geometry-only shadow:
+After cell-band rejection, the shadow counts remaining points in each front
+cell. `artifact_grid_halo_spans` defines the halo independently as flat groups:
+
+```text
+[region_id, forward_cell, min_lateral_cell, max_lateral_cell]
+```
+
+Both lateral bounds are inclusive. Multiple spans can create an arbitrary
+staircase shape; every mask cell must remain covered by its region's halo. The
+checked-in spans reproduce the former one-cell, eight-neighbour dilation, but
+can now be expanded or reshaped without changing any mask record. All
+configured halo cells require at least `artifact_min_points_per_cell` unmasked
+points; the default is ten. Cells outside this fixed scope retain one-point
+sensitivity. Set the minimum to one at runtime to compare against the
+geometry-only shadow:
 
 ```bash
 ros2 param set /local_costmap artifact_min_points_per_cell 1
-ros2 param set /local_costmap artifact_min_points_per_cell 2
+ros2 param set /local_costmap artifact_min_points_per_cell 10
 ```
 
-Prism-rejected points are magenta in RViz; low-support points are yellow. A
-bright green outline labelled `XY HALO` shows the continuous sensor-frame halo
-footprint. The grid-aligned threshold-scope display paints every cell evaluated
-by the minimum-support rule cyan and overlays cells that failed the rule in
-yellow. Because candidate cells depend on points in the current cloud, this
-cell display can change from frame to frame. The raw Front 180 display defaults
-off so it cannot show through cells removed from the shadow, but remains
-available as a comparison checkbox.
+Cell-band-rejected points are magenta in RViz; low-support points are yellow.
+Bright green stepped outlines show the exact configured halo footprints. The
+threshold scope paints those cells cyan and overlays cells that fail the
+current support rule in yellow. The raw Front 180 display defaults off so it
+cannot show through cells removed from the shadow, but remains available as a
+comparison checkbox.
 
 ## Chassis Reflections
 

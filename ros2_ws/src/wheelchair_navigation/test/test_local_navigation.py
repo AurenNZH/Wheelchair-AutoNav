@@ -49,15 +49,64 @@ class LocalNavigationTests(unittest.TestCase):
             parameters["artifact_threshold_cells_topic"],
             "/artifact_filter/threshold_cells",
         )
-        self.assertEqual(parameters["artifact_filter_frame"], "rslidar")
+        self.assertEqual(parameters["artifact_filter_frame"], "base_link")
         self.assertTrue(parameters["publish_artifact_shadow"])
-        self.assertEqual(len(parameters["artifact_pancake_masks"]), 21)
+        records = np.asarray(
+            parameters["artifact_grid_mask_cells"], dtype=np.float64
+        ).reshape(-1, 5)
+        self.assertEqual(records.shape, (54, 5))
+        expected_spans = {
+            0: {
+                5: (-3, -1), 6: (-3, -1), 7: (-3, -1),
+                8: (-1, -1), 10: (-6, -4), 11: (-6, -4),
+                12: (-6, -4),
+            },
+            1: {
+                5: (0, 4), 6: (0, 4), 7: (0, 4), 8: (0, 4),
+                9: (2, 4), 10: (2, 4),
+            },
+            2: {1: (-7, -5), 2: (-7, -5), 3: (-7, -5)},
+        }
+        for region_id, spans in expected_spans.items():
+            expected_cells = {
+                (forward, lateral)
+                for forward, bounds in spans.items()
+                for lateral in range(bounds[0], bounds[1] + 1)
+            }
+            actual_cells = {
+                (int(row[1]), int(row[2]))
+                for row in records if int(row[0]) == region_id
+            }
+            self.assertEqual(actual_cells, expected_cells)
+        configured = {
+            (int(row[0]), int(row[1]), int(row[2])): tuple(row[3:])
+            for row in records
+        }
+        np.testing.assert_allclose(configured[(0, 5, -1)], [0.360, 0.460])
+        np.testing.assert_allclose(configured[(1, 7, 2)], [0.355, 0.490])
+        np.testing.assert_allclose(configured[(2, 2, -5)], [0.350, 0.420])
+        halo_spans = np.asarray(
+            parameters["artifact_grid_halo_spans"], dtype=np.float64
+        ).reshape(-1, 4)
+        self.assertEqual(halo_spans.shape, (23, 4))
+        expected_halo_spans = {
+            (0, x, -4, 0) for x in range(4, 9)
+        } | {
+            (0, 9, -7, 0)
+        } | {
+            (0, x, -7, -3) for x in range(10, 14)
+        } | {
+            (1, x, -1, 5) for x in range(4, 10)
+        } | {
+            (1, x, 1, 5) for x in range(10, 12)
+        } | {
+            (2, x, -8, -4) for x in range(0, 5)
+        }
         self.assertEqual(
-            parameters["artifact_pancake_masks"][:7],
-            [0.02, -0.21, 0.16, -0.52, 0.04, 0.03, 0.10],
+            {tuple(int(value) for value in row) for row in halo_spans},
+            expected_halo_spans,
         )
-        self.assertEqual(parameters["artifact_min_points_per_cell"], 2)
-        self.assertEqual(parameters["artifact_threshold_halo_m"], 0.10)
+        self.assertEqual(parameters["artifact_min_points_per_cell"], 10)
         self.assertEqual(parameters["front_length_m"], 4.0)
         self.assertEqual(
             parameters["self_filter_boxes"],

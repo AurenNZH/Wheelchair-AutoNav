@@ -55,7 +55,7 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
         "state=%s message=%s rate=%sHz process=%sms p95=%sms max=%sms "
         "mapping_p95=%sms cloud_age=%sms age_p95=%sms point_filter=%sms "
         "raw_cells=%s front_cells=%s "
-        "shadow_cells=%s prism_rejected=%s low_support=%s mixed_cells=%s "
+        "shadow_cells=%s mask_rejected=%s low_support=%s mixed_cells=%s "
         "min_points=%s artifact_filter=%sms "
         "self_filtered_points=%s rejected_clouds=%s lag_spikes=%s"
         % (
@@ -74,7 +74,7 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
             values.get("artifact_filtered_front_cells", "-"),
             values.get("artifact_unique_rejected_points", "-"),
             values.get("artifact_low_support_points", "-"),
-            values.get("artifact_prism_mixed_cells", "-"),
+            values.get("artifact_mask_mixed_cells", "-"),
             values.get("artifact_min_points_per_cell", "-"),
             values.get("artifact_filter_ms", "-"),
             values.get("self_filtered_points", "-"),

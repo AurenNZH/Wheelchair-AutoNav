@@ -28,18 +28,106 @@ local_costmap:
     self_filter_padding_m: 0.0
     # Diagnostic shadow only. Shared control continues to consume /front_costmap.
     publish_artifact_shadow: true
-    artifact_filter_frame: rslidar
-    # Flat groups: [start_x, start_y, end_x, end_y, half_width, min_z, max_z].
-    # Provisional visual-debug masks measured from a live sensor-frame cloud on
-    # 2026-08-06. Keep these shadow-only until recorded obstacle gates pass.
-    artifact_pancake_masks: [
-      0.02, -0.21, 0.16, -0.52, 0.04, 0.03, 0.10,
-      -0.28, 0.08, -0.48, 0.14, 0.035, 0.03, 0.10,
-      0.39, -0.07, 0.56, 0.02, 0.035, 0.03, 0.10
+    artifact_filter_frame: base_link
+    # Flat groups: [region_id, forward_cell, lateral_cell, min_z, max_z].
+    # XY indices refer directly to the 10 cm front costmap. The 54 records
+    # form three visual regions. Z bounds retain the nearest/intersecting
+    # legacy prism's measured band. Keep this shadow-only until recorded
+    # obstacle gates pass.
+    artifact_grid_mask_cells: [
+      0.0, 5.0, -3.0, 0.350, 0.420,
+      0.0, 5.0, -2.0, 0.360, 0.460,
+      0.0, 5.0, -1.0, 0.360, 0.460,
+      0.0, 6.0, -4.0, 0.350, 0.420,
+      0.0, 6.0, -3.0, 0.350, 0.420,
+      0.0, 6.0, -2.0, 0.360, 0.460,
+      0.0, 6.0, -1.0, 0.360, 0.535,
+      0.0, 7.0, -4.0, 0.350, 0.420,
+      0.0, 7.0, -3.0, 0.350, 0.420,
+      0.0, 7.0, -2.0, 0.360, 0.460,
+      0.0, 7.0, -1.0, 0.360, 0.535,
+      0.0, 8.0, -4.0, 0.350, 0.420,
+      0.0, 8.0, -3.0, 0.360, 0.535,
+      0.0, 8.0, -1.0, 0.360, 0.535,
+      0.0, 9.0, -4.0, 0.350, 0.420,
+      0.0, 9.0, -3.0, 0.360, 0.535,
+      0.0, 10.0, -6.0, 0.355, 0.470,
+      0.0, 10.0, -5.0, 0.350, 0.420,
+      0.0, 10.0, -4.0, 0.350, 0.420,
+      0.0, 11.0, -6.0, 0.350, 0.420,
+      0.0, 11.0, -5.0, 0.350, 0.420,
+      0.0, 11.0, -4.0, 0.350, 0.420,
+      0.0, 12.0, -6.0, 0.350, 0.420,
+      0.0, 12.0, -5.0, 0.350, 0.420,
+      0.0, 12.0, -4.0, 0.350, 0.420,
+      1.0, 5.0, 0.0, 0.350, 0.420,
+      1.0, 5.0, 1.0, 0.350, 0.420,
+      1.0, 5.0, 2.0, 0.350, 0.420,
+      1.0, 5.0, 3.0, 0.350, 0.420,
+      1.0, 5.0, 4.0, 0.350, 0.420,
+      1.0, 6.0, 0.0, 0.350, 0.420,
+      1.0, 6.0, 1.0, 0.350, 0.420,
+      1.0, 6.0, 2.0, 0.350, 0.420,
+      1.0, 6.0, 3.0, 0.395, 0.480,
+      1.0, 6.0, 4.0, 0.395, 0.480,
+      1.0, 7.0, 0.0, 0.355, 0.490,
+      1.0, 7.0, 1.0, 0.355, 0.490,
+      1.0, 7.0, 2.0, 0.355, 0.490,
+      1.0, 7.0, 3.0, 0.380, 0.490,
+      1.0, 7.0, 4.0, 0.395, 0.480,
+      1.0, 8.0, 0.0, 0.355, 0.490,
+      1.0, 8.0, 1.0, 0.355, 0.490,
+      1.0, 8.0, 2.0, 0.355, 0.490,
+      1.0, 8.0, 3.0, 0.355, 0.490,
+      1.0, 8.0, 4.0, 0.380, 0.490,
+      1.0, 9.0, 2.0, 0.355, 0.490,
+      1.0, 9.0, 3.0, 0.355, 0.490,
+      1.0, 9.0, 4.0, 0.380, 0.490,
+      1.0, 10.0, 2.0, 0.355, 0.480,
+      1.0, 10.0, 3.0, 0.355, 0.480,
+      1.0, 10.0, 4.0, 0.355, 0.480,
+      2.0, 1.0, -7.0, 0.350, 0.420,
+      2.0, 1.0, -6.0, 0.350, 0.420,
+      2.0, 1.0, -5.0, 0.350, 0.420,
+      2.0, 2.0, -7.0, 0.350, 0.420,
+      2.0, 2.0, -6.0, 0.350, 0.420,
+      2.0, 2.0, -5.0, 0.350, 0.420,
+      2.0, 3.0, -7.0, 0.350, 0.420,
+      2.0, 3.0, -6.0, 0.350, 0.420,
+      2.0, 3.0, -5.0, 0.350, 0.420
+    ]
+    # Independently editable halo footprints. Flat groups are
+    # [region_id, forward_cell, min_lateral_cell, max_lateral_cell], with both
+    # lateral bounds inclusive. These spans reproduce the previous one-cell,
+    # eight-neighbour expansion of the current masks. Every mask cell must be
+    # covered, but the spans may extend to any other desired threshold cells.
+    artifact_grid_halo_spans: [
+      0.0, 4.0, -4.0, 0.0,
+      0.0, 5.0, -5.0, 0.0,
+      0.0, 6.0, -6.0, 0.0,
+      0.0, 7.0, -6.0, 0.0,
+      0.0, 8.0, -6.0, 0.0,
+      0.0, 9.0, -7.0, 0.0,
+      0.0, 10.0, -7.0, 0.0,
+      0.0, 11.0, -7.0, 0.0,
+      0.0, 12.0, -7.0, 0.0,
+      0.0, 13.0, -7.0, 0.0,
+      1.0, 4.0, -1.0, 5.0,
+      1.0, 5.0, -1.0, 5.0,
+      1.0, 6.0, -1.0, 5.0,
+      1.0, 7.0, -1.0, 5.0,
+      1.0, 8.0, -1.0, 5.0,
+      1.0, 9.0, -1.0, 5.0,
+      1.0, 10.0, 1.0, 5.0,
+      1.0, 11.0, 1.0, 5.0,
+      2.0, 0.0, -8.0, -4.0,
+      2.0, 1.0, -8.0, -4.0,
+      2.0, 2.0, -8.0, -4.0,
+      2.0, 3.0, -8.0, -4.0,
+      2.0, 4.0, -8.0, -4.0
     ]
     # Runtime-tunable provisional support rule. Set minimum to 1 to disable.
-    artifact_min_points_per_cell: 2
-    artifact_threshold_halo_m: 0.10
+    artifact_min_points_per_cell: 10
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0

@@ -41,3 +41,8 @@ a separate review after every real-obstacle gate in the validation protocol
 passes. A thin horizontal bar at artifact height is the deliberate worst-case
 blind-volume test; disappearance is a failed promotion gate, not a reason to
 widen or silently accept the mask.
+
+The oriented-prism representation described here was superseded on 2026-08-07
+by the cell-aligned three-region staircase recorded in
+`2026-08-06_airy_provisional_mask_geometry.md`. The diagnostic-only and
+raw-map invariants remain unchanged.

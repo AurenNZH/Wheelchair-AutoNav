@@ -112,7 +112,7 @@ Visualization Manager:
       Use Fixed Frame: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: Artifact Masks + XY Halo
+      Name: Artifact Staircases + Cell Halo
       Topic:
         Depth: 1
         Durability Policy: Transient Local

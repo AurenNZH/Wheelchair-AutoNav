@@ -25,11 +25,13 @@ from visualization_msgs.msg import Marker, MarkerArray
 from wheelchair_navigation.artifact_filter import (
     ArtifactCellSupportStats,
     ArtifactFilterStats,
-    ArtifactPancakeMask,
-    artifact_pancake_membership,
-    artifact_xy_halo_membership,
+    ArtifactGridCell,
+    ArtifactHaloSpan,
+    artifact_configured_halo_cell_ids,
+    artifact_grid_membership,
     minimum_cell_support_filter,
-    parse_artifact_pancake_masks,
+    parse_artifact_grid_cells,
+    parse_artifact_grid_halo_spans,
     validate_artifact_filter_frame,
 )
 from wheelchair_navigation.local_navigation import (
@@ -96,10 +98,10 @@ class LocalNavigationNode(Node):
         self.declare_parameter("front_fov_deg", 180.0)
         self.declare_parameter("self_filter_boxes", [])
         self.declare_parameter("self_filter_padding_m", 0.0)
-        self.declare_parameter("artifact_filter_frame", "rslidar")
-        self.declare_parameter("artifact_pancake_masks", [])
+        self.declare_parameter("artifact_filter_frame", "base_link")
+        self.declare_parameter("artifact_grid_mask_cells", [])
+        self.declare_parameter("artifact_grid_halo_spans", [])
         self.declare_parameter("artifact_min_points_per_cell", 2)
-        self.declare_parameter("artifact_threshold_halo_m", 0.10)
         self.declare_parameter("publish_artifact_shadow", True)
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
@@ -363,40 +365,43 @@ class LocalNavigationNode(Node):
                 artifact_frame = str(
                     self.get_parameter("artifact_filter_frame").value
                 )
-                masks = parse_artifact_pancake_masks(
-                    self.get_parameter("artifact_pancake_masks").value
+                cells = parse_artifact_grid_cells(
+                    self.get_parameter("artifact_grid_mask_cells").value
+                )
+                halo_spans = parse_artifact_grid_halo_spans(
+                    self.get_parameter("artifact_grid_halo_spans").value
                 )
                 validate_artifact_filter_frame(
-                    msg.header.frame_id, artifact_frame
-                )
-                prism_rejected_mask, artifact_stats = (
-                    artifact_pancake_membership(
-                        cloud.xyz, masks, accepted_mask
-                    )
-                )
-                threshold_halo_m = float(
-                    self.get_parameter("artifact_threshold_halo_m").value
-                )
-                halo_mask = artifact_xy_halo_membership(
-                    cloud.xyz,
-                    masks,
-                    threshold_halo_m,
-                    accepted_mask,
+                    artifact_frame, target_frame
                 )
                 front_valid_mask, cell_ids, cell_count = (
                     front_point_cell_ids(points_base, front_config)
+                )
+                mask_rejected, artifact_stats = artifact_grid_membership(
+                    points_base,
+                    cell_ids,
+                    front_valid_mask,
+                    cells,
+                    front_config,
+                    accepted_mask,
+                )
+                threshold_candidate_cells = (
+                    artifact_configured_halo_cell_ids(
+                        halo_spans,
+                        cells,
+                        front_config,
+                    )
                 )
                 support_result = minimum_cell_support_filter(
                     cell_ids,
                     front_valid_mask,
                     accepted_mask,
-                    prism_rejected_mask,
-                    halo_mask,
+                    mask_rejected,
+                    threshold_candidate_cells,
                     cell_count=cell_count,
                     min_points_per_cell=self.get_parameter(
                         "artifact_min_points_per_cell"
                     ).value,
-                    halo_m=threshold_halo_m,
                 )
                 artifact_support_stats = support_result.stats
                 shadow_front_points = points_base[
@@ -405,7 +410,7 @@ class LocalNavigationNode(Node):
                 artifact_front = make_front_grid(
                     shadow_front_points, front_config
                 )
-                rejected_sensor = cloud.xyz[prism_rejected_mask]
+                rejected_sensor = cloud.xyz[mask_rejected]
                 low_support_sensor = cloud.xyz[
                     support_result.low_support_mask
                 ]
@@ -434,10 +439,11 @@ class LocalNavigationNode(Node):
                 marker_header.stamp = msg.header.stamp
                 marker_header.frame_id = artifact_frame
                 self._artifact_masks_pub.publish(
-                    build_artifact_mask_markers(
+                    build_artifact_grid_markers(
                         marker_header,
-                        masks,
-                        halo_m=threshold_halo_m,
+                        cells,
+                        halo_spans,
+                        front_config,
                     )
                 )
                 threshold_header = Header()
@@ -602,7 +608,9 @@ class LocalNavigationNode(Node):
         if artifact_stats is not None:
             values.update(
                 {
-                    "artifact_mask_count": str(artifact_stats.mask_count),
+                    "artifact_region_count": str(
+                        artifact_stats.region_count
+                    ),
                     "artifact_unique_rejected_points": str(
                         artifact_stats.unique_rejected_points
                     ),
@@ -612,9 +620,9 @@ class LocalNavigationNode(Node):
                 }
             )
             for index, count in enumerate(
-                artifact_stats.per_mask_rejected_points
+                artifact_stats.per_region_rejected_points
             ):
-                values["artifact_mask_%d_rejected_points" % index] = str(
+                values["artifact_region_%d_rejected_points" % index] = str(
                     count
                 )
         if artifact_support_stats is not None:
@@ -623,16 +631,17 @@ class LocalNavigationNode(Node):
                     "artifact_min_points_per_cell": str(
                         artifact_support_stats.min_points_per_cell
                     ),
-                    "artifact_threshold_halo_m": "%.3f"
-                    % artifact_support_stats.halo_m,
-                    "artifact_prism_touched_cells": str(
-                        artifact_support_stats.prism_touched_cells
+                    "artifact_configured_halo_cells": str(
+                        artifact_support_stats.configured_halo_cells
                     ),
-                    "artifact_prism_removed_cells": str(
-                        artifact_support_stats.prism_removed_cells
+                    "artifact_mask_touched_cells": str(
+                        artifact_support_stats.mask_touched_cells
                     ),
-                    "artifact_prism_mixed_cells": str(
-                        artifact_support_stats.prism_mixed_cells
+                    "artifact_mask_removed_cells": str(
+                        artifact_support_stats.mask_removed_cells
+                    ),
+                    "artifact_mask_mixed_cells": str(
+                        artifact_support_stats.mask_mixed_cells
                     ),
                     "artifact_threshold_candidate_cells": str(
                         artifact_support_stats.threshold_candidate_cells
@@ -686,130 +695,101 @@ def artifact_shadow_error_reason(exc: Exception) -> str:
     return "invalid_artifact_shadow_configuration"
 
 
-def build_artifact_mask_markers(
+def build_artifact_grid_markers(
     header: Header,
-    masks: tuple[ArtifactPancakeMask, ...],
-    *,
-    halo_m: float = 0.0,
+    cells: tuple[ArtifactGridCell, ...],
+    halo_spans: tuple[ArtifactHaloSpan, ...],
+    config: FrontCostmapConfig,
 ) -> MarkerArray:
-    """Visualize each pancake and its Z-independent XY halo footprint."""
-
-    if not np.isfinite(halo_m) or halo_m < 0.0:
-        raise ValueError("artifact marker halo must be finite and non-negative")
+    """Visualize consolidated cell meshes and their staircase halo outlines."""
 
     result = MarkerArray()
+    clear = Marker()
+    clear.header = header
+    clear.action = Marker.DELETEALL
+    result.markers.append(clear)
     colors = (
         (0.10, 0.85, 1.00),
-        (1.00, 0.55, 0.05),
         (0.85, 0.20, 1.00),
+        (1.00, 0.55, 0.05),
     )
-    for index, mask in enumerate(masks):
-        dx = mask.end_x_m - mask.start_x_m
-        dy = mask.end_y_m - mask.start_y_m
-        yaw = float(np.arctan2(dy, dx))
-        red, green, blue = colors[index % len(colors)]
-        center_x = (mask.start_x_m + mask.end_x_m) / 2.0
-        center_y = (mask.start_y_m + mask.end_y_m) / 2.0
-        center_z = (mask.min_z_m + mask.max_z_m) / 2.0
-        half_length = mask.length_m / 2.0
-        half_height = (mask.max_z_m - mask.min_z_m) / 2.0
-
-        marker = Marker()
-        marker.header = header
-        marker.ns = "artifact_pancake_masks"
-        marker.id = index * 3
-        marker.type = Marker.CUBE
-        marker.action = Marker.ADD
-        marker.pose.position.x = center_x
-        marker.pose.position.y = center_y
-        marker.pose.position.z = center_z
-        marker.pose.orientation.z = float(np.sin(yaw / 2.0))
-        marker.pose.orientation.w = float(np.cos(yaw / 2.0))
-        marker.scale.x = mask.length_m
-        marker.scale.y = 2.0 * mask.half_width_m
-        marker.scale.z = mask.max_z_m - mask.min_z_m
-        marker.color.r = red
-        marker.color.g = green
-        marker.color.b = blue
-        marker.color.a = 0.34
-        marker.frame_locked = True
-        result.markers.append(marker)
+    resolution = float(config.resolution_m)
+    region_ids = sorted({cell.region_id for cell in cells})
+    for region_id in region_ids:
+        region_cells = tuple(
+            cell for cell in cells if cell.region_id == region_id
+        )
+        red, green, blue = colors[region_id % len(colors)]
+        mesh = Marker()
+        mesh.header = header
+        mesh.ns = "artifact_grid_regions"
+        mesh.id = region_id
+        mesh.type = Marker.TRIANGLE_LIST
+        mesh.action = Marker.ADD
+        mesh.pose.orientation.w = 1.0
+        mesh.color.r = red
+        mesh.color.g = green
+        mesh.color.b = blue
+        mesh.color.a = 0.34
+        mesh.frame_locked = True
+        for cell in region_cells:
+            mesh.points.extend(_cell_box_triangle_points(cell, resolution))
+        result.markers.append(mesh)
 
         outline = Marker()
         outline.header = header
-        outline.ns = "artifact_pancake_outlines"
-        outline.id = index * 3 + 1
+        outline.ns = "artifact_grid_region_outlines"
+        outline.id = region_id
         outline.type = Marker.LINE_LIST
         outline.action = Marker.ADD
-        outline.pose = marker.pose
+        outline.pose.orientation.w = 1.0
         outline.scale.x = 0.012
         outline.color.r = red
         outline.color.g = green
         outline.color.b = blue
         outline.color.a = 1.0
         outline.frame_locked = True
-        outline.points = _box_outline_points(
-            half_length, mask.half_width_m, half_height
+        outline.points = _cell_footprint_outline_points(
+            {
+                (cell.forward_cell, cell.lateral_cell)
+                for cell in region_cells
+            },
+            resolution,
+            max(cell.max_z_m for cell in region_cells) + 0.006,
         )
         result.markers.append(outline)
 
-        label = Marker()
-        label.header = header
-        label.ns = "artifact_pancake_labels"
-        label.id = index * 3 + 2
-        label.type = Marker.TEXT_VIEW_FACING
-        label.action = Marker.ADD
-        label.pose.position.x = center_x
-        label.pose.position.y = center_y
-        label.pose.position.z = mask.max_z_m + 0.08
-        label.pose.orientation.w = 1.0
-        label.scale.z = 0.08
-        label.color.r = red
-        label.color.g = green
-        label.color.b = blue
-        label.color.a = 1.0
-        label.text = "MASK %d" % index
-        label.frame_locked = True
-        result.markers.append(label)
-
         halo_outline = Marker()
         halo_outline.header = header
-        halo_outline.ns = "artifact_threshold_halo_outlines"
-        halo_outline.id = index
+        halo_outline.ns = "artifact_grid_halo_outlines"
+        halo_outline.id = region_id
         halo_outline.type = Marker.LINE_LIST
         halo_outline.action = Marker.ADD
-        halo_outline.pose = marker.pose
+        halo_outline.pose.orientation.w = 1.0
         halo_outline.scale.x = 0.018
         halo_outline.color.r = 0.25
         halo_outline.color.g = 1.0
         halo_outline.color.b = 0.25
         halo_outline.color.a = 1.0
         halo_outline.frame_locked = True
-        halo_outline.points = _rectangle_outline_points(
-            half_length + halo_m,
-            mask.half_width_m + halo_m,
-            half_height + 0.025,
+        halo_ids = artifact_configured_halo_cell_ids(
+            halo_spans,
+            cells,
+            config,
+            region_id=region_id,
+        )
+        width = int(np.ceil(config.length_m / resolution))
+        height = int(np.ceil(config.width_m / resolution))
+        zero_row = height // 2
+        halo_outline.points = _cell_footprint_outline_points(
+            {
+                (int(cell_id % width), int(cell_id // width) - zero_row)
+                for cell_id in halo_ids
+            },
+            resolution,
+            max(cell.max_z_m for cell in region_cells) + 0.025,
         )
         result.markers.append(halo_outline)
-
-        halo_label = Marker()
-        halo_label.header = header
-        halo_label.ns = "artifact_threshold_halo_labels"
-        halo_label.id = index
-        halo_label.type = Marker.TEXT_VIEW_FACING
-        halo_label.action = Marker.ADD
-        halo_label.pose.position.x = center_x
-        halo_label.pose.position.y = center_y
-        halo_label.pose.position.z = mask.max_z_m + 0.16
-        halo_label.pose.orientation.w = 1.0
-        halo_label.scale.z = 0.07
-        halo_label.color.r = 0.25
-        halo_label.color.g = 1.0
-        halo_label.color.b = 0.25
-        halo_label.color.a = 1.0
-        halo_label.text = "XY HALO %d: +%.2f m" % (index, halo_m)
-        halo_label.frame_locked = True
-        result.markers.append(halo_label)
     return result
 
 
@@ -903,56 +883,72 @@ def _cell_list_marker(
     return marker
 
 
-def _box_outline_points(
-    half_length: float,
-    half_width: float,
-    half_height: float,
+def _cell_box_triangle_points(
+    cell: ArtifactGridCell,
+    resolution_m: float,
 ) -> list[Point]:
-    """Return line-list endpoints for all twelve edges of a local box."""
+    """Return twelve triangles for one height-bounded costmap cell."""
 
+    min_x = cell.forward_cell * resolution_m
+    max_x = min_x + resolution_m
+    min_y = cell.lateral_cell * resolution_m
+    max_y = min_y + resolution_m
     corners = [
-        (-half_length, -half_width, -half_height),
-        (half_length, -half_width, -half_height),
-        (half_length, half_width, -half_height),
-        (-half_length, half_width, -half_height),
-        (-half_length, -half_width, half_height),
-        (half_length, -half_width, half_height),
-        (half_length, half_width, half_height),
-        (-half_length, half_width, half_height),
+        (min_x, min_y, cell.min_z_m),
+        (max_x, min_y, cell.min_z_m),
+        (max_x, max_y, cell.min_z_m),
+        (min_x, max_y, cell.min_z_m),
+        (min_x, min_y, cell.max_z_m),
+        (max_x, min_y, cell.max_z_m),
+        (max_x, max_y, cell.max_z_m),
+        (min_x, max_y, cell.max_z_m),
     ]
-    edges = (
-        (0, 1), (1, 2), (2, 3), (3, 0),
-        (4, 5), (5, 6), (6, 7), (7, 4),
-        (0, 4), (1, 5), (2, 6), (3, 7),
+    triangles = (
+        (0, 2, 1), (0, 3, 2),
+        (4, 5, 6), (4, 6, 7),
+        (0, 1, 5), (0, 5, 4),
+        (1, 2, 6), (1, 6, 5),
+        (2, 3, 7), (2, 7, 6),
+        (3, 0, 4), (3, 4, 7),
     )
     points = []
-    for start, end in edges:
-        for corner in (corners[start], corners[end]):
+    for triangle in triangles:
+        for index in triangle:
             point = Point()
-            point.x, point.y, point.z = corner
+            point.x, point.y, point.z = corners[index]
             points.append(point)
     return points
 
 
-def _rectangle_outline_points(
-    half_length: float,
-    half_width: float,
+def _cell_footprint_outline_points(
+    cells: set[tuple[int, int]],
+    resolution_m: float,
     z_m: float,
 ) -> list[Point]:
-    """Return line-list endpoints for a rectangle in local mask axes."""
+    """Return only the exterior line segments of a staircase footprint."""
 
-    corners = (
-        (-half_length, -half_width, z_m),
-        (half_length, -half_width, z_m),
-        (half_length, half_width, z_m),
-        (-half_length, half_width, z_m),
-    )
     points = []
-    for start, end in ((0, 1), (1, 2), (2, 3), (3, 0)):
-        for corner in (corners[start], corners[end]):
-            point = Point()
-            point.x, point.y, point.z = corner
-            points.append(point)
+    for col, row in sorted(cells):
+        min_x = col * resolution_m
+        max_x = min_x + resolution_m
+        min_y = row * resolution_m
+        max_y = min_y + resolution_m
+        edges = []
+        if (col - 1, row) not in cells:
+            edges.append(((min_x, min_y), (min_x, max_y)))
+        if (col + 1, row) not in cells:
+            edges.append(((max_x, min_y), (max_x, max_y)))
+        if (col, row - 1) not in cells:
+            edges.append(((min_x, min_y), (max_x, min_y)))
+        if (col, row + 1) not in cells:
+            edges.append(((min_x, max_y), (max_x, max_y)))
+        for start, end in edges:
+            for x_m, y_m in (start, end):
+                point = Point()
+                point.x = x_m
+                point.y = y_m
+                point.z = z_m
+                points.append(point)
     return points
 
 
