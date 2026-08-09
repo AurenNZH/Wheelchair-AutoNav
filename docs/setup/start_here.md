@@ -82,3 +82,7 @@ Follow [shared_control_validation.md](shared_control_validation.md) in order:
 6. controlled foam-obstacle SLOW/STOP tests.
 
 Never jump directly from RViz validation to obstacle-driving tests.
+
+Before physical-JSM shared control, complete the receive-only
+[physical joystick observation](physical_joystick_observer.md). That observer
+does not alter the existing CAN passthrough or publish an actuator command.

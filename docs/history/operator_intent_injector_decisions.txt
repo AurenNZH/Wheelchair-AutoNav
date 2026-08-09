@@ -120,3 +120,20 @@ raised to 0.430 m; neighbouring cells, the chassis self-filter, the global
 three-point rule, and the local fifteen-point rule remain unchanged. This is a
 narrow recorded-evidence adjustment rather than a broader obstacle-policy
 relaxation, and still requires a physical target gate before promotion.
+
+2026-08-09T19:33:07+01:00 — Passive physical-JSM observation milestone
+Physical-joystick shared control begins with observation rather than command
+replacement. A standalone Pi observer receives only the configured
+02000X00#XxYy position frame, ignores locally generated SocketCAN loopback, and
+records signed raw axes, normalized ROS steering/forward values, frame timing,
+and diagnostic direction. It deliberately has no CAN-send method, UDP client,
+ROS publisher, gateway lifecycle control, or dependency on the existing
+keyboard controller. This keeps the chair's current R-Net path untouched while
+we measure the actual PiCAN Duo interface, JSM slot, axis signs, update rate,
+and neutral jitter instead of inheriting assumptions from can2RNET examples.
+
+The first powered scope remains straight-forward physical joystick input. The
+captured data will establish the neutral deadzone before physical JSM values
+are translated into OperatorIntent in a later shadow-only milestone. No CAN
+suppression, replacement, FollowJSM injection, or supervisor actuation is
+authorized by this change.

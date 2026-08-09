@@ -10,6 +10,7 @@ components/can_controller/
 ├── requirements.txt
 ├── scripts/
 │   ├── setup_utils.py
+│   ├── observe_physical_joystick.py
 │   └── teleoperate_keyboard.py
 ├── src/
 │   └── wheelchair_teleop/
@@ -28,6 +29,37 @@ python scripts/teleoperate_keyboard.py --config ../../configs/wheelchair/default
 ```
 
 The older notes below still describe the CAN/RNET behavior and safety model, but some command paths have changed to match the monorepo layout.
+
+## Passive physical-JSM observer
+
+The first physical-joystick shared-control milestone is deliberately
+non-actuating. `observe_physical_joystick.py` listens for the physical R-Net
+JSM position frame and displays its two signed axes without starting or
+stopping a CAN gateway, transmitting a CAN frame, sending UDP, or publishing a
+ROS message.
+
+The actual PiCAN Duo topology must be observed rather than assumed. Choose the
+interface that receives the physical JSM frame directly:
+
+```bash
+python scripts/observe_physical_joystick.py \
+  --can-interface can1 --device-slot 1
+```
+
+To retain every valid 100 Hz sample while exercising neutral, forward,
+reverse, left, right, and diagonal positions:
+
+```bash
+python scripts/observe_physical_joystick.py \
+  --can-interface can1 --device-slot 1 \
+  --duration-s 30 --csv /tmp/physical_jsm.csv
+```
+
+Do not run keyboard command injection during this capture. The observer ignores
+locally generated SocketCAN loopback frames, so it reports the physical JSM
+rather than commands created by another Pi process. See the
+[physical-JSM observer guide](../../docs/setup/physical_joystick_observer.md)
+for topology discovery, expected output, and acceptance checks.
 
 ## Optional Jetson safety envelope
 
