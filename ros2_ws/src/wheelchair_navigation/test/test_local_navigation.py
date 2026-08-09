@@ -54,24 +54,33 @@ class LocalNavigationTests(unittest.TestCase):
         records = np.asarray(
             parameters["artifact_grid_mask_cells"], dtype=np.float64
         ).reshape(-1, 5)
-        self.assertEqual(records.shape, (54, 5))
-        expected_spans = {
+        self.assertEqual(records.shape, (76, 5))
+        expected_cells_by_row = {
             0: {
-                5: (-3, -1), 6: (-3, -1), 7: (-3, -1),
-                8: (-1, -1), 10: (-6, -4), 11: (-6, -4),
-                12: (-6, -4),
+                5: (-5, -4, -3, -2, -1),
+                6: (-5, -4, -3, -2, -1),
+                7: (-5, -4, -3, -2, -1),
+                8: (-6, -5, -4, -3, -2, -1),
+                9: (-6, -5, -4, -3, -2),
+                10: (-6, -5, -4),
+                11: (-6, -5, -4), 12: (-6, -5, -4),
             },
             1: {
-                5: (0, 4), 6: (0, 4), 7: (0, 4), 8: (0, 4),
-                9: (2, 4), 10: (2, 4),
+                5: (0, 1, 2, 3, 4), 6: (0, 1, 2, 3, 4),
+                7: (0, 1, 2, 3, 4), 8: (0, 1, 2, 3, 4),
+                9: (2, 3, 4), 10: (2, 3, 4),
             },
-            2: {1: (-7, -5), 2: (-7, -5), 3: (-7, -5)},
+            2: {
+                1: (-9, -8, -7, -6, -5),
+                2: (-9, -8, -7, -6, -5),
+                3: (-9, -8, -7, -6, -5),
+            },
         }
-        for region_id, spans in expected_spans.items():
+        for region_id, rows in expected_cells_by_row.items():
             expected_cells = {
                 (forward, lateral)
-                for forward, bounds in spans.items()
-                for lateral in range(bounds[0], bounds[1] + 1)
+                for forward, laterals in rows.items()
+                for lateral in laterals
             }
             actual_cells = {
                 (int(row[1]), int(row[2]))
@@ -83,6 +92,7 @@ class LocalNavigationTests(unittest.TestCase):
             for row in records
         }
         np.testing.assert_allclose(configured[(0, 5, -1)], [0.360, 0.460])
+        np.testing.assert_allclose(configured[(1, 6, 1)], [0.350, 0.430])
         np.testing.assert_allclose(configured[(1, 7, 2)], [0.355, 0.490])
         np.testing.assert_allclose(configured[(2, 2, -5)], [0.350, 0.420])
         halo_spans = np.asarray(
@@ -90,23 +100,26 @@ class LocalNavigationTests(unittest.TestCase):
         ).reshape(-1, 4)
         self.assertEqual(halo_spans.shape, (23, 4))
         expected_halo_spans = {
-            (0, x, -4, 0) for x in range(4, 9)
+            (0, 4, -4, 0), (0, 5, -5, 0),
         } | {
-            (0, 9, -7, 0)
+            (0, x, -6, 0) for x in range(6, 8)
         } | {
-            (0, x, -7, -3) for x in range(10, 14)
+            (0, x, -7, 0) for x in range(8, 14)
         } | {
             (1, x, -1, 5) for x in range(4, 10)
         } | {
             (1, x, 1, 5) for x in range(10, 12)
         } | {
-            (2, x, -8, -4) for x in range(0, 5)
+            (2, x, -10, -4) for x in range(0, 5)
         }
         self.assertEqual(
             {tuple(int(value) for value in row) for row in halo_spans},
             expected_halo_spans,
         )
-        self.assertEqual(parameters["artifact_min_points_per_cell"], 10)
+        self.assertEqual(
+            parameters["artifact_global_min_points_per_cell"], 3
+        )
+        self.assertEqual(parameters["artifact_min_points_per_cell"], 15)
         self.assertEqual(parameters["front_length_m"], 4.0)
         self.assertEqual(
             parameters["self_filter_boxes"],

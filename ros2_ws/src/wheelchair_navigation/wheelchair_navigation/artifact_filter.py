@@ -44,6 +44,7 @@ class ArtifactCellSupportStats:
     """Point-support counters for mask and halo cells."""
 
     min_points_per_cell: int
+    global_min_points_per_cell: int
     configured_halo_cells: int
     mask_touched_cells: int
     mask_removed_cells: int
@@ -367,10 +368,14 @@ def minimum_cell_support_filter(
     *,
     cell_count: int,
     min_points_per_cell: int,
+    global_min_points_per_cell: int = 1,
 ) -> ArtifactCellSupportResult:
-    """Require point support only in configured mask and halo cells."""
+    """Require global support plus a stricter mask-and-halo threshold."""
 
     minimum = _validated_minimum_points(min_points_per_cell)
+    global_minimum = _validated_minimum_points(
+        global_min_points_per_cell
+    )
     if cell_count < 1:
         raise ValueError("artifact support grid must contain at least one cell")
 
@@ -397,9 +402,16 @@ def minimum_cell_support_filter(
     mask_cells = np.unique(ids[eligible & rejected & valid])
     candidate_cells = np.union1d(mask_cells, candidates)
     candidate_counts = kept_counts[candidate_cells]
-    low_support_cells = candidate_cells[
+    local_low_support_cells = candidate_cells[
         (candidate_counts > 0) & (candidate_counts < minimum)
     ]
+    occupied_cells = np.flatnonzero(kept_counts > 0)
+    global_low_support_cells = occupied_cells[
+        kept_counts[occupied_cells] < global_minimum
+    ]
+    low_support_cells = np.union1d(
+        local_low_support_cells, global_low_support_cells
+    )
     low_support = kept_front & np.isin(ids, low_support_cells)
     shadow = kept_after_mask & ~low_support
 
@@ -411,6 +423,7 @@ def minimum_cell_support_filter(
         low_support_cell_ids=low_support_cells,
         stats=ArtifactCellSupportStats(
             min_points_per_cell=minimum,
+            global_min_points_per_cell=global_minimum,
             configured_halo_cells=int(candidate_cells.size),
             mask_touched_cells=int(mask_cells.size),
             mask_removed_cells=int(np.count_nonzero(mask_counts == 0)),

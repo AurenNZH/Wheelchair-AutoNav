@@ -30,6 +30,10 @@ start movement. ROS steering is left-positive. The single-AIRY demo permits
 `left_turn_unobserved`, excessive right steering stops with
 `right_turn_limit_exceeded`, and reverse remains disabled.
 
+The measured 0.80 m base is centred on `base_link`, so its configured forward
+and rear extents are both 0.40 m. STOP and SLOW distances are additional
+travel-to-contact distances beyond that swept footprint.
+
 ## Recorded-map decision replay
 
 The replay pipeline injects straight-forward operator intent into recorded

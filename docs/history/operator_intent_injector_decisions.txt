@@ -96,3 +96,27 @@ near-field returns, and the five-second lease returned to deadman_released.
 Stopping that single map stream produced stale_map and MAP STALE after the
 two-second replay timeout. No surround_proximity decision was emitted, and no
 Gazebo-owned file was changed.
+
+2026-08-07T18:46:29+01:00 — Centred geometry and cell-support milestone
+The measured 0.80 m base is centred on base_link, so shared control now models
+0.40 m in front and 0.40 m behind while retaining 0.70 m STOP and 1.20 m SLOW
+travel distances. The artifact shadow now requires at least three post-mask
+returns in every occupied front cell; its explicitly configured artifact halo
+retains the stricter fifteen-return rule. This separates general single-return
+noise rejection from the evidence already gathered for persistent AIRY
+artifacts, and deliberately leaves the raw front map unchanged for comparison.
+
+Five replay residual cells are published as labelled, static RViz diagnostics;
+they do not alter either map. Reprocessing the raw clouds with the new rules
+made clear_lidar_fix_01 CLEAR in 123/123 frames and clear_lidar_fix_02 CLEAR in
+158/159 frames. The remaining STOP was R1 at cell (6, 1), which exceeded the
+fifteen-return halo threshold in one frame. This is evidence for a fresh
+clear_lidar_fix_03 recording, not justification to weaken the halo threshold.
+
+2026-08-07T19:19:57+01:00 — R1 height refinement
+Inspection of clear_lidar_fix_03 located the R1 survivors in the correct XY
+cell but immediately above its 0.420 m Z ceiling. The R1 ceiling alone was
+raised to 0.430 m; neighbouring cells, the chassis self-filter, the global
+three-point rule, and the local fifteen-point rule remain unchanged. This is a
+narrow recorded-evidence adjustment rather than a broader obstacle-policy
+relaxation, and still requires a physical target gate before promotion.

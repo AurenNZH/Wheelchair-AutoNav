@@ -128,6 +128,15 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /artifact_filter/threshold_cells
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Replay Residual Cells (Red + Labels)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /artifact_filter/residual_cells
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

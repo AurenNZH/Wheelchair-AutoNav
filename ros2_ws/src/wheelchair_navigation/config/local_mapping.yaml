@@ -9,6 +9,7 @@ local_costmap:
     artifact_low_support_points_topic: /artifact_filter/low_support_points
     artifact_masks_topic: /artifact_filter/masks
     artifact_threshold_cells_topic: /artifact_filter/threshold_cells
+    artifact_residual_cells_topic: /artifact_filter/residual_cells
     diagnostics_topic: /diagnostics
     size_m: 8.0
     resolution_m: 0.1
@@ -29,28 +30,47 @@ local_costmap:
     # Diagnostic shadow only. Shared control continues to consume /front_costmap.
     publish_artifact_shadow: true
     artifact_filter_frame: base_link
+    # Diagnostic-only cells observed to survive in the two clear replay bags.
+    # Flat pairs are [forward_cell, lateral_cell]; these markers do not filter.
+    artifact_residual_cells: [
+      6.0, 1.0,
+      12.0, 1.0,
+      13.0, 1.0,
+      15.0, -3.0,
+      19.0, -4.0
+    ]
     # Flat groups: [region_id, forward_cell, lateral_cell, min_z, max_z].
-    # XY indices refer directly to the 10 cm front costmap. The 54 records
+    # XY indices refer directly to the 10 cm front costmap. The 76 records
     # form three visual regions. Z bounds retain the nearest/intersecting
     # legacy prism's measured band. Keep this shadow-only until recorded
     # obstacle gates pass.
     artifact_grid_mask_cells: [
+      0.0, 5.0, -5.0, 0.350, 0.420,
+      0.0, 5.0, -4.0, 0.350, 0.420,
       0.0, 5.0, -3.0, 0.350, 0.420,
       0.0, 5.0, -2.0, 0.360, 0.460,
       0.0, 5.0, -1.0, 0.360, 0.460,
+      0.0, 6.0, -5.0, 0.350, 0.420,
       0.0, 6.0, -4.0, 0.350, 0.420,
       0.0, 6.0, -3.0, 0.350, 0.420,
       0.0, 6.0, -2.0, 0.360, 0.460,
       0.0, 6.0, -1.0, 0.360, 0.535,
+      0.0, 7.0, -5.0, 0.350, 0.420,
       0.0, 7.0, -4.0, 0.350, 0.420,
       0.0, 7.0, -3.0, 0.350, 0.420,
       0.0, 7.0, -2.0, 0.360, 0.460,
       0.0, 7.0, -1.0, 0.360, 0.535,
+      0.0, 8.0, -6.0, 0.350, 0.420,
+      0.0, 8.0, -5.0, 0.350, 0.420,
       0.0, 8.0, -4.0, 0.350, 0.420,
       0.0, 8.0, -3.0, 0.360, 0.535,
+      0.0, 8.0, -2.0, 0.360, 0.535,
       0.0, 8.0, -1.0, 0.360, 0.535,
+      0.0, 9.0, -6.0, 0.350, 0.420,
+      0.0, 9.0, -5.0, 0.350, 0.420,
       0.0, 9.0, -4.0, 0.350, 0.420,
       0.0, 9.0, -3.0, 0.360, 0.535,
+      0.0, 9.0, -2.0, 0.360, 0.535,
       0.0, 10.0, -6.0, 0.355, 0.470,
       0.0, 10.0, -5.0, 0.350, 0.420,
       0.0, 10.0, -4.0, 0.350, 0.420,
@@ -66,7 +86,7 @@ local_costmap:
       1.0, 5.0, 3.0, 0.350, 0.420,
       1.0, 5.0, 4.0, 0.350, 0.420,
       1.0, 6.0, 0.0, 0.350, 0.420,
-      1.0, 6.0, 1.0, 0.350, 0.420,
+      1.0, 6.0, 1.0, 0.350, 0.430,
       1.0, 6.0, 2.0, 0.350, 0.420,
       1.0, 6.0, 3.0, 0.395, 0.480,
       1.0, 6.0, 4.0, 0.395, 0.480,
@@ -86,12 +106,18 @@ local_costmap:
       1.0, 10.0, 2.0, 0.355, 0.480,
       1.0, 10.0, 3.0, 0.355, 0.480,
       1.0, 10.0, 4.0, 0.355, 0.480,
+      2.0, 1.0, -9.0, 0.350, 0.420,
+      2.0, 1.0, -8.0, 0.350, 0.420,
       2.0, 1.0, -7.0, 0.350, 0.420,
       2.0, 1.0, -6.0, 0.350, 0.420,
       2.0, 1.0, -5.0, 0.350, 0.420,
+      2.0, 2.0, -9.0, 0.350, 0.420,
+      2.0, 2.0, -8.0, 0.350, 0.420,
       2.0, 2.0, -7.0, 0.350, 0.420,
       2.0, 2.0, -6.0, 0.350, 0.420,
       2.0, 2.0, -5.0, 0.350, 0.420,
+      2.0, 3.0, -9.0, 0.350, 0.420,
+      2.0, 3.0, -8.0, 0.350, 0.420,
       2.0, 3.0, -7.0, 0.350, 0.420,
       2.0, 3.0, -6.0, 0.350, 0.420,
       2.0, 3.0, -5.0, 0.350, 0.420
@@ -106,7 +132,7 @@ local_costmap:
       0.0, 5.0, -5.0, 0.0,
       0.0, 6.0, -6.0, 0.0,
       0.0, 7.0, -6.0, 0.0,
-      0.0, 8.0, -6.0, 0.0,
+      0.0, 8.0, -7.0, 0.0,
       0.0, 9.0, -7.0, 0.0,
       0.0, 10.0, -7.0, 0.0,
       0.0, 11.0, -7.0, 0.0,
@@ -120,14 +146,17 @@ local_costmap:
       1.0, 9.0, -1.0, 5.0,
       1.0, 10.0, 1.0, 5.0,
       1.0, 11.0, 1.0, 5.0,
-      2.0, 0.0, -8.0, -4.0,
-      2.0, 1.0, -8.0, -4.0,
-      2.0, 2.0, -8.0, -4.0,
-      2.0, 3.0, -8.0, -4.0,
-      2.0, 4.0, -8.0, -4.0
+      2.0, 0.0, -10.0, -4.0,
+      2.0, 1.0, -10.0, -4.0,
+      2.0, 2.0, -10.0, -4.0,
+      2.0, 3.0, -10.0, -4.0,
+      2.0, 4.0, -10.0, -4.0
     ]
-    # Runtime-tunable provisional support rule. Set minimum to 1 to disable.
-    artifact_min_points_per_cell: 10
+    # The shadow requires three post-filter points in every front cell. The
+    # configured mask/halo cells retain the stricter fifteen-point threshold.
+    # Set either value to 1 to disable that part of the support rule.
+    artifact_global_min_points_per_cell: 3
+    artifact_min_points_per_cell: 15
     max_cloud_age_s: 1.0
     max_future_offset_s: 0.1
     processing_warn_ms: 100.0

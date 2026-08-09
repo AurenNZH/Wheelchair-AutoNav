@@ -27,7 +27,9 @@ from wheelchair_navigation.local_navigation import (
 from wheelchair_navigation.local_navigation_node import (
     artifact_shadow_error_reason,
     build_artifact_grid_markers,
+    build_artifact_residual_cell_markers,
     build_artifact_threshold_cell_markers,
+    parse_artifact_residual_cells,
 )
 
 
@@ -248,6 +250,26 @@ class ArtifactFilterTests(unittest.TestCase):
         np.testing.assert_array_equal(stricter.shadow_mask, [True, True])
         self.assertEqual(stricter.stats.threshold_candidate_cells, 0)
 
+    def test_global_minimum_applies_outside_configured_halo(self):
+        result = minimum_cell_support_filter(
+            cell_ids=np.array([0, 1, 1, 1, 2, 2], dtype=np.int64),
+            valid_front_mask=np.ones(6, dtype=bool),
+            eligible_mask=np.ones(6, dtype=bool),
+            mask_rejected_mask=np.zeros(6, dtype=bool),
+            threshold_candidate_cell_ids=np.array([], dtype=np.int64),
+            cell_count=3,
+            min_points_per_cell=15,
+            global_min_points_per_cell=3,
+        )
+
+        np.testing.assert_array_equal(
+            result.shadow_mask, [False, True, True, True, False, False]
+        )
+        np.testing.assert_array_equal(result.low_support_cell_ids, [0, 2])
+        self.assertEqual(result.stats.global_min_points_per_cell, 3)
+        self.assertEqual(result.stats.low_support_cells, 2)
+        self.assertEqual(result.stats.low_support_points, 3)
+
     def test_invalid_support_configuration_is_rejected(self):
         common = {
             "cell_ids": np.array([0], dtype=np.int64),
@@ -261,6 +283,14 @@ class ArtifactFilterTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 minimum_cell_support_filter(
                     min_points_per_cell=value, **common
+                )
+            with self.subTest(global_value=value), self.assertRaises(
+                ValueError
+            ):
+                minimum_cell_support_filter(
+                    min_points_per_cell=1,
+                    global_min_points_per_cell=value,
+                    **common,
                 )
 
     def test_raw_maps_are_unchanged_and_mixed_mask_cell_remains(self):
@@ -371,6 +401,45 @@ class ArtifactFilterTests(unittest.TestCase):
         ).markers
         self.assertEqual(cleared[0].action, cleared[0].DELETE)
         self.assertEqual(cleared[1].action, cleared[1].DELETE)
+
+    def test_residual_cell_markers_are_exact_labelled_and_diagnostic(self):
+        header = Header()
+        header.frame_id = "base_link"
+        config = FrontCostmapConfig(
+            length_m=2.0, width_m=2.0, resolution_m=0.5
+        )
+        cells = parse_artifact_residual_cells([0.0, 0.0, 3.0, -2.0])
+
+        markers = build_artifact_residual_cell_markers(
+            header, config, cells
+        ).markers
+
+        self.assertEqual(cells, ((0, 0), (3, -2)))
+        self.assertEqual(markers[0].action, markers[0].DELETEALL)
+        self.assertEqual(markers[1].ns, "artifact_residual_cells")
+        self.assertEqual(markers[1].type, markers[1].CUBE_LIST)
+        self.assertEqual(
+            [(point.x, point.y) for point in markers[1].points],
+            [(0.25, 0.25), (1.75, -0.75)],
+        )
+        self.assertIn("R1 cell=(0,0)", markers[2].text)
+        self.assertIn("R2 cell=(3,-2)", markers[3].text)
+        self.assertTrue(all(marker.frame_locked for marker in markers[1:]))
+
+        invalid = (
+            [0.0],
+            [0.5, 0.0],
+            [0.0, np.nan],
+            [0.0, 0.0, 0.0, 0.0],
+        )
+        for values in invalid:
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                parse_artifact_residual_cells(values)
+
+        with self.assertRaises(ValueError):
+            build_artifact_residual_cell_markers(
+                header, config, ((4, 0),)
+            )
 
 
 if __name__ == "__main__":

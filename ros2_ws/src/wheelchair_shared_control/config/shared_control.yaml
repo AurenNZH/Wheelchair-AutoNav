@@ -11,9 +11,9 @@
     enable_motion: false
     geometry_calibrated: false
 
-    # Provisional dimensions: replace with measurements in base_link.
+    # The measured 0.80 m base is centred on base_link.
     chair_width_m: 0.70
-    front_extent_m: 0.80
+    front_extent_m: 0.40
     rear_extent_m: 0.40
     lateral_margin_m: 0.15
     stop_distance_m: 0.70

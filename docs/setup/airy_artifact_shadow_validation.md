@@ -9,8 +9,9 @@ For each case, record 10–20 seconds while stationary and preserve the original
 cloud frame and timestamps:
 
 ```bash
-ros2 bag record /rslidar_points /tf /tf_static /front_costmap \
-  /local_obstacles /diagnostics
+ros2 bag record -o ~/wheelchair_bags/clear_lidar_fix_03 \
+  /rslidar_points /tf /tf_static /front_costmap \
+  /front_costmap_artifact_filtered /local_obstacles /diagnostics
 ```
 
 Capture open floor, black acrylic, and the installed shielded wheelchair. Also
@@ -64,15 +65,14 @@ cells/points, artifact filter time, processing p95/maximum, and cloud-age p95.
 - Raw `/local_obstacles` and `/front_costmap` messages are bit-for-bit unchanged
   with shadow publication enabled or disabled.
 - In the empty installed scene, at least 95% of manually labelled near-sensor
-  artifact cells disappear. With the default local support rule, no cell
-  outside `artifact_grid_halo_spans` may change. Every mask cell must remain
-  inside its region's configured halo footprint.
+  artifact cells disappear. Every mask cell must remain inside its region's
+  configured halo footprint.
 - Larger structured surfaces visible in the seven source photographs remain.
-- With `artifact_min_points_per_cell:=1`, cell-band exclusion alone is active
+- With both point thresholds set to one, cell-band exclusion alone is active
   and a mask cell containing any unmasked accepted point stays occupied.
-- With the current recorded-scene default of ten, only in-scope cells with
-  fewer than ten remaining accepted points clear. Cells outside the mask-local
-  scope retain the raw mapper's one-point sensitivity.
+- With the current defaults, every shadow cell requires at least three
+  remaining points, while configured mask/halo cells require fifteen. The raw
+  maps retain their original one-point sensitivity.
 - Magenta mask-rejected and yellow low-support point clouds are disjoint and
   preserve the source cloud frame and timestamp.
 - On every labelled obstacle bag, the shadow never changes expected STOP to

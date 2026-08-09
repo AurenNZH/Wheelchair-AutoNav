@@ -33,7 +33,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("enable_motion", False)
         self.declare_parameter("geometry_calibrated", False)
         self.declare_parameter("chair_width_m", 0.70)
-        self.declare_parameter("front_extent_m", 0.80)
+        self.declare_parameter("front_extent_m", 0.40)
         self.declare_parameter("rear_extent_m", 0.40)
         self.declare_parameter("lateral_margin_m", 0.15)
         self.declare_parameter("stop_distance_m", 0.70)

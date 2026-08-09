@@ -22,10 +22,11 @@ convention.
 - Robot-forward 180-degree raw obstacles: `/front_costmap`
 - Diagnostic artifact shadow: `/front_costmap_artifact_filtered`
 - Sensor-frame points removed from the shadow: `/artifact_filter/rejected_points`
-- Low-support points removed from halo cells: `/artifact_filter/low_support_points`
+- Low-support points removed from the shadow: `/artifact_filter/low_support_points`
 - Configured staircase regions and cell-aligned halo outlines:
   `/artifact_filter/masks`
 - Exact grid cells evaluated by thresholding: `/artifact_filter/threshold_cells`
+- Five labelled residual replay cells: `/artifact_filter/residual_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -75,14 +76,16 @@ chassis-filtered and artifact-rejected points, rejected clouds, and lag spikes.
 
 Each XY index names one exact 10 cm front-costmap cell. Forward index zero is
 X `0.0..0.1 m`; lateral index zero is Y `0.0..0.1 m`, with negative values to
-the wheelchair's right. The checked-in 54 records form three provisional
+the wheelchair's right. The checked-in 76 records form three provisional
 regions with per-cell Z bands. RViz renders three consolidated translucent
 staircase meshes and their exterior outlines without labels. These values are
 not approved safety geometry. Calibrate them from recorded `/rslidar_points`
 bags by following `docs/setup/airy_artifact_shadow_validation.md`.
 
 After cell-band rejection, the shadow counts remaining points in each front
-cell. `artifact_grid_halo_spans` defines the halo independently as flat groups:
+cell. Every cell requires `artifact_global_min_points_per_cell` points; its
+current value is three. `artifact_grid_halo_spans` defines a stricter local
+scope independently as flat groups:
 
 ```text
 [region_id, forward_cell, min_lateral_cell, max_lateral_cell]
@@ -91,15 +94,16 @@ cell. `artifact_grid_halo_spans` defines the halo independently as flat groups:
 Both lateral bounds are inclusive. Multiple spans can create an arbitrary
 staircase shape; every mask cell must remain covered by its region's halo. The
 checked-in spans reproduce the former one-cell, eight-neighbour dilation, but
-can now be expanded or reshaped without changing any mask record. All
-configured halo cells require at least `artifact_min_points_per_cell` unmasked
-points; the default is ten. Cells outside this fixed scope retain one-point
-sensitivity. Set the minimum to one at runtime to compare against the
-geometry-only shadow:
+can now be expanded or reshaped without changing any mask record. Configured
+halo cells require at least `artifact_min_points_per_cell` unmasked points;
+the current value is fifteen. Set both thresholds to one at runtime to compare
+against the geometry-only shadow:
 
 ```bash
+ros2 param set /local_costmap artifact_global_min_points_per_cell 1
 ros2 param set /local_costmap artifact_min_points_per_cell 1
-ros2 param set /local_costmap artifact_min_points_per_cell 10
+ros2 param set /local_costmap artifact_global_min_points_per_cell 3
+ros2 param set /local_costmap artifact_min_points_per_cell 15
 ```
 
 Cell-band-rejected points are magenta in RViz; low-support points are yellow.
@@ -108,6 +112,13 @@ threshold scope paints those cells cyan and overlays cells that fail the
 current support rule in yellow. The raw Front 180 display defaults off so it
 cannot show through cells removed from the shadow, but remains available as a
 comparison checkbox.
+
+The red, labelled residual-cell layer is diagnostic only and records the five
+cells that intermittently survived in `clear_lidar_fix_01` and
+`clear_lidar_fix_02`. `R1` is cell `(6, 1)`; `R2` and `R3` are `(12, 1)` and
+`(13, 1)`; `R4` is `(15, -3)`; and `R5` is `(19, -4)`. The marker centres are
+shown in metres in `base_link`. These markers neither alter a costmap nor
+change a safety decision.
 
 ## Chassis Reflections
 

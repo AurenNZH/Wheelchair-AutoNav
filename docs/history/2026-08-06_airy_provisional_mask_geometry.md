@@ -135,17 +135,31 @@ All three staircase regions had zero residual occupied-cell events.
 
 ## Operator geometry and explicit halo — 2026-08-07
 
-The operator subsequently refined the staircase masks to 54 cells across the
+The operator subsequently refined the staircase masks to 76 cells across the
 same three regions. Those edits are preserved as the current mask geometry.
 Halo shape was then decoupled from the masks: `artifact_grid_halo_spans` now
 stores inclusive lateral runs as
 `[region_id, forward_cell, min_lateral_cell, max_lateral_cell]`.
 
-The initial 23 spans reproduce the former one-cell, eight-neighbour dilation
-of the operator-refined masks, covering 117 unique threshold cells. Future
+The 23 spans reproduce a one-cell, eight-neighbour dilation of the
+operator-refined masks. Future
 halo tuning changes only these spans; every mask cell must remain covered, and
 the mask cells and their per-cell Z bands remain unchanged.
 
 Replay results for this operator-refined geometry are recorded after each
 configuration update; the explicit halo must remain exactly reproducible from
 the checked-in spans.
+
+## Global shadow support and centred supervisor geometry — 2026-08-07
+
+The two clear-scene bags exposed five intermittent occupied cells in the
+straight swept path. Four were outside the local halo and survived on one or
+two points. The diagnostic shadow now requires three post-filter points in
+every front cell while preserving the stricter fifteen-point rule in the
+configured mask/halo scope. Raw maps remain one-point-sensitive and unchanged.
+
+The measured 0.80 m wheelchair base is centred on `base_link`; shared control
+therefore uses 0.40 m forward and rear extents. STOP and SLOW travel-to-contact
+distances remain 0.70 m and 1.20 m. A new clear-scene recording is required to
+measure the combined result, with R1 retained as a labelled diagnostic because
+it survived three frames of the previous second bag.

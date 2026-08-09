@@ -20,7 +20,7 @@ class SafetyPolicyTests(unittest.TestCase):
             enable_motion=True,
             geometry_calibrated=True,
             chair_width_m=0.7,
-            front_extent_m=0.8,
+            front_extent_m=0.4,
             rear_extent_m=0.4,
             lateral_margin_m=0.15,
             stop_distance_m=0.7,
@@ -71,7 +71,7 @@ class SafetyPolicyTests(unittest.TestCase):
         )
         slow = evaluate_safety(
             self.intent,
-            np.array([[1.7, 0.0]], dtype=np.float32),
+            np.array([[1.4, 0.0]], dtype=np.float32),
             0.1,
             self.enabled,
         )
@@ -79,6 +79,28 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(stop.reason, "obstacle_stop")
         self.assertEqual(slow.decision, SLOW)
         self.assertLess(slow.permitted_forward, self.intent.forward)
+
+    def test_centred_base_uses_four_tenths_forward_extent(self):
+        current_footprint = evaluate_safety(
+            self.intent,
+            np.array([[0.4, 0.0]], dtype=np.float32),
+            0.1,
+            self.enabled,
+        )
+        ahead = evaluate_safety(
+            self.intent,
+            np.array([[1.2, 0.0]], dtype=np.float32),
+            0.1,
+            self.enabled,
+        )
+
+        self.assertEqual(current_footprint.nearest_path_distance_m, 0.0)
+        self.assertAlmostEqual(
+            ahead.nearest_path_distance_m,
+            0.8,
+            delta=self.enabled.path_sample_step_m + 1e-6,
+        )
+        self.assertEqual(ahead.decision, SLOW)
 
     def test_requested_turn_checks_curved_swept_footprint(self):
         turning_intent = OperatorIntentData("session", 3, -0.35, 0.5, True)

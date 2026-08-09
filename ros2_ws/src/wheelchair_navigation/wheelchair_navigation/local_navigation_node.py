@@ -85,6 +85,10 @@ class LocalNavigationNode(Node):
             "artifact_threshold_cells_topic",
             "/artifact_filter/threshold_cells",
         )
+        self.declare_parameter(
+            "artifact_residual_cells_topic",
+            "/artifact_filter/residual_cells",
+        )
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("size_m", 8.0)
         self.declare_parameter("resolution_m", 0.1)
@@ -101,6 +105,8 @@ class LocalNavigationNode(Node):
         self.declare_parameter("artifact_filter_frame", "base_link")
         self.declare_parameter("artifact_grid_mask_cells", [])
         self.declare_parameter("artifact_grid_halo_spans", [])
+        self.declare_parameter("artifact_residual_cells", [])
+        self.declare_parameter("artifact_global_min_points_per_cell", 1)
         self.declare_parameter("artifact_min_points_per_cell", 2)
         self.declare_parameter("publish_artifact_shadow", True)
         self.declare_parameter("max_cloud_age_s", 1.0)
@@ -163,11 +169,21 @@ class LocalNavigationNode(Node):
             ),
             marker_qos,
         )
+        self._artifact_residual_cells_pub = self.create_publisher(
+            MarkerArray,
+            str(
+                self.get_parameter(
+                    "artifact_residual_cells_topic"
+                ).value
+            ),
+            marker_qos,
+        )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray,
             str(self.get_parameter("diagnostics_topic").value),
             10,
         )
+        self._publish_residual_cell_markers()
         lidar_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
@@ -402,6 +418,9 @@ class LocalNavigationNode(Node):
                     min_points_per_cell=self.get_parameter(
                         "artifact_min_points_per_cell"
                     ).value,
+                    global_min_points_per_cell=self.get_parameter(
+                        "artifact_global_min_points_per_cell"
+                    ).value,
                 )
                 artifact_support_stats = support_result.stats
                 shadow_front_points = points_base[
@@ -521,6 +540,28 @@ class LocalNavigationNode(Node):
             fov_deg=float(self.get_parameter("front_fov_deg").value),
         )
 
+    def _publish_residual_cell_markers(self) -> None:
+        """Publish the static replay findings without waiting for LiDAR."""
+
+        try:
+            cells = parse_artifact_residual_cells(
+                self.get_parameter("artifact_residual_cells").value
+            )
+            header = Header()
+            header.stamp = self.get_clock().now().to_msg()
+            header.frame_id = str(self.get_parameter("target_frame").value)
+            self._artifact_residual_cells_pub.publish(
+                build_artifact_residual_cell_markers(
+                    header,
+                    self._front_map_config(),
+                    cells,
+                )
+            )
+        except ValueError as exc:
+            self.get_logger().warning(
+                "Residual-cell diagnostics suppressed: %s" % exc
+            )
+
     @staticmethod
     def _period_ms(current, previous, scale: float = 1e-6) -> float:
         if previous is None or current <= previous:
@@ -630,6 +671,9 @@ class LocalNavigationNode(Node):
                 {
                     "artifact_min_points_per_cell": str(
                         artifact_support_stats.min_points_per_cell
+                    ),
+                    "artifact_global_min_points_per_cell": str(
+                        artifact_support_stats.global_min_points_per_cell
                     ),
                     "artifact_configured_halo_cells": str(
                         artifact_support_stats.configured_halo_cells
@@ -837,6 +881,114 @@ def build_artifact_threshold_cell_markers(
             z_m=0.035,
         )
     )
+    return result
+
+
+def parse_artifact_residual_cells(
+    values: list[float] | tuple[float, ...] | None,
+) -> tuple[tuple[int, int], ...]:
+    """Parse flat ``forward_cell, lateral_cell`` diagnostic pairs."""
+
+    if values is None:
+        return ()
+    if len(values) % 2:
+        raise ValueError(
+            "artifact_residual_cells must contain complete cell pairs"
+        )
+
+    cells = []
+    seen = set()
+    for start in range(0, len(values), 2):
+        fields = tuple(float(value) for value in values[start:start + 2])
+        if not np.isfinite(fields).all():
+            raise ValueError("artifact residual cell values must be finite")
+        forward_cell, lateral_cell = (int(value) for value in fields)
+        if (float(forward_cell), float(lateral_cell)) != fields:
+            raise ValueError("artifact residual cell coordinates must be integers")
+        cell = (forward_cell, lateral_cell)
+        if cell in seen:
+            raise ValueError("duplicate artifact residual cell")
+        seen.add(cell)
+        cells.append(cell)
+    return tuple(cells)
+
+
+def build_artifact_residual_cell_markers(
+    header: Header,
+    config: FrontCostmapConfig,
+    cells: tuple[tuple[int, int], ...],
+) -> MarkerArray:
+    """Highlight and label recorded residual cells without changing maps."""
+
+    geometry = np.asarray(
+        [config.length_m, config.width_m, config.resolution_m],
+        dtype=np.float64,
+    )
+    if not np.isfinite(geometry).all() or np.any(geometry <= 0.0):
+        raise ValueError("artifact residual marker grid must be positive")
+
+    width = int(np.ceil(config.length_m / config.resolution_m))
+    height = int(np.ceil(config.width_m / config.resolution_m))
+    zero_row = height // 2
+    result = MarkerArray()
+
+    clear = Marker()
+    clear.header = header
+    clear.action = Marker.DELETEALL
+    result.markers.append(clear)
+
+    cubes = Marker()
+    cubes.header = header
+    cubes.ns = "artifact_residual_cells"
+    cubes.id = 0
+    cubes.type = Marker.CUBE_LIST
+    cubes.action = Marker.ADD if cells else Marker.DELETE
+    cubes.pose.orientation.w = 1.0
+    cubes.scale.x = config.resolution_m * 0.96
+    cubes.scale.y = config.resolution_m * 0.96
+    cubes.scale.z = 0.04
+    cubes.color.r = 1.0
+    cubes.color.g = 0.05
+    cubes.color.b = 0.05
+    cubes.color.a = 0.78
+    cubes.frame_locked = True
+
+    for index, (forward_cell, lateral_cell) in enumerate(cells, start=1):
+        row = zero_row + lateral_cell
+        if not (0 <= forward_cell < width and 0 <= row < height):
+            raise ValueError("artifact residual marker cell is outside the grid")
+
+        x_m = (forward_cell + 0.5) * config.resolution_m
+        y_m = (lateral_cell + 0.5) * config.resolution_m
+        point = Point()
+        point.x = x_m
+        point.y = y_m
+        point.z = 0.06
+        cubes.points.append(point)
+
+        label = Marker()
+        label.header = header
+        label.ns = "artifact_residual_cell_labels"
+        label.id = index
+        label.type = Marker.TEXT_VIEW_FACING
+        label.action = Marker.ADD
+        label.pose.orientation.w = 1.0
+        label.pose.position.x = x_m
+        label.pose.position.y = y_m
+        label.pose.position.z = 0.20 + 0.05 * (index % 2)
+        label.scale.z = 0.065
+        label.color.r = 1.0
+        label.color.g = 0.95
+        label.color.b = 0.95
+        label.color.a = 1.0
+        label.frame_locked = True
+        label.text = (
+            "R%d cell=(%d,%d) centre=(%.2f,%+.2f)m"
+            % (index, forward_cell, lateral_cell, x_m, y_m)
+        )
+        result.markers.append(label)
+
+    result.markers.insert(1, cubes)
     return result
 
 

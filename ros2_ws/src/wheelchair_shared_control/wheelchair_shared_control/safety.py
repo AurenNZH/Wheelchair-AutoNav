@@ -27,7 +27,7 @@ class SafetyConfig:
     enable_motion: bool = False
     geometry_calibrated: bool = False
     chair_width_m: float = 0.70
-    front_extent_m: float = 0.80
+    front_extent_m: float = 0.40
     rear_extent_m: float = 0.40
     lateral_margin_m: float = 0.15
     stop_distance_m: float = 0.70
