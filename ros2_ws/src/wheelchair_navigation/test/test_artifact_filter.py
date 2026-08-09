@@ -27,9 +27,7 @@ from wheelchair_navigation.local_navigation import (
 from wheelchair_navigation.local_navigation_node import (
     artifact_shadow_error_reason,
     build_artifact_grid_markers,
-    build_artifact_residual_cell_markers,
     build_artifact_threshold_cell_markers,
-    parse_artifact_residual_cells,
 )
 
 
@@ -401,46 +399,6 @@ class ArtifactFilterTests(unittest.TestCase):
         ).markers
         self.assertEqual(cleared[0].action, cleared[0].DELETE)
         self.assertEqual(cleared[1].action, cleared[1].DELETE)
-
-    def test_residual_cell_markers_are_exact_labelled_and_diagnostic(self):
-        header = Header()
-        header.frame_id = "base_link"
-        config = FrontCostmapConfig(
-            length_m=2.0, width_m=2.0, resolution_m=0.5
-        )
-        cells = parse_artifact_residual_cells([0.0, 0.0, 3.0, -2.0])
-
-        markers = build_artifact_residual_cell_markers(
-            header, config, cells
-        ).markers
-
-        self.assertEqual(cells, ((0, 0), (3, -2)))
-        self.assertEqual(markers[0].action, markers[0].DELETEALL)
-        self.assertEqual(markers[1].ns, "artifact_residual_cells")
-        self.assertEqual(markers[1].type, markers[1].CUBE_LIST)
-        self.assertEqual(
-            [(point.x, point.y) for point in markers[1].points],
-            [(0.25, 0.25), (1.75, -0.75)],
-        )
-        self.assertIn("R1 cell=(0,0)", markers[2].text)
-        self.assertIn("R2 cell=(3,-2)", markers[3].text)
-        self.assertTrue(all(marker.frame_locked for marker in markers[1:]))
-
-        invalid = (
-            [0.0],
-            [0.5, 0.0],
-            [0.0, np.nan],
-            [0.0, 0.0, 0.0, 0.0],
-        )
-        for values in invalid:
-            with self.subTest(values=values), self.assertRaises(ValueError):
-                parse_artifact_residual_cells(values)
-
-        with self.assertRaises(ValueError):
-            build_artifact_residual_cell_markers(
-                header, config, ((4, 0),)
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

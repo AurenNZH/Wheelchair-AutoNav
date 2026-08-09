@@ -26,7 +26,6 @@ convention.
 - Configured staircase regions and cell-aligned halo outlines:
   `/artifact_filter/masks`
 - Exact grid cells evaluated by thresholding: `/artifact_filter/threshold_cells`
-- Five labelled residual replay cells: `/artifact_filter/residual_cells`
 - Timing and filter counters: `/diagnostics`
 - Target frame: `base_link`
 
@@ -112,13 +111,6 @@ threshold scope paints those cells cyan and overlays cells that fail the
 current support rule in yellow. The raw Front 180 display defaults off so it
 cannot show through cells removed from the shadow, but remains available as a
 comparison checkbox.
-
-The red, labelled residual-cell layer is diagnostic only and records the five
-cells that intermittently survived in `clear_lidar_fix_01` and
-`clear_lidar_fix_02`. `R1` is cell `(6, 1)`; `R2` and `R3` are `(12, 1)` and
-`(13, 1)`; `R4` is `(15, -3)`; and `R5` is `(19, -4)`. The marker centres are
-shown in metres in `base_link`. These markers neither alter a costmap nor
-change a safety decision.
 
 ## Chassis Reflections
 
