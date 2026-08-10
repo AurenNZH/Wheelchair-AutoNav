@@ -30,20 +30,22 @@ python scripts/teleoperate_keyboard.py --config ../../configs/wheelchair/default
 
 The older notes below still describe the CAN/RNET behavior and safety model, but some command paths have changed to match the monorepo layout.
 
-## Passive physical-JSM observer
+## Transparent physical-JSM observer gateway
 
-The first physical-joystick shared-control milestone is deliberately
-non-actuating. `observe_physical_joystick.py` listens for the physical R-Net
-JSM position frame and displays its two signed axes without starting or
-stopping a CAN gateway, transmitting a CAN frame, sending UDP, or publishing a
-ROS message.
+The first physical-joystick shared-control milestone does not generate or
+alter commands. Because the PiCAN Duo is installed in-line, however, the two
+R-Net halves must remain connected while observing. The observer therefore
+uses the same user-space bidirectional passthrough pattern as keyboard teleop,
+forwards every CAN frame unchanged, and displays the physical JSM's two signed
+axes before forwarding its frame to the controller side.
 
-The actual PiCAN Duo topology must be observed rather than assumed. Choose the
-interface that receives the physical JSM frame directly:
+Use the keyboard teleop interface convention: `can0` is the wheelchair
+controller side and `can1` is the physical-JSM side. Remove kernel `cangw`
+rules first; otherwise two gateways would operate concurrently:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can1 --device-slot 1
+  --can-interface can0 --gateway-interface can1 --device-slot 1
 ```
 
 To retain every valid 100 Hz sample while exercising neutral, forward,
@@ -51,13 +53,13 @@ reverse, left, right, and diagonal positions:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can1 --device-slot 1 \
+  --can-interface can0 --gateway-interface can1 --device-slot 1 \
   --duration-s 30 --csv /tmp/physical_jsm.csv
 ```
 
-Do not run keyboard command injection during this capture. The observer ignores
-locally generated SocketCAN loopback frames, so it reports the physical JSM
-rather than commands created by another Pi process. See the
+Do not run keyboard teleop or another gateway during this capture. The observer
+decodes joystick input only on `--gateway-interface`, so a controller-side
+frame cannot be reported as physical input. See the
 [physical-JSM observer guide](../../docs/setup/physical_joystick_observer.md)
 for topology discovery, expected output, and acceptance checks.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Display and optionally record physical R-Net joystick input without CAN TX."""
+"""Pass R-Net traffic unchanged while displaying physical joystick input."""
 
 import argparse
 import csv
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wheelchair_teleop.jsm_observer import (  # noqa: E402
     JsmFrameError,
-    PhysicalJsmObserver,
+    PhysicalJsmGatewayObserver,
     direction_label,
     joystick_frame_id,
 )
@@ -54,12 +54,17 @@ def _positive_float(text: str) -> float:
 def _arguments(argv=None):
     parser = argparse.ArgumentParser(
         description=(
-            "Observe physical R-Net JSM position frames. This program has no "
-            "CAN transmit, UDP, ROS, gateway, or actuator path."
+            "Transparently bridge the split R-Net bus while observing physical "
+            "JSM position frames. No frames are generated or modified."
         )
     )
     parser.add_argument(
         "--can-interface",
+        required=True,
+        help="SocketCAN interface connected to the wheelchair controller (for example can0)",
+    )
+    parser.add_argument(
+        "--gateway-interface",
         required=True,
         help="SocketCAN interface connected to the physical JSM (for example can1)",
     )
@@ -122,8 +127,9 @@ def main(argv=None) -> int:
             writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
             writer.writeheader()
 
-        observer = PhysicalJsmObserver(
-            args.can_interface,
+        observer = PhysicalJsmGatewayObserver(
+            controller_interface=args.can_interface,
+            joystick_interface=args.gateway_interface,
             device_slot=args.device_slot,
         )
         observer.open()
@@ -134,12 +140,13 @@ def main(argv=None) -> int:
         return 1
 
     print(
-        "Physical-JSM observer active: interface=%s frame=%08X#XxYy"
-        % (args.can_interface, expected_id)
+        "Physical-JSM observer gateway active: JSM %s <-> controller %s "
+        "frame=%08X#XxYy"
+        % (args.gateway_interface, args.can_interface, expected_id)
     )
     print(
-        "RECEIVE ONLY: no CAN frames, UDP packets, ROS messages, or actuator "
-        "commands are published."
+        "TRANSPARENT PASS-THROUGH: CAN frames are forwarded unchanged; no "
+        "joystick commands, UDP packets, or ROS messages are generated."
     )
     if args.csv is not None:
         print("Recording every valid sample to %s" % args.csv)
@@ -173,7 +180,7 @@ def main(argv=None) -> int:
                 writer.writerow(
                     {
                         "wall_time_s": "%.6f" % sample.wall_time_s,
-                        "can_interface": args.can_interface,
+                        "can_interface": args.gateway_interface,
                         "can_id": "%08X" % sample.can_id,
                         "x_raw": sample.x_raw,
                         "y_raw": sample.y_raw,
@@ -190,9 +197,11 @@ def main(argv=None) -> int:
                 or sample.monotonic_s - last_display >= display_period_s
             )
             if should_display:
+                gateway_stats = observer.stats
                 print(
                     "JSM %-13s raw=(%4d,%4d) ros=(steer=%+.2f forward=%.2f "
-                    "reverse=%.2f) rate=%6.1f Hz interval_ms=%s"
+                    "reverse=%.2f) rate=%6.1f Hz interval_ms=%s "
+                    "forwarded=(JSM->ctl:%d ctl->JSM:%d)"
                     % (
                         direction,
                         sample.x_raw,
@@ -202,14 +211,16 @@ def main(argv=None) -> int:
                         sample.reverse,
                         _rate_hz(recent_timestamps),
                         interval_ms or "first",
+                        gateway_stats.forwarded_to_controller,
+                        gateway_stats.forwarded_to_joystick,
                     )
                 )
                 last_display = sample.monotonic_s
                 last_direction = direction
     except KeyboardInterrupt:
         print("\nObservation stopped by operator.")
-    except JsmFrameError as exc:
-        print("Rejected physical-JSM frame: %s" % exc, file=sys.stderr)
+    except (JsmFrameError, OSError) as exc:
+        print("Observer gateway stopped: %s" % exc, file=sys.stderr)
         return 1
     finally:
         observer.close()

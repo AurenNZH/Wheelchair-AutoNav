@@ -1,8 +1,9 @@
-"""Receive-only decoding and observation of physical R-Net JSM input."""
+"""Decode physical R-Net JSM input with passive or transparent observation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import select
 import socket
 import struct
 import time
@@ -37,6 +38,14 @@ class JsmSample:
     ros_steering: float
     forward: float
     reverse: float
+
+
+@dataclass(frozen=True)
+class GatewayStats:
+    """Frame counters for the transparent observer gateway."""
+
+    forwarded_to_controller: int
+    forwarded_to_joystick: int
 
 
 def joystick_frame_id(device_slot: int) -> int:
@@ -212,9 +221,168 @@ class PhysicalJsmObserver:
         self.close()
 
 
+class PhysicalJsmGatewayObserver:
+    """Bridge an in-line R-Net connection and observe its physical JSM side.
+
+    Every received classical CAN frame is forwarded byte-for-byte to the other
+    interface. JSM samples are decoded only from frames that arrived on the
+    physical-joystick interface, before those frames are forwarded to the
+    controller interface.
+    """
+
+    def __init__(
+        self,
+        controller_interface: str,
+        joystick_interface: str,
+        *,
+        device_slot: int = 1,
+        receive_timeout_s: float = 0.25,
+        socket_factory: Optional[Callable[..., object]] = None,
+        select_function: Callable = select.select,
+        wall_clock: Callable[[], float] = time.time,
+        monotonic_clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if not controller_interface or not isinstance(controller_interface, str):
+            raise ValueError("controller_interface is required")
+        if not joystick_interface or not isinstance(joystick_interface, str):
+            raise ValueError("joystick_interface is required")
+        if controller_interface == joystick_interface:
+            raise ValueError("controller and joystick interfaces must differ")
+        if receive_timeout_s <= 0.0:
+            raise ValueError("receive_timeout_s must be positive")
+
+        joystick_frame_id(device_slot)
+        self.controller_interface = controller_interface
+        self.joystick_interface = joystick_interface
+        self.device_slot = device_slot
+        self.receive_timeout_s = float(receive_timeout_s)
+        self._socket_factory = socket_factory or socket.socket
+        self._select = select_function
+        self._wall_clock = wall_clock
+        self._monotonic_clock = monotonic_clock
+        self._controller_socket = None
+        self._joystick_socket = None
+        self._last_sample_monotonic = None
+        self._forwarded_to_controller = 0
+        self._forwarded_to_joystick = 0
+
+    def _open_socket(self, interface_name: str):
+        can_socket = self._socket_factory(
+            socket.AF_CAN,
+            socket.SOCK_RAW,
+            CAN_RAW_PROTOCOL,
+        )
+        try:
+            can_socket.bind((interface_name,))
+        except Exception:
+            can_socket.close()
+            raise
+        return can_socket
+
+    def open(self) -> None:
+        if self._controller_socket is not None:
+            return
+        if not hasattr(socket, "AF_CAN"):
+            raise OSError("SocketCAN is not available on this platform")
+
+        controller_socket = self._open_socket(self.controller_interface)
+        try:
+            joystick_socket = self._open_socket(self.joystick_interface)
+        except Exception:
+            controller_socket.close()
+            raise
+
+        self._controller_socket = controller_socket
+        self._joystick_socket = joystick_socket
+
+    def receive(self) -> Optional[JsmSample]:
+        """Forward ready traffic and return a physical JSM sample if present."""
+
+        if self._controller_socket is None or self._joystick_socket is None:
+            raise RuntimeError("observer gateway is not open")
+
+        readable, _, _ = self._select(
+            (self._controller_socket, self._joystick_socket),
+            (),
+            (),
+            self.receive_timeout_s,
+        )
+        sample = None
+        for source_socket in readable:
+            if source_socket is self._controller_socket:
+                destination_socket = self._joystick_socket
+                observe = False
+            elif source_socket is self._joystick_socket:
+                destination_socket = self._controller_socket
+                observe = True
+            else:
+                continue
+
+            frame = source_socket.recv(CAN_FRAME_SIZE)
+            if len(frame) != CAN_FRAME_SIZE:
+                raise JsmFrameError("received an incomplete classical CAN frame")
+
+            # Preserve the complete kernel can_frame. The observer never
+            # constructs, edits, suppresses, or replaces a bus message.
+            destination_socket.send(frame)
+            if observe:
+                self._forwarded_to_controller += 1
+            else:
+                self._forwarded_to_joystick += 1
+
+            if not observe:
+                continue
+
+            can_id, payload_length, payload = struct.unpack(CAN_FRAME_FORMAT, frame)
+            now_monotonic = self._monotonic_clock()
+            interval_s = None
+            if self._last_sample_monotonic is not None:
+                interval_s = now_monotonic - self._last_sample_monotonic
+            try:
+                candidate = decode_jsm_frame(
+                    can_id,
+                    payload_length,
+                    payload,
+                    device_slot=self.device_slot,
+                    wall_time_s=self._wall_clock(),
+                    monotonic_s=now_monotonic,
+                    interval_s=interval_s,
+                )
+            except JsmFrameError:
+                continue
+
+            self._last_sample_monotonic = now_monotonic
+            sample = candidate
+
+        return sample
+
+    @property
+    def stats(self) -> GatewayStats:
+        return GatewayStats(
+            forwarded_to_controller=self._forwarded_to_controller,
+            forwarded_to_joystick=self._forwarded_to_joystick,
+        )
+
+    def close(self) -> None:
+        for can_socket in (self._controller_socket, self._joystick_socket):
+            if can_socket is not None:
+                can_socket.close()
+        self._controller_socket = None
+        self._joystick_socket = None
+
+    def __enter__(self) -> "PhysicalJsmGatewayObserver":
+        self.open()
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        self.close()
+
+
 __all__ = [
     "JsmFrameError",
     "JsmSample",
+    "GatewayStats",
+    "PhysicalJsmGatewayObserver",
     "PhysicalJsmObserver",
     "decode_jsm_frame",
     "direction_label",

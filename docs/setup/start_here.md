@@ -83,6 +83,6 @@ Follow [shared_control_validation.md](shared_control_validation.md) in order:
 
 Never jump directly from RViz validation to obstacle-driving tests.
 
-Before physical-JSM shared control, complete the receive-only
+Before physical-JSM shared control, complete the transparent-pass-through
 [physical joystick observation](physical_joystick_observer.md). That observer
-does not alter the existing CAN passthrough or publish an actuator command.
+forwards the split bus unchanged and does not generate an actuator command.

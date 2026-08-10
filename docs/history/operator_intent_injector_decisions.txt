@@ -137,3 +137,20 @@ captured data will establish the neutral deadzone before physical JSM values
 are translated into OperatorIntent in a later shadow-only milestone. No CAN
 suppression, replacement, FollowJSM injection, or supervisor actuation is
 authorized by this change.
+
+2026-08-10T16:03:52+01:00 — In-line observer passthrough correction
+Powered testing established that this PiCAN Duo installation splits the JSM
+and controller into separate CAN segments: without a gateway the JSM reports a
+DIME communication fault. The original single-interface observer therefore
+could not satisfy the physical topology. When a kernel cangw rule forwarded the
+JSM frame onto the observed controller side, the observer intentionally ignored
+that locally generated SocketCAN copy, which explains the absence of samples.
+
+The observer now follows the already proven keyboard-teleop gateway pattern:
+it owns one raw socket per interface, forwards every complete CAN frame
+byte-for-byte in both directions, and decodes joystick position only from the
+physical-JSM side before forwarding it. It never constructs, changes,
+suppresses, or replaces a frame. Explicit controller and JSM interface options,
+directional forwarding counters, and tests for bidirectional preservation make
+that narrower authority visible. Kernel cangw rules and other gateway programs
+must remain stopped while it runs so there is exactly one bridge.

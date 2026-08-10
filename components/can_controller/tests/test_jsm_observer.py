@@ -17,6 +17,7 @@ from wheelchair_teleop.jsm_observer import (
     CAN_RTR_FLAG,
     JsmFrameError,
     JsmSample,
+    PhysicalJsmGatewayObserver,
     PhysicalJsmObserver,
     SOL_CAN_RAW,
     decode_jsm_frame,
@@ -48,6 +49,27 @@ class FakeReceiveSocket:
         if not self.received:
             raise socket.timeout
         return self.received.popleft()
+
+    def close(self):
+        self.closed = True
+
+
+class FakeGatewaySocket:
+    def __init__(self, received=()):
+        self.received = deque(received)
+        self.sent = []
+        self.bound = None
+        self.closed = False
+
+    def bind(self, address):
+        self.bound = address
+
+    def recv(self, _size):
+        return self.received.popleft()
+
+    def send(self, frame):
+        self.sent.append(frame)
+        return len(frame)
 
     def close(self):
         self.closed = True
@@ -192,6 +214,68 @@ class PhysicalJsmObserverTests(unittest.TestCase):
         observer.open()
         with self.assertRaises(JsmFrameError):
             observer.receive()
+
+
+class PhysicalJsmGatewayObserverTests(unittest.TestCase):
+    def test_rejects_identical_interfaces(self):
+        with self.assertRaises(ValueError):
+            PhysicalJsmGatewayObserver("can0", "can0")
+
+    def test_forwards_both_directions_and_observes_physical_side(self):
+        controller_frame = can_frame(CAN_EFF_FLAG | 0x0A040100, 50, 0)
+        physical_frame = can_frame(CAN_EFF_FLAG | 0x02000100, 20, 30)
+        controller_socket = FakeGatewaySocket((controller_frame,))
+        joystick_socket = FakeGatewaySocket((physical_frame,))
+        sockets = iter((controller_socket, joystick_socket))
+
+        observer = PhysicalJsmGatewayObserver(
+            "can0",
+            "can1",
+            socket_factory=lambda *_args: next(sockets),
+            select_function=lambda readers, _writes, _errors, _timeout: (
+                list(readers),
+                [],
+                [],
+            ),
+            wall_clock=lambda: 100.0,
+            monotonic_clock=lambda: 10.0,
+        )
+        observer.open()
+
+        sample = observer.receive()
+
+        self.assertEqual(controller_socket.bound, ("can0",))
+        self.assertEqual(joystick_socket.bound, ("can1",))
+        self.assertEqual(joystick_socket.sent, [controller_frame])
+        self.assertEqual(controller_socket.sent, [physical_frame])
+        self.assertEqual((sample.x_raw, sample.y_raw), (20, 30))
+        self.assertEqual(observer.stats.forwarded_to_controller, 1)
+        self.assertEqual(observer.stats.forwarded_to_joystick, 1)
+
+        observer.close()
+        self.assertTrue(controller_socket.closed)
+        self.assertTrue(joystick_socket.closed)
+
+    def test_controller_side_jsm_loopback_is_not_reported_as_physical(self):
+        local_jsm_frame = can_frame(CAN_EFF_FLAG | 0x02000100, 80, 80)
+        controller_socket = FakeGatewaySocket((local_jsm_frame,))
+        joystick_socket = FakeGatewaySocket()
+        sockets = iter((controller_socket, joystick_socket))
+
+        observer = PhysicalJsmGatewayObserver(
+            "can0",
+            "can1",
+            socket_factory=lambda *_args: next(sockets),
+            select_function=lambda _readers, _writes, _errors, _timeout: (
+                [controller_socket],
+                [],
+                [],
+            ),
+        )
+        observer.open()
+
+        self.assertIsNone(observer.receive())
+        self.assertEqual(joystick_socket.sent, [local_jsm_frame])
 
 
 if __name__ == "__main__":
