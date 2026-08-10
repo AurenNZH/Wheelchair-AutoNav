@@ -154,3 +154,27 @@ suppresses, or replaces a frame. Explicit controller and JSM interface options,
 directional forwarding counters, and tests for bidirectional preservation make
 that narrower authority visible. Kernel cangw rules and other gateway programs
 must remain stopped while it runs so there is exactly one bridge.
+
+2026-08-10T16:54:41+01:00 — Physical slot-2 shared-control milestone
+Powered observation established that the real JSM uses device slot 2. Physical
+shared control is therefore implemented as a separate explicit program rather
+than adding authority to the transparent observer or changing keyboard teleop.
+Shadow remains the default. Enforce mode replaces only the incoming
+02000200 position bytes before they reach the controller and passes all other
+R-Net traffic unchanged.
+
+The first physical scope is straight forward: five raw counts define neutral,
+CLEAR is locally capped at 20, SLOW at 15, and every STOP, timeout, invalid
+envelope, unsupported steering, reverse request, or policy exception centres
+the position frame. Forward magnitude changes are treated as jitter within the
+same straight corridor and are clamped to the lesser current request; release,
+direction, steering class, and session changes invalidate earlier envelopes.
+This prevents ordinary joystick variation from causing a clear/stop loop
+without allowing an old authorization to start a new movement.
+
+Validation proceeds through vCAN and live shadow evidence before explicit
+lowest-speed enforcement in the enlarged controlled test area. An attendant
+holds the independent physical cutoff throughout. The previous raised-wheel
+requirement is no longer the only accepted physical gate for this installation,
+but fixed peer allowlists, five-envelope arming, the 200 ms timeout, and the
+controlled soft-obstacle sequence remain mandatory.

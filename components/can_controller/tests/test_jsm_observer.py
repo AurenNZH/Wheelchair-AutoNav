@@ -23,6 +23,7 @@ from wheelchair_teleop.jsm_observer import (
     decode_jsm_frame,
     direction_label,
     joystick_frame_id,
+    replace_jsm_axes,
 )
 
 
@@ -139,6 +140,19 @@ class JsmDecoderTests(unittest.TestCase):
         self.assertEqual(direction_label(sample, deadzone=0), "forward_right")
         self.assertEqual(direction_label(sample, deadzone=3), "forward")
         self.assertEqual((sample.x_raw, sample.y_raw), (3, 50))
+
+    def test_axis_replacement_preserves_identifier_dlc_and_padding(self):
+        original = struct.pack(
+            CAN_FRAME_FORMAT,
+            CAN_EFF_FLAG | 0x02000200,
+            2,
+            b"\x32\x40abcdef",
+        )
+        replaced = replace_jsm_axes(original, 0, 15)
+        can_id, dlc, payload = struct.unpack(CAN_FRAME_FORMAT, replaced)
+        self.assertEqual(can_id, CAN_EFF_FLAG | 0x02000200)
+        self.assertEqual(dlc, 2)
+        self.assertEqual(payload, b"\x00\x0fabcdef")
 
 
 class PhysicalJsmObserverTests(unittest.TestCase):
@@ -276,6 +290,68 @@ class PhysicalJsmGatewayObserverTests(unittest.TestCase):
 
         self.assertIsNone(observer.receive())
         self.assertEqual(joystick_socket.sent, [local_jsm_frame])
+
+    def test_slot_two_jsm_is_replaced_before_forwarding(self):
+        physical_frame = can_frame(CAN_EFF_FLAG | 0x02000200, 0, 80)
+        controller_socket = FakeGatewaySocket()
+        joystick_socket = FakeGatewaySocket((physical_frame,))
+        sockets = iter((controller_socket, joystick_socket))
+        observer = PhysicalJsmGatewayObserver(
+            "can0",
+            "can1",
+            device_slot=2,
+            socket_factory=lambda *_args: next(sockets),
+            select_function=lambda _readers, _writes, _errors, _timeout: (
+                [joystick_socket],
+                [],
+                [],
+            ),
+            jsm_transform=lambda _sample: (0, 15),
+            monotonic_clock=lambda: 1.0,
+        )
+        observer.open()
+
+        sample = observer.receive()
+
+        can_id, dlc, payload = struct.unpack(
+            CAN_FRAME_FORMAT, controller_socket.sent[0]
+        )
+        self.assertEqual((sample.x_raw, sample.y_raw), (0, 80))
+        self.assertEqual(can_id, CAN_EFF_FLAG | 0x02000200)
+        self.assertEqual(dlc, 2)
+        self.assertEqual(struct.unpack("=bb", payload[:2]), (0, 15))
+        self.assertEqual(observer.stats.transformed_jsm, 1)
+
+    def test_transform_exception_forwards_centered_frame(self):
+        physical_frame = can_frame(CAN_EFF_FLAG | 0x02000200, 20, 80)
+        controller_socket = FakeGatewaySocket()
+        joystick_socket = FakeGatewaySocket((physical_frame,))
+        sockets = iter((controller_socket, joystick_socket))
+
+        def fail_closed(_sample):
+            raise RuntimeError("test failure")
+
+        observer = PhysicalJsmGatewayObserver(
+            "can0",
+            "can1",
+            device_slot=2,
+            socket_factory=lambda *_args: next(sockets),
+            select_function=lambda _readers, _writes, _errors, _timeout: (
+                [joystick_socket],
+                [],
+                [],
+            ),
+            jsm_transform=fail_closed,
+            monotonic_clock=lambda: 1.0,
+        )
+        observer.open()
+
+        observer.receive()
+
+        _, _, payload = struct.unpack(CAN_FRAME_FORMAT, controller_socket.sent[0])
+        self.assertEqual(struct.unpack("=bb", payload[:2]), (0, 0))
+        self.assertEqual(observer.stats.transform_errors, 1)
+        self.assertEqual(observer.last_transform_error, "test failure")
 
 
 if __name__ == "__main__":

@@ -77,7 +77,7 @@ Follow [shared_control_validation.md](shared_control_validation.md) in order:
 1. clean-dome, hood, coverage, and latency validation;
 2. measured swept geometry;
 3. `vcan` Jetson–Pi failure tests;
-4. raised-wheel tests with an independent cutoff;
+4. live shadow, then lowest-speed controlled-area tests with an independent cutoff;
 5. empty-corridor movement at the lowest effective speed;
 6. controlled foam-obstacle SLOW/STOP tests.
 
@@ -86,3 +86,6 @@ Never jump directly from RViz validation to obstacle-driving tests.
 Before physical-JSM shared control, complete the transparent-pass-through
 [physical joystick observation](physical_joystick_observer.md). That observer
 forwards the split bus unchanged and does not generate an actuator command.
+Then follow the staged
+[physical joystick shared-control test](physical_joystick_shared_control.md)
+for UDP shadow validation and explicit low-speed enforcement.

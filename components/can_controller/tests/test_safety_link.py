@@ -46,6 +46,17 @@ class FakeSocket:
         self.closed = True
 
 
+class FakeClock:
+    def __init__(self, now=100.0):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds):
+        self.now += seconds
+
+
 class SafetyLinkTests(unittest.TestCase):
     def test_disabled_link_preserves_manual_command(self):
         link = SafetyLink(enabled=False)
@@ -186,6 +197,121 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertTrue(link.get_status()["stop_latched"])
         self.assertEqual(link.apply(0, 0, False), (0, 0))
         self.assertFalse(link.get_status()["stop_latched"])
+
+    def test_slow_has_distinct_local_cap(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.20,
+            slow_command_cap=0.15,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        self.assertEqual(link.apply(0, 80, True), (0, 0))
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 1, 0.35, 0.0,
+                        "obstacle_slow", 50.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 80, True), (0, 15))
+        self.assertEqual(link.get_status()["latest_decision"], 1)
+
+    def test_default_slow_cap_preserves_existing_keyboard_limit(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.20,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, 80, True)
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 1, 0.35, 0.0,
+                        "obstacle_slow", 50.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 80, True), (0, 20))
+
+    def test_forward_jitter_uses_same_corridor_and_never_exceeds_current_input(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.20,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, 50, True)
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 0.50, 0.0,
+                        "clear", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 51, True), (0, 20))
+        self.assertEqual(link.apply(0, 10, True), (0, 10))
+
+    def test_release_prevents_old_clear_from_authorizing_new_motion(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, 50, True)
+        first = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        first["session"], first["seq"], 2, 0.50, 0.0,
+                        "clear", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 50, True), (0, 20))
+        self.assertEqual(link.apply(0, 0, False), (0, 0))
+        self.assertEqual(link.apply(0, 50, True), (0, 0))
+        self.assertEqual(
+            link.get_status()["reason"], "envelope_precedes_current_input"
+        )
 
 
 if __name__ == "__main__":

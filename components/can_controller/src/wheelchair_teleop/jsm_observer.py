@@ -46,6 +46,8 @@ class GatewayStats:
 
     forwarded_to_controller: int
     forwarded_to_joystick: int
+    transformed_jsm: int = 0
+    transform_errors: int = 0
 
 
 def joystick_frame_id(device_slot: int) -> int:
@@ -96,6 +98,23 @@ def decode_jsm_frame(
         forward=max(0.0, float(y_raw) / 100.0),
         reverse=max(0.0, -float(y_raw) / 100.0),
     )
+
+
+def replace_jsm_axes(frame: bytes, x_raw: int, y_raw: int) -> bytes:
+    """Return a classical CAN frame with only its first two data bytes changed."""
+
+    if len(frame) != CAN_FRAME_SIZE:
+        raise JsmFrameError("cannot replace axes in an incomplete CAN frame")
+    for name, value in (("x_raw", x_raw), ("y_raw", y_raw)):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("%s must be an integer" % name)
+        if not -100 <= value <= 100:
+            raise ValueError("%s must be in [-100, 100]" % name)
+    can_id, payload_length, payload = struct.unpack(CAN_FRAME_FORMAT, frame)
+    if payload_length != 2:
+        raise JsmFrameError("joystick position payload must contain exactly two bytes")
+    replaced = bytes((x_raw & 0xFF, y_raw & 0xFF)) + payload[2:]
+    return struct.pack(CAN_FRAME_FORMAT, can_id, payload_length, replaced)
 
 
 def direction_label(sample: JsmSample, deadzone: int = 0) -> str:
@@ -239,6 +258,7 @@ class PhysicalJsmGatewayObserver:
         receive_timeout_s: float = 0.25,
         socket_factory: Optional[Callable[..., object]] = None,
         select_function: Callable = select.select,
+        jsm_transform: Optional[Callable[[JsmSample], tuple[int, int]]] = None,
         wall_clock: Callable[[], float] = time.time,
         monotonic_clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -258,6 +278,7 @@ class PhysicalJsmGatewayObserver:
         self.receive_timeout_s = float(receive_timeout_s)
         self._socket_factory = socket_factory or socket.socket
         self._select = select_function
+        self._jsm_transform = jsm_transform
         self._wall_clock = wall_clock
         self._monotonic_clock = monotonic_clock
         self._controller_socket = None
@@ -265,6 +286,10 @@ class PhysicalJsmGatewayObserver:
         self._last_sample_monotonic = None
         self._forwarded_to_controller = 0
         self._forwarded_to_joystick = 0
+        self._transformed_jsm = 0
+        self._transform_errors = 0
+        self.last_forwarded_axes = None
+        self.last_transform_error = None
 
     def _open_socket(self, interface_name: str):
         can_socket = self._socket_factory(
@@ -322,37 +347,64 @@ class PhysicalJsmGatewayObserver:
             if len(frame) != CAN_FRAME_SIZE:
                 raise JsmFrameError("received an incomplete classical CAN frame")
 
-            # Preserve the complete kernel can_frame. The observer never
-            # constructs, edits, suppresses, or replaces a bus message.
-            destination_socket.send(frame)
+            forwarded_frame = frame
+            candidate = None
+            if observe:
+                can_id, payload_length, payload = struct.unpack(
+                    CAN_FRAME_FORMAT, frame
+                )
+                now_monotonic = self._monotonic_clock()
+                interval_s = None
+                if self._last_sample_monotonic is not None:
+                    interval_s = now_monotonic - self._last_sample_monotonic
+                try:
+                    candidate = decode_jsm_frame(
+                        can_id,
+                        payload_length,
+                        payload,
+                        device_slot=self.device_slot,
+                        wall_time_s=self._wall_clock(),
+                        monotonic_s=now_monotonic,
+                        interval_s=interval_s,
+                    )
+                except JsmFrameError:
+                    candidate = None
+
+                if candidate is not None and self._jsm_transform is not None:
+                    try:
+                        forwarded_axes = self._jsm_transform(candidate)
+                        forwarded_frame = replace_jsm_axes(
+                            frame,
+                            forwarded_axes[0],
+                            forwarded_axes[1],
+                        )
+                        self.last_transform_error = None
+                    except Exception as exc:
+                        # The supervised gateway fails closed at the frame
+                        # boundary. Housekeeping traffic continues so a UDP or
+                        # policy failure cannot expose the raw motion request.
+                        forwarded_frame = replace_jsm_axes(frame, 0, 0)
+                        self._transform_errors += 1
+                        self.last_transform_error = str(exc)
+                    _, _, forwarded_payload = struct.unpack(
+                        CAN_FRAME_FORMAT, forwarded_frame
+                    )
+                    self.last_forwarded_axes = struct.unpack(
+                        "=bb", forwarded_payload[:2]
+                    )
+                    self._transformed_jsm += 1
+
+            sent = destination_socket.send(forwarded_frame)
+            if sent != len(forwarded_frame):
+                raise OSError("incomplete CAN frame forwarding")
             if observe:
                 self._forwarded_to_controller += 1
             else:
                 self._forwarded_to_joystick += 1
 
-            if not observe:
-                continue
-
-            can_id, payload_length, payload = struct.unpack(CAN_FRAME_FORMAT, frame)
-            now_monotonic = self._monotonic_clock()
-            interval_s = None
-            if self._last_sample_monotonic is not None:
-                interval_s = now_monotonic - self._last_sample_monotonic
-            try:
-                candidate = decode_jsm_frame(
-                    can_id,
-                    payload_length,
-                    payload,
-                    device_slot=self.device_slot,
-                    wall_time_s=self._wall_clock(),
-                    monotonic_s=now_monotonic,
-                    interval_s=interval_s,
-                )
-            except JsmFrameError:
-                continue
-
-            self._last_sample_monotonic = now_monotonic
-            sample = candidate
+            if candidate is not None:
+                self._last_sample_monotonic = candidate.monotonic_s
+                sample = candidate
 
         return sample
 
@@ -361,6 +413,8 @@ class PhysicalJsmGatewayObserver:
         return GatewayStats(
             forwarded_to_controller=self._forwarded_to_controller,
             forwarded_to_joystick=self._forwarded_to_joystick,
+            transformed_jsm=self._transformed_jsm,
+            transform_errors=self._transform_errors,
         )
 
     def close(self) -> None:
@@ -387,4 +441,5 @@ __all__ = [
     "decode_jsm_frame",
     "direction_label",
     "joystick_frame_id",
+    "replace_jsm_axes",
 ]

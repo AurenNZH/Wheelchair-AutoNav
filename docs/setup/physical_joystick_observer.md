@@ -8,7 +8,7 @@ directions, while generating no joystick command, UDP packet, or ROS message.
 
 R-Net joystick position is normally the extended `02000X00#XxYy` frame, where
 `X` is the JSM device slot and the two data bytes are signed X/Y positions.
-The usual slot-1 frame is `02000100`; X is right-positive and Y is
+This chair's measured slot-2 frame is `02000200`; X is right-positive and Y is
 forward-positive.
 
 ## 1. Prepare the in-line interfaces
@@ -39,7 +39,7 @@ The command uses the same interface meanings as keyboard teleop:
 ```bash
 cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controller/scripts
 ./observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 1
+  --can-interface can0 --gateway-interface can1 --device-slot 2
 ```
 
 Here `--can-interface can0` is the controller side and
@@ -51,7 +51,7 @@ centered input should report raw `(0, 0)` or a small repeatable neutral offset.
 Example output:
 
 ```text
-Physical-JSM observer gateway active: JSM can1 <-> controller can0 frame=02000100#XxYy
+Physical-JSM observer gateway active: JSM can1 <-> controller can0 frame=02000200#XxYy
 TRANSPARENT PASS-THROUGH: CAN frames are forwarded unchanged; no joystick commands, UDP packets, or ROS messages are generated.
 JSM neutral       raw=(   0,   0) ros=(steer=+0.00 forward=0.00 reverse=0.00) rate= 100.0 Hz interval_ms=10.000 forwarded=(JSM->ctl:100 ctl->JSM:120)
 JSM forward_right raw=(  20,  40) ros=(steer=-0.20 forward=0.40 reverse=0.00) rate= 100.0 Hz interval_ms=10.000 forwarded=(JSM->ctl:200 ctl->JSM:240)
@@ -73,7 +73,7 @@ Record every valid sample:
 
 ```bash
 ./observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 1 \
+  --can-interface can0 --gateway-interface can1 --device-slot 2 \
   --duration-s 30 --csv /tmp/physical_jsm.csv
 ```
 

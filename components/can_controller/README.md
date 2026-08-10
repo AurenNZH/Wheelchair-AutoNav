@@ -11,6 +11,7 @@ components/can_controller/
 ├── scripts/
 │   ├── setup_utils.py
 │   ├── observe_physical_joystick.py
+│   ├── supervise_physical_joystick.py
 │   └── teleoperate_keyboard.py
 ├── src/
 │   └── wheelchair_teleop/
@@ -45,7 +46,7 @@ rules first; otherwise two gateways would operate concurrently:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 1
+  --can-interface can0 --gateway-interface can1 --device-slot 2
 ```
 
 To retain every valid 100 Hz sample while exercising neutral, forward,
@@ -53,7 +54,7 @@ reverse, left, right, and diagonal positions:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 1 \
+  --can-interface can0 --gateway-interface can1 --device-slot 2 \
   --duration-s 30 --csv /tmp/physical_jsm.csv
 ```
 
@@ -62,6 +63,27 @@ decodes joystick input only on `--gateway-interface`, so a controller-side
 frame cannot be reported as physical input. See the
 [physical-JSM observer guide](../../docs/setup/physical_joystick_observer.md)
 for topology discovery, expected output, and acceptance checks.
+
+## Physical-JSM shared control
+
+`supervise_physical_joystick.py` is a separate, explicit path for sending the
+measured slot-2 JSM request to the Jetson and applying its safety envelope.
+It defaults to `shadow`, where physical commands remain unchanged. In
+`enforce`, straight-forward CLEAR is locally capped at 20 raw counts, SLOW at
+15, and every STOP or link failure is centred. Steering and reverse are not
+enabled in this first physical scope.
+
+```bash
+python scripts/supervise_physical_joystick.py \
+  --mode shadow \
+  --can-interface can0 --gateway-interface can1 --device-slot 2 \
+  --jetson-address 192.168.1.10
+```
+
+Do not run this alongside `cangw`, keyboard teleop, the observer, or another
+gateway. Follow the
+[physical shared-control test guide](../../docs/setup/physical_joystick_shared_control.md)
+before selecting `--mode enforce`.
 
 ## Optional Jetson safety envelope
 
@@ -83,7 +105,8 @@ is complete. The link stops on a missing or stale response,
 malformed/wrong-peer packet, sequence mismatch, released input, or Jetson STOP.
 An automatic STOP stays latched until the operator releases the motion key.
 Five distinct clear heartbeats are required to re-arm, and the default RNET
-command ceiling is 20%.
+command ceiling is 20%. The separate physical-JSM program adds its explicit
+15% SLOW ceiling without changing keyboard behavior.
 
 Pi joystick X is right-positive, while ROS steering is left-positive. The
 safety link converts this sign in both directions so the Jetson evaluates the

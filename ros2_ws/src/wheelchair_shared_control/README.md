@@ -22,6 +22,19 @@ Run the fail-closed software:
 ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
 
+For the separately gated straight-forward physical-JSM test, the live launch
+options are explicit rather than stored as enabled defaults:
+
+```bash
+ros2 launch wheelchair_shared_control shared_control.launch.py \
+  enable_motion:=true geometry_calibrated:=true enable_udp:=true \
+  pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
+  min_steering:=0.0 max_steering:=0.0 slow_forward_limit:=0.15
+```
+
+Replace the example Pi address with its fixed isolated-LAN address and follow
+the [physical-JSM procedure](../../../../docs/setup/physical_joystick_shared_control.md).
+
 The normal command above reports `live_control_disabled`, even with valid
 maps and intent. The supervisor checks only the straight or gently curved
 swept footprint requested by the operator; it does not choose a direction or

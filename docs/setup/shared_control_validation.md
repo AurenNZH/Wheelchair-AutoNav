@@ -106,11 +106,14 @@ every supported footrest/mount position, AIRY yaw convention, and maximum
 intended loaded mass. AIRY pitch and roll are confirmed zero. Replace
 provisional collision dimensions only with the complete swept envelope.
 
-With wheels raised and an observer at the physical cutoff:
+After vCAN failure tests and live shadow observation, use either raised wheels
+or the documented controlled open test area at the lowest command cap, with an
+observer continuously holding the independent physical cutoff:
 
-1. Confirm keyboard release, stale input, Jetson loss, and emergency stop all
+1. Confirm joystick release, stale input, Jetson loss, and emergency stop all
    centre the CAN command.
-2. Confirm forward-only behavior and the 20% command cap.
+2. Confirm straight-forward-only behavior, the 20% CLEAR cap, and the distinct
+   15% SLOW cap.
 3. Confirm the physical cutoff works while software is unresponsive.
 
 On a level, dry, controlled floor, measure worst-case stopping distance over
@@ -134,13 +137,15 @@ Use a safety observer, physical cutoff, open escape space, and command cap at
 1. Empty corridor: no false intervention.
 2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
    boundary.
-3. Requested gentle right curves: stop only when the requested swept footprint
-   is blocked; every left request must stop with `left_turn_unobserved`.
+3. Every steering or reverse request must remain stopped in the initial
+   straight-forward physical mode.
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
-6. Side/rear close obstacle: full-surround proximity veto.
-7. Stationary human-sized dummy, then remotely moved dummy up to 0.5 m/s.
+6. Keep side/rear obstacles diagnostic-only; the current supervisor consumes
+   only `/front_costmap` and does not claim full-surround protection.
+7. Defer moving-person tests and right-curved physical control until the basic
+   straight CLEAR/SLOW/STOP gates pass repeatably.
 
 Any collision, missed detection, oscillating permit/stop behavior, timeout
 violation, or unexplained map dropout is a failed gate.

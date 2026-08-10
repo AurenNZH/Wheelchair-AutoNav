@@ -16,6 +16,13 @@ def generate_launch_description():
             DeclareLaunchArgument("geometry_calibrated", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("max_map_age_s", default_value="0.30"),
+            DeclareLaunchArgument("slow_forward_limit", default_value="0.35"),
+            DeclareLaunchArgument("min_steering", default_value="-0.35"),
+            DeclareLaunchArgument("max_steering", default_value="0.0"),
+            DeclareLaunchArgument("enable_udp", default_value="false"),
+            DeclareLaunchArgument("bind_address", default_value="0.0.0.0"),
+            DeclareLaunchArgument("pi_address", default_value=""),
+            DeclareLaunchArgument("allowed_pi_address", default_value=""),
             Node(
                 package="wheelchair_shared_control",
                 executable="safety_supervisor",
@@ -32,6 +39,11 @@ def generate_launch_description():
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),
+                        "slow_forward_limit": LaunchConfiguration(
+                            "slow_forward_limit"
+                        ),
+                        "min_steering": LaunchConfiguration("min_steering"),
+                        "max_steering": LaunchConfiguration("max_steering"),
                     },
                 ],
             ),
@@ -42,7 +54,15 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     parameters,
-                    {"use_sim_time": LaunchConfiguration("use_sim_time")},
+                    {
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "enable_udp": LaunchConfiguration("enable_udp"),
+                        "bind_address": LaunchConfiguration("bind_address"),
+                        "pi_address": LaunchConfiguration("pi_address"),
+                        "allowed_pi_address": LaunchConfiguration(
+                            "allowed_pi_address"
+                        ),
+                    },
                 ],
             ),
         ]

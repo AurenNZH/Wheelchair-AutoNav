@@ -62,7 +62,9 @@ class SafetyLink:
         envelope_timeout_s: float = 0.20,
         required_clear_envelopes: int = 5,
         command_cap: float = 0.20,
+        slow_command_cap: float | None = None,
         udp_socket=None,
+        monotonic_clock=time.monotonic,
     ):
         self.enabled = bool(enabled)
         self.jetson_address = jetson_address
@@ -73,18 +75,30 @@ class SafetyLink:
         self.envelope_timeout_s = float(envelope_timeout_s)
         self.required_clear_envelopes = int(required_clear_envelopes)
         self.command_cap = float(command_cap)
+        self.slow_command_cap = (
+            self.command_cap
+            if slow_command_cap is None
+            else float(slow_command_cap)
+        )
         self.session_id = str(uuid.uuid4())
         self._socket = udp_socket
         self._owns_socket = udp_socket is None
+        self._monotonic_clock = monotonic_clock
         self._sequence = 0
         self._last_send_monotonic = 0.0
         self._last_envelope_monotonic = 0.0
         self._last_envelope = None
         self._intent_by_sequence = {}
+        self._sent_monotonic_by_sequence = {}
         self._clear_count = 0
         self._last_counted_intent_sequence = None
+        self._minimum_acceptable_sequence = 0
+        self._last_command_class = None
         self._stop_latched = False
         self._reason = "shared_control_disabled"
+        self._latest_decision = None
+        self._latest_map_age_ms = None
+        self._latest_round_trip_ms = None
 
         if self.enabled:
             self._validate_config()
@@ -107,6 +121,8 @@ class SafetyLink:
             raise ValueError("required_clear_envelopes must be at least one")
         if not 0.0 < self.command_cap <= 1.0:
             raise ValueError("command_cap must be in (0, 1]")
+        if not 0.0 < self.slow_command_cap <= self.command_cap:
+            raise ValueError("slow_command_cap must be in (0, command_cap]")
 
     def apply(self, x_pos: int, y_pos: int, deadman: bool) -> tuple[int, int]:
         """Return steering/forward values permitted by a fresh matching envelope."""
@@ -114,10 +130,20 @@ class SafetyLink:
         if not self.enabled:
             return int(x_pos), int(y_pos)
 
-        now = time.monotonic()
+        now = self._monotonic_clock()
         steering = pi_x_to_ros_steering(x_pos)
         forward = max(0.0, min(1.0, float(y_pos) / 100.0))
         command = (steering, forward, bool(deadman))
+        command_class = (steering, forward > 0.0, bool(deadman))
+        if command_class != self._last_command_class:
+            # An envelope for a previous release/direction/steering class must
+            # never authorize a new movement. Forward magnitude is omitted so
+            # harmless potentiometer jitter does not repeatedly restart the
+            # handshake for the same straight or curved corridor.
+            self._clear_count = 0
+            self._last_counted_intent_sequence = None
+            self._minimum_acceptable_sequence = self._sequence + 1
+            self._last_command_class = command_class
         if now - self._last_send_monotonic >= self.heartbeat_period_s:
             self._send_intent(command, now)
         self._receive_envelopes(now)
@@ -139,8 +165,12 @@ class SafetyLink:
             return 0, 0
 
         envelope = self._last_envelope
+        if envelope.intent_sequence < self._minimum_acceptable_sequence:
+            self._clear_count = 0
+            self._reason = "envelope_precedes_current_input"
+            return 0, 0
         matching_intent = self._intent_by_sequence.get(envelope.intent_sequence)
-        if matching_intent != command:
+        if not self._intent_is_compatible(matching_intent, command):
             self._clear_count = 0
             self._reason = "envelope_does_not_match_current_intent"
             return 0, 0
@@ -158,7 +188,16 @@ class SafetyLink:
             self._reason = "waiting_for_clear_envelopes"
             return 0, 0
 
-        permitted_forward = min(envelope.permitted_forward, self.command_cap)
+        decision_cap = (
+            self.slow_command_cap
+            if envelope.decision == SLOW
+            else self.command_cap
+        )
+        permitted_forward = min(
+            envelope.permitted_forward,
+            decision_cap,
+            forward,
+        )
         permitted_steering = max(
             -self.command_cap,
             min(self.command_cap, envelope.permitted_steering),
@@ -167,6 +206,23 @@ class SafetyLink:
         return ros_steering_to_pi_x(permitted_steering), int(
             round(permitted_forward * 100.0)
         )
+
+    @staticmethod
+    def _intent_is_compatible(
+        sent_command: tuple[float, float, bool] | None,
+        current_command: tuple[float, float, bool],
+    ) -> bool:
+        """Allow only forward-magnitude jitter within one authorized corridor."""
+
+        if sent_command is None:
+            return False
+        sent_steering, sent_forward, sent_deadman = sent_command
+        steering, forward, deadman = current_command
+        if sent_steering != steering or sent_deadman != deadman:
+            return False
+        if sent_forward > 0.0 and forward > 0.0:
+            return True
+        return sent_forward == forward
 
     def _send_intent(self, command: tuple[float, float, bool], now: float) -> None:
         self._sequence += 1
@@ -186,9 +242,11 @@ class SafetyLink:
         self._socket.sendto(data, (self.jetson_address, self.intent_port))
         self._last_send_monotonic = now
         self._intent_by_sequence[self._sequence] = command
+        self._sent_monotonic_by_sequence[self._sequence] = now
         for sequence in list(self._intent_by_sequence):
             if sequence < self._sequence - 32:
                 del self._intent_by_sequence[sequence]
+                self._sent_monotonic_by_sequence.pop(sequence, None)
 
     def _receive_envelopes(self, now: float) -> None:
         for _ in range(32):
@@ -211,6 +269,14 @@ class SafetyLink:
                 continue
             self._last_envelope = envelope
             self._last_envelope_monotonic = now
+            self._latest_decision = envelope.decision
+            self._latest_map_age_ms = envelope.map_age_ms
+            sent_at = self._sent_monotonic_by_sequence.get(
+                envelope.intent_sequence
+            )
+            self._latest_round_trip_ms = (
+                None if sent_at is None else max(0.0, (now - sent_at) * 1000.0)
+            )
 
     def emergency_stop(self) -> None:
         if self.enabled:
@@ -224,12 +290,23 @@ class SafetyLink:
         self._socket = None
 
     def get_status(self) -> dict:
+        envelope_age_ms = None
+        if self._last_envelope is not None:
+            envelope_age_ms = max(
+                0.0,
+                (self._monotonic_clock() - self._last_envelope_monotonic)
+                * 1000.0,
+            )
         return {
             "enabled": self.enabled,
             "session_id": self.session_id,
             "reason": self._reason,
             "stop_latched": self._stop_latched,
             "clear_count": self._clear_count,
+            "latest_decision": self._latest_decision,
+            "map_age_ms": self._latest_map_age_ms,
+            "round_trip_ms": self._latest_round_trip_ms,
+            "envelope_age_ms": envelope_age_ms,
         }
 
 
