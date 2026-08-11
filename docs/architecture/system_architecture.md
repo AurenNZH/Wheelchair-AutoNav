@@ -21,7 +21,7 @@ Jetson wheelchair_shared_control
         |
         v
 Raspberry Pi wheelchair_teleop
-  deadman + sequence + timeout + command cap
+  2-D intent class + deadman + sequence + timeout + vector-preserving cap
         |
         v
 CAN/RNET joystick frames
@@ -51,9 +51,10 @@ The validated AIRY transform is:
 base_link -> rslidar: 0.330 -0.265 0.320 1.04720 0 0
 ```
 
-The single AIRY supports the inspected indoor forward/right MVP. Chair
-occlusion prevents safe left turns. The sensor does not validate drop-offs,
-steps, curbs, reverse, or low hazards beneath its observed height.
+The software supports a symmetric forward-correction cone, but physical use on
+either side remains conditional on RViz coverage and controlled obstacle gates.
+Hard turns, reverse, drop-offs, steps, curbs, and low hazards beneath the
+observed height remain outside the validated scope.
 
 ## Fail-Closed Layers
 

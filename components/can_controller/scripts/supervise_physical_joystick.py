@@ -33,6 +33,8 @@ CSV_FIELDS = (
     "can_id",
     "input_x",
     "input_y",
+    "intent_class",
+    "intent_heading_deg",
     "supervisor_decision",
     "reason",
     "would_output_x",
@@ -77,7 +79,7 @@ def _positive_float(text: str) -> float:
 def _arguments(argv=None):
     parser = argparse.ArgumentParser(
         description=(
-            "Bridge an in-line physical R-Net JSM and exchange straight-forward "
+            "Bridge an in-line physical R-Net JSM and exchange classified "
             "intent/safety envelopes with the Jetson."
         )
     )
@@ -134,7 +136,13 @@ def _arguments(argv=None):
         "--deadzone",
         type=_nonnegative_integer,
         default=5,
-        help="neutral and straight-axis deadzone in raw counts (default: 5)",
+        help="two-axis release deadzone in raw counts (default: 5)",
+    )
+    parser.add_argument(
+        "--forward-cone-deg",
+        type=_positive_float,
+        default=25.0,
+        help="supported forward correction half-angle (default: 25 degrees)",
     )
     parser.add_argument("--display-rate-hz", type=_positive_float, default=5.0)
     parser.add_argument("--duration-s", type=_positive_float, default=None)
@@ -176,6 +184,8 @@ def main(argv=None) -> int:
             raise ValueError("clear-cap must be in [1, 100]")
         if args.slow_cap > args.clear_cap:
             raise ValueError("slow-cap must not exceed clear-cap")
+        if args.forward_cone_deg >= 90.0:
+            raise ValueError("forward-cone-deg must be less than 90")
     except ValueError as exc:
         print("Configuration error: %s" % exc, file=sys.stderr)
         return 2
@@ -203,11 +213,14 @@ def main(argv=None) -> int:
             required_clear_envelopes=args.required_clear_envelopes,
             command_cap=args.clear_cap / 100.0,
             slow_command_cap=args.slow_cap / 100.0,
+            neutral_deadzone=args.deadzone,
+            forward_cone_half_angle_deg=args.forward_cone_deg,
         )
         control = StraightPhysicalJsmControl(
             safety_link,
             mode=args.mode,
             neutral_deadzone=args.deadzone,
+            forward_cone_half_angle_deg=args.forward_cone_deg,
         )
         gateway = PhysicalJsmGatewayObserver(
             controller_interface=args.can_interface,
@@ -242,8 +255,8 @@ def main(argv=None) -> int:
         )
     else:
         print(
-            "ENFORCE: straight-forward only; CLEAR<=%d SLOW<=%d STOP=0."
-            % (args.clear_cap, args.slow_cap),
+            "ENFORCE: forward cone=+/-%.1fdeg CLEAR<=%d SLOW<=%d STOP=0."
+            % (args.forward_cone_deg, args.clear_cap, args.slow_cap),
             flush=True,
         )
     print(
@@ -289,6 +302,10 @@ def main(argv=None) -> int:
                         "can_id": "%08X" % sample.can_id,
                         "input_x": result.input_x,
                         "input_y": result.input_y,
+                        "intent_class": result.intent_label,
+                        "intent_heading_deg": _optional_number(
+                            result.heading_deg, 3
+                        ),
                         "supervisor_decision": _decision_name(
                             result.supervisor_decision
                         ),
@@ -314,6 +331,7 @@ def main(argv=None) -> int:
             signature = (
                 result.supervisor_decision,
                 result.reason,
+                result.intent_class,
                 result.would_output_x,
                 result.would_output_y,
                 result.forwarded_x,
@@ -327,11 +345,14 @@ def main(argv=None) -> int:
             )
             if should_display:
                 print(
-                    "%s reason=%s input=(%d,%d) safe=(%d,%d) sent=(%d,%d) "
+                    "%s reason=%s intent=%s angle=%s input=(%d,%d) "
+                    "safe=(%d,%d) sent=(%d,%d) "
                     "rate=%.1fHz map_ms=%s rtt_ms=%s forwarded=(%d,%d) errors=%d"
                     % (
                         _decision_name(result.supervisor_decision),
                         result.reason,
+                        result.intent_label,
+                        _optional_number(result.heading_deg),
                         result.input_x,
                         result.input_y,
                         result.would_output_x,

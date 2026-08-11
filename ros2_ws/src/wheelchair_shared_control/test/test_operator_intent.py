@@ -1,0 +1,54 @@
+import unittest
+
+from wheelchair_shared_control.operator_intent import (
+    FORWARD,
+    FORWARD_LEFT,
+    FORWARD_RIGHT,
+    LEFT_TURN,
+    RELEASED,
+    REVERSE,
+    REVERSE_LEFT,
+    REVERSE_RIGHT,
+    RIGHT_TURN,
+    classify_normalized_axes,
+)
+
+
+class OperatorIntentClassificationTests(unittest.TestCase):
+    def test_recorded_pi_vectors_match_ros_classes(self):
+        # Pi X is right-positive, so ROS lateral is its negation.
+        fixtures = {
+            (0.0, 0.0): RELEASED,
+            (0.0, 1.0): FORWARD,
+            (0.14, 0.99): FORWARD_LEFT,
+            (-0.20, 1.0): FORWARD_RIGHT,
+            (0.96, 0.12): LEFT_TURN,
+            (-1.0, 0.0): RIGHT_TURN,
+            (-0.98, -0.20): RIGHT_TURN,
+            (0.0, -1.0): REVERSE,
+            (0.20, -1.0): REVERSE_LEFT,
+            (-0.20, -1.0): REVERSE_RIGHT,
+        }
+        for axes, expected in fixtures.items():
+            with self.subTest(axes=axes):
+                self.assertEqual(
+                    classify_normalized_axes(*axes).intent_class,
+                    expected,
+                )
+
+    def test_neutral_and_cone_boundaries_are_inclusive(self):
+        self.assertEqual(
+            classify_normalized_axes(0.05, -0.05).intent_class,
+            RELEASED,
+        )
+        self.assertTrue(
+            classify_normalized_axes(0.46, 1.0).is_forward
+        )
+        self.assertEqual(
+            classify_normalized_axes(0.47, 1.0).intent_class,
+            LEFT_TURN,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -11,11 +11,21 @@ from wheelchair_shared_control.safety import (
     evaluate_safety,
     occupied_points_from_grid,
 )
+from wheelchair_shared_control.operator_intent import (
+    FORWARD,
+    FORWARD_LEFT,
+    FORWARD_RIGHT,
+    LEFT_TURN,
+    REVERSE,
+    RIGHT_TURN,
+)
 
 
 class SafetyPolicyTests(unittest.TestCase):
     def setUp(self):
-        self.intent = OperatorIntentData("session", 1, 0.0, 0.5, True)
+        self.intent = OperatorIntentData(
+            "session", 1, 0.0, 0.5, FORWARD, True
+        )
         self.enabled = SafetyConfig(
             enable_motion=True,
             geometry_calibrated=True,
@@ -54,13 +64,15 @@ class SafetyPolicyTests(unittest.TestCase):
             self.intent, self.empty, 0.31, self.enabled
         )
         reverse = evaluate_safety(
-            OperatorIntentData("session", 2, 0.0, -0.1, True),
+            OperatorIntentData(
+                "session", 2, 0.0, -0.1, REVERSE, True
+            ),
             self.empty,
             0.1,
             self.enabled,
         )
         self.assertEqual(stale.reason, "stale_map")
-        self.assertEqual(reverse.reason, "reverse_disabled")
+        self.assertEqual(reverse.reason, "reverse_not_enabled")
 
     def test_obstacle_in_stop_and_slow_regions(self):
         stop = evaluate_safety(
@@ -78,7 +90,7 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(stop.decision, STOP)
         self.assertEqual(stop.reason, "obstacle_stop")
         self.assertEqual(slow.decision, SLOW)
-        self.assertLess(slow.permitted_forward, self.intent.forward)
+        self.assertLess(slow.permitted_forward, self.intent.longitudinal)
 
     def test_centred_base_uses_four_tenths_forward_extent(self):
         current_footprint = evaluate_safety(
@@ -103,7 +115,9 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(ahead.decision, SLOW)
 
     def test_requested_turn_checks_curved_swept_footprint(self):
-        turning_intent = OperatorIntentData("session", 3, -0.35, 0.5, True)
+        turning_intent = OperatorIntentData(
+            "session", 3, -0.175, 0.5, FORWARD_RIGHT, True
+        )
         obstacle = np.array([[1.3, -0.65]], dtype=np.float32)
         turn = evaluate_safety(
             turning_intent, obstacle, 0.1, self.enabled
@@ -114,24 +128,55 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertIn(turn.decision, (STOP, SLOW))
         self.assertEqual(straight.decision, CLEAR)
 
-    def test_left_and_excessive_right_turns_are_vetoed(self):
+    def test_hard_left_and_right_turns_are_vetoed(self):
         left = evaluate_safety(
-            OperatorIntentData("session", 4, 0.1, 0.5, True),
+            OperatorIntentData(
+                "session", 4, 0.96, 0.12, LEFT_TURN, True
+            ),
             self.empty,
             0.1,
             self.enabled,
         )
-        excessive_right = evaluate_safety(
-            OperatorIntentData("session", 5, -0.5, 0.5, True),
+        right = evaluate_safety(
+            OperatorIntentData(
+                "session", 5, -1.0, 0.0, RIGHT_TURN, True
+            ),
             self.empty,
             0.1,
             self.enabled,
         )
 
         self.assertEqual(left.decision, STOP)
-        self.assertEqual(left.reason, "left_turn_unobserved")
-        self.assertEqual(excessive_right.decision, STOP)
-        self.assertEqual(excessive_right.reason, "right_turn_limit_exceeded")
+        self.assertEqual(left.reason, "left_turn_not_enabled")
+        self.assertEqual(right.decision, STOP)
+        self.assertEqual(right.reason, "right_turn_not_enabled")
+
+    def test_intent_class_mismatch_is_stopped(self):
+        mismatch = evaluate_safety(
+            OperatorIntentData(
+                "session", 5, 0.96, 0.12, FORWARD_LEFT, True
+            ),
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+        self.assertEqual(mismatch.reason, "intent_class_mismatch")
+
+    def test_correction_checks_straight_to_requested_path_union(self):
+        correction = OperatorIntentData(
+            "session", 6, 0.175, 0.5, FORWARD_LEFT, True
+        )
+        obstacle_on_straight = np.array([[1.3, -0.45]], dtype=np.float32)
+
+        decision = evaluate_safety(
+            correction,
+            obstacle_on_straight,
+            0.1,
+            self.enabled,
+        )
+
+        self.assertIn(decision.decision, (STOP, SLOW))
+        self.assertIn(decision.reason, ("obstacle_stop", "obstacle_slow"))
 
     def test_front_footprint_obstacle_still_vetoes_motion(self):
         decision = evaluate_safety(

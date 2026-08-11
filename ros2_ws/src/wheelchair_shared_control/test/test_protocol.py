@@ -10,11 +10,14 @@ from wheelchair_shared_control.protocol import (
     encode_envelope,
     encode_intent,
 )
+from wheelchair_shared_control.operator_intent import FORWARD_LEFT
 
 
 class ProtocolTests(unittest.TestCase):
     def test_intent_round_trip(self):
-        packet = IntentPacket("session-a", 7, -0.2, 0.4, True)
+        packet = IntentPacket(
+            "session-a", 7, 0.2, 0.4, FORWARD_LEFT, True
+        )
         self.assertEqual(decode_intent(encode_intent(packet)), packet)
 
     def test_envelope_round_trip(self):
@@ -30,34 +33,46 @@ class ProtocolTests(unittest.TestCase):
     def test_wrong_version_and_out_of_range_intent_are_rejected(self):
         wrong_version = json.dumps(
             {
-                "v": 2,
+                "v": 1,
                 "type": "intent",
                 "session": "s",
                 "seq": 1,
-                "steering": 0.0,
-                "forward": 0.0,
+                "lateral": 0.0,
+                "longitudinal": 0.0,
+                "intent_class": 0,
                 "deadman": False,
             }
         ).encode()
         with self.assertRaises(ProtocolError):
             decode_intent(wrong_version)
         with self.assertRaises(ProtocolError):
-            encode_intent(IntentPacket("s", 1, 0.0, 1.1, True))
+            encode_intent(
+                IntentPacket("s", 1, 0.0, 1.1, FORWARD_LEFT, True)
+            )
 
     def test_boolean_is_not_accepted_as_numeric_sequence(self):
         data = json.dumps(
             {
-                "v": 1,
+                "v": 2,
                 "type": "intent",
                 "session": "s",
                 "seq": True,
-                "steering": 0.0,
-                "forward": 0.0,
+                "lateral": 0.0,
+                "longitudinal": 0.0,
+                "intent_class": 0,
                 "deadman": False,
             }
         ).encode()
         with self.assertRaises(ProtocolError):
             decode_intent(data)
+
+    def test_deadman_and_class_must_agree(self):
+        with self.assertRaises(ProtocolError):
+            encode_intent(IntentPacket("s", 1, 0.0, 0.0, 0, True))
+        with self.assertRaises(ProtocolError):
+            encode_intent(
+                IntentPacket("s", 1, 0.0, 0.5, FORWARD_LEFT, False)
+            )
 
 
 if __name__ == "__main__":

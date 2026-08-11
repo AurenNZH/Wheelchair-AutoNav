@@ -91,8 +91,11 @@ class UdpBridgeNode(Node):
             msg.header.frame_id = "base_link"
             msg.session_id = packet.session_id
             msg.sequence = packet.sequence
-            msg.steering = packet.steering
-            msg.forward = packet.forward
+            msg.steering = packet.lateral
+            msg.forward = max(0.0, packet.longitudinal)
+            msg.lateral = packet.lateral
+            msg.longitudinal = packet.longitudinal
+            msg.intent_class = packet.intent_class
             msg.deadman = packet.deadman
             self._intent_pub.publish(msg)
 

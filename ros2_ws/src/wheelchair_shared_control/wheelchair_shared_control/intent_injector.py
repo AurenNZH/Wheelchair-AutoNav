@@ -13,6 +13,11 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from wheelchair_msgs.msg import OperatorIntent
 
+from wheelchair_shared_control.operator_intent import (
+    FORWARD as FORWARD_INTENT,
+    RELEASED as RELEASED_INTENT,
+)
+
 
 RELEASED = "released"
 FORWARD = "forward"
@@ -21,8 +26,9 @@ COMMANDS = (RELEASED, FORWARD)
 
 @dataclass(frozen=True)
 class InjectedCommand:
-    steering: float
-    forward: float
+    lateral: float
+    longitudinal: float
+    intent_class: int
     deadman: bool
 
 
@@ -36,8 +42,13 @@ def command_for_preset(name: str, forward_request: float) -> InjectedCommand:
         motion_timeout_s=1.0,
     )
     if name == RELEASED:
-        return InjectedCommand(0.0, 0.0, False)
-    return InjectedCommand(0.0, float(forward_request), True)
+        return InjectedCommand(0.0, 0.0, RELEASED_INTENT, False)
+    return InjectedCommand(
+        0.0,
+        float(forward_request),
+        FORWARD_INTENT,
+        True,
+    )
 
 
 def validate_injector_config(
@@ -187,14 +198,17 @@ class OperatorIntentInjectorNode(Node):
         msg.header.frame_id = str(self.get_parameter("frame_id").value)
         msg.session_id = self._session_id
         msg.sequence = self._sequence
-        msg.steering = command.steering
-        msg.forward = command.forward
+        msg.steering = command.lateral
+        msg.forward = max(0.0, command.longitudinal)
+        msg.lateral = command.lateral
+        msg.longitudinal = command.longitudinal
+        msg.intent_class = command.intent_class
         msg.deadman = command.deadman
         self._publisher.publish(msg)
         if self._command != self._last_published_command:
             self.get_logger().info(
                 "Injected operator command: %s (forward=%.3f deadman=%s)"
-                % (self._command, command.forward, command.deadman)
+                % (self._command, command.longitudinal, command.deadman)
             )
             self._last_published_command = self._command
 

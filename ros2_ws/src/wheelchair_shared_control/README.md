@@ -1,7 +1,8 @@
 # Wheelchair Shared Control
 
-Fail-safe supervisor for operator-requested forward motion. It checks the
-requested straight or right-curved swept footprint against `/front_costmap`.
+Fail-safe supervisor for operator-requested forward motion. It checks straight
+motion or a correction inside the configured forward cone against
+`/front_costmap`.
 It never selects a path, publishes `cmd_vel`, or accesses CAN.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`. The UDP
@@ -22,26 +23,26 @@ Run the fail-closed software:
 ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
 
-For the separately gated straight-forward physical-JSM test, the live launch
+For the separately gated physical-JSM test, the live launch
 options are explicit rather than stored as enabled defaults:
 
 ```bash
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  min_steering:=0.0 max_steering:=0.0 slow_forward_limit:=0.15
+  slow_forward_limit:=0.15
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow
 the [physical-JSM procedure](../../../../docs/setup/physical_joystick_shared_control.md).
 
-The normal command above reports `live_control_disabled`, even with valid
-maps and intent. The supervisor checks only the straight or gently curved
-swept footprint requested by the operator; it does not choose a direction or
-start movement. ROS steering is left-positive. The single-AIRY demo permits
-`-0.35 <= steering <= 0.0`; left steering stops with
-`left_turn_unobserved`, excessive right steering stops with
-`right_turn_limit_exceeded`, and reverse remains disabled.
+The normal command above reports `live_control_disabled`, even with valid maps
+and intent. UDP protocol v2 carries normalized left-positive lateral and
+forward-positive longitudinal axes plus a semantic class. The supervisor
+permits only the symmetric 25-degree forward-correction cone. It checks every
+path from straight through the requested correction so the Pi can safely
+reduce that correction while applying CLEAR/SLOW caps. Hard turns and reverse
+remain classified but return explicit STOP reasons.
 
 The measured 0.80 m base is centred on `base_link`, so its configured forward
 and rear extents are both 0.40 m. STOP and SLOW distances are additional

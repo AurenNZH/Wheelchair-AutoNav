@@ -34,9 +34,15 @@ class IntentInjectorTests(unittest.TestCase):
         released = command_for_preset(RELEASED, 0.5)
         forward = command_for_preset(FORWARD, 0.5)
 
-        self.assertEqual((released.steering, released.forward), (0.0, 0.0))
+        self.assertEqual(
+            (released.lateral, released.longitudinal), (0.0, 0.0)
+        )
+        self.assertEqual(released.intent_class, OperatorIntent.RELEASED)
         self.assertFalse(released.deadman)
-        self.assertEqual((forward.steering, forward.forward), (0.0, 0.5))
+        self.assertEqual(
+            (forward.lateral, forward.longitudinal), (0.0, 0.5)
+        )
+        self.assertEqual(forward.intent_class, OperatorIntent.FORWARD)
         self.assertTrue(forward.deadman)
 
     def test_invalid_startup_values_are_rejected(self):
@@ -100,12 +106,14 @@ class EnvelopeMonitorTests(unittest.TestCase):
         first = OperatorIntent()
         first.session_id = "test"
         first.sequence = 1
-        first.forward = 0.5
+        first.longitudinal = 0.5
+        first.intent_class = OperatorIntent.FORWARD
         first.deadman = True
         second = OperatorIntent()
         second.session_id = "test"
         second.sequence = 2
-        second.forward = 0.5
+        second.longitudinal = 0.5
+        second.intent_class = OperatorIntent.FORWARD
         second.deadman = True
 
         self.assertEqual(intent_signature(first), intent_signature(second))

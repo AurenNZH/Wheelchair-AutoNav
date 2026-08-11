@@ -11,6 +11,12 @@ import rclpy
 from rclpy.node import Node
 from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
 
+from wheelchair_shared_control.operator_intent import (
+    RELEASED,
+    classify_normalized_axes,
+    intent_label,
+)
+
 
 WAITING = "WAITING"
 READY = "READY"
@@ -57,19 +63,58 @@ def format_map_state(state: MapPipelineState) -> str:
     return "[MAP] STALE front_costmap age=%.2fs" % state.age_s
 
 
-def intent_signature(msg: OperatorIntent) -> tuple[bool, float, float]:
+def intent_signature(msg: OperatorIntent) -> tuple[bool, int, float, float]:
     """Ignore timestamp and sequence heartbeats when identifying intent changes."""
 
-    return bool(msg.deadman), float(msg.forward), float(msg.steering)
+    intent_class, lateral, longitudinal = _intent_view(msg)
+    return (
+        bool(msg.deadman),
+        intent_class,
+        lateral,
+        longitudinal,
+    )
 
 
 def format_intent(msg: OperatorIntent) -> str:
-    if not msg.deadman or msg.forward <= 0.0:
+    intent_class, lateral, longitudinal = _intent_view(msg)
+    if not msg.deadman or intent_class == RELEASED:
         return "[INTENT] RELEASED"
-    return "[INTENT] FORWARD request=%.3f steering=%.3f" % (
-        msg.forward,
-        msg.steering,
+    try:
+        label = intent_label(intent_class).upper()
+    except ValueError:
+        label = "UNKNOWN(%d)" % intent_class
+    heading_deg = math.degrees(
+        math.atan2(lateral, longitudinal)
     )
+    return "[INTENT] %s lateral=%.3f longitudinal=%.3f angle=%.1fdeg" % (
+        label,
+        lateral,
+        longitudinal,
+        heading_deg,
+    )
+
+
+def _intent_view(msg: OperatorIntent) -> tuple[int, float, float]:
+    """Return v2 axes, deriving them for existing ROS-only publishers."""
+
+    intent_class = int(msg.intent_class)
+    lateral = float(msg.lateral)
+    longitudinal = float(msg.longitudinal)
+    if (
+        lateral == 0.0
+        and longitudinal == 0.0
+        and intent_class == RELEASED
+        and bool(msg.deadman)
+    ):
+        longitudinal = float(msg.forward)
+        lateral = float(msg.steering) * longitudinal
+        try:
+            intent_class = classify_normalized_axes(
+                lateral, longitudinal
+            ).intent_class
+        except ValueError:
+            intent_class = -1
+    return intent_class, lateral, longitudinal
 
 
 def decision_name(decision: int) -> str:

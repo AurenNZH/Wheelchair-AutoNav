@@ -17,6 +17,7 @@ from wheelchair_shared_control.safety import (
     evaluate_safety,
     occupied_points_from_grid,
 )
+from wheelchair_shared_control.operator_intent import classify_normalized_axes
 
 
 class SafetySupervisorNode(Node):
@@ -39,10 +40,13 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
-        self.declare_parameter("min_steering", -0.35)
-        self.declare_parameter("max_steering", 0.0)
+        self.declare_parameter("min_steering", -0.466307658)
+        self.declare_parameter("max_steering", 0.466307658)
         self.declare_parameter("slow_forward_limit", 0.35)
         self.declare_parameter("path_sample_step_m", 0.05)
+        self.declare_parameter("steering_sample_step", 0.05)
+        self.declare_parameter("neutral_deadzone", 0.05)
+        self.declare_parameter("forward_cone_half_angle_deg", 25.0)
         self.declare_parameter("max_map_age_s", 0.30)
 
         self._config = self._load_config()
@@ -104,6 +108,15 @@ class SafetySupervisorNode(Node):
             path_sample_step_m=float(
                 self.get_parameter("path_sample_step_m").value
             ),
+            steering_sample_step=float(
+                self.get_parameter("steering_sample_step").value
+            ),
+            neutral_deadzone=float(
+                self.get_parameter("neutral_deadzone").value
+            ),
+            forward_cone_half_angle_deg=float(
+                self.get_parameter("forward_cone_half_angle_deg").value
+            ),
             max_map_age_s=float(self.get_parameter("max_map_age_s").value),
         )
 
@@ -160,12 +173,38 @@ class SafetySupervisorNode(Node):
                 decision = self._stop("invalid_map_timestamp")
             else:
                 map_age_s = (now_ns - self._front_stamp_ns) / 1e9
+                lateral = float(self._intent.lateral)
+                longitudinal = float(self._intent.longitudinal)
+                intent_class = int(self._intent.intent_class)
+                deadman = bool(self._intent.deadman)
+                if (
+                    lateral == 0.0
+                    and longitudinal == 0.0
+                    and intent_class == int(OperatorIntent.RELEASED)
+                    and deadman
+                ):
+                    # Compatibility for ROS-only simulation publishers that
+                    # still fill the original steering/forward projection.
+                    longitudinal = float(self._intent.forward)
+                    lateral = float(self._intent.steering) * longitudinal
+                    try:
+                        intent_class = classify_normalized_axes(
+                            lateral,
+                            longitudinal,
+                            neutral_deadzone=self._config.neutral_deadzone,
+                            forward_cone_half_angle_deg=(
+                                self._config.forward_cone_half_angle_deg
+                            ),
+                        ).intent_class
+                    except ValueError:
+                        intent_class = -1
                 intent = OperatorIntentData(
                     session_id=session_id,
                     sequence=intent_sequence,
-                    steering=float(self._intent.steering),
-                    forward=float(self._intent.forward),
-                    deadman=bool(self._intent.deadman),
+                    lateral=lateral,
+                    longitudinal=longitudinal,
+                    intent_class=intent_class,
+                    deadman=deadman,
                 )
                 decision = evaluate_safety(
                     intent,

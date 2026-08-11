@@ -10,9 +10,17 @@ import socket
 import time
 import uuid
 
+from .operator_intent import (
+    FORWARD_CLASSES,
+    RELEASED,
+    ClassifiedIntent,
+    classify_raw_axes,
+    intent_label,
+)
+
 
 logger = logging.getLogger(__name__)
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
@@ -30,6 +38,14 @@ def ros_steering_to_pi_x(steering: float) -> int:
 
     bounded = max(-1.0, min(1.0, float(steering)))
     return int(round(-bounded * 100.0))
+
+
+def steering_ratio_to_pi_x(steering_ratio: float, y_pos: int) -> int:
+    """Preserve a left-positive steering ratio at the permitted forward Y."""
+
+    bounded_ratio = max(-1.0, min(1.0, float(steering_ratio)))
+    bounded_y = max(0, min(100, int(y_pos)))
+    return int(round(-bounded_ratio * bounded_y))
 
 
 class ProtocolError(ValueError):
@@ -63,6 +79,8 @@ class SafetyLink:
         required_clear_envelopes: int = 5,
         command_cap: float = 0.20,
         slow_command_cap: float | None = None,
+        neutral_deadzone: int = 5,
+        forward_cone_half_angle_deg: float = 25.0,
         udp_socket=None,
         monotonic_clock=time.monotonic,
     ):
@@ -79,6 +97,10 @@ class SafetyLink:
             self.command_cap
             if slow_command_cap is None
             else float(slow_command_cap)
+        )
+        self.neutral_deadzone = int(neutral_deadzone)
+        self.forward_cone_half_angle_deg = float(
+            forward_cone_half_angle_deg
         )
         self.session_id = str(uuid.uuid4())
         self._socket = udp_socket
@@ -123,6 +145,12 @@ class SafetyLink:
             raise ValueError("command_cap must be in (0, 1]")
         if not 0.0 < self.slow_command_cap <= self.command_cap:
             raise ValueError("slow_command_cap must be in (0, command_cap]")
+        classify_raw_axes(
+            0,
+            0,
+            neutral_deadzone=self.neutral_deadzone,
+            forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
+        )
 
     def apply(self, x_pos: int, y_pos: int, deadman: bool) -> tuple[int, int]:
         """Return steering/forward values permitted by a fresh matching envelope."""
@@ -131,15 +159,17 @@ class SafetyLink:
             return int(x_pos), int(y_pos)
 
         now = self._monotonic_clock()
-        steering = pi_x_to_ros_steering(x_pos)
-        forward = max(0.0, min(1.0, float(y_pos) / 100.0))
-        command = (steering, forward, bool(deadman))
-        command_class = (steering, forward > 0.0, bool(deadman))
+        command = classify_raw_axes(
+            int(x_pos) if deadman else 0,
+            int(y_pos) if deadman else 0,
+            neutral_deadzone=self.neutral_deadzone,
+            forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
+        )
+        command_class = self._authorization_family(command.intent_class)
         if command_class != self._last_command_class:
-            # An envelope for a previous release/direction/steering class must
-            # never authorize a new movement. Forward magnitude is omitted so
-            # harmless potentiometer jitter does not repeatedly restart the
-            # handshake for the same straight or curved corridor.
+            # Forward, correction-left, and correction-right share one arming
+            # family. Each envelope still authorizes only the checked steering
+            # interval, but normal correction changes do not restart arming.
             self._clear_count = 0
             self._last_counted_intent_sequence = None
             self._minimum_acceptable_sequence = self._sequence + 1
@@ -148,10 +178,16 @@ class SafetyLink:
             self._send_intent(command, now)
         self._receive_envelopes(now)
 
-        if y_pos <= 0 or not deadman:
+        if command.intent_class == RELEASED or not deadman:
             self._stop_latched = False
             self._clear_count = 0
             self._reason = "operator_released"
+            return 0, 0
+        if command.intent_class not in FORWARD_CLASSES:
+            self._clear_count = 0
+            self._reason = "%s_not_enabled" % intent_label(
+                command.intent_class
+            )
             return 0, 0
         if self._stop_latched:
             self._reason = "automatic_stop_latched"
@@ -188,6 +224,12 @@ class SafetyLink:
             self._reason = "waiting_for_clear_envelopes"
             return 0, 0
 
+        if not self._envelope_limit_is_valid(envelope, matching_intent):
+            self._stop_latched = True
+            self._clear_count = 0
+            self._reason = "invalid_safety_envelope_limit"
+            return 0, 0
+
         decision_cap = (
             self.slow_command_cap
             if envelope.decision == SLOW
@@ -196,45 +238,81 @@ class SafetyLink:
         permitted_forward = min(
             envelope.permitted_forward,
             decision_cap,
-            forward,
+            command.longitudinal,
         )
-        permitted_steering = max(
-            -self.command_cap,
-            min(self.command_cap, envelope.permitted_steering),
+        permitted_steering = self._steering_inside_authorized_interval(
+            command.steering_ratio,
+            envelope.permitted_steering,
         )
         self._reason = envelope.reason
-        return ros_steering_to_pi_x(permitted_steering), int(
-            round(permitted_forward * 100.0)
+        output_y = int(round(permitted_forward * 100.0))
+        return steering_ratio_to_pi_x(permitted_steering, output_y), output_y
+
+    @staticmethod
+    def _authorization_family(intent_class: int) -> str:
+        if intent_class == RELEASED:
+            return "released"
+        if intent_class in FORWARD_CLASSES:
+            return "forward_cone"
+        return "unsupported"
+
+    @staticmethod
+    def _steering_inside_authorized_interval(
+        current_ratio: float,
+        authorized_ratio: float,
+    ) -> float:
+        """Clamp to the checked straight-to-requested steering interval."""
+
+        if current_ratio == 0.0 or authorized_ratio == 0.0:
+            return 0.0
+        if math.copysign(1.0, current_ratio) != math.copysign(
+            1.0, authorized_ratio
+        ):
+            return 0.0
+        return math.copysign(
+            min(abs(current_ratio), abs(authorized_ratio)),
+            current_ratio,
         )
 
     @staticmethod
     def _intent_is_compatible(
-        sent_command: tuple[float, float, bool] | None,
-        current_command: tuple[float, float, bool],
+        sent_command: ClassifiedIntent | None,
+        current_command: ClassifiedIntent,
     ) -> bool:
-        """Allow only forward-magnitude jitter within one authorized corridor."""
+        """Allow a fresh envelope only within the active forward family."""
 
         if sent_command is None:
             return False
-        sent_steering, sent_forward, sent_deadman = sent_command
-        steering, forward, deadman = current_command
-        if sent_steering != steering or sent_deadman != deadman:
-            return False
-        if sent_forward > 0.0 and forward > 0.0:
-            return True
-        return sent_forward == forward
+        return sent_command.is_forward and current_command.is_forward
 
-    def _send_intent(self, command: tuple[float, float, bool], now: float) -> None:
+    @staticmethod
+    def _envelope_limit_is_valid(
+        envelope: Envelope,
+        sent_command: ClassifiedIntent,
+    ) -> bool:
+        if envelope.permitted_forward > sent_command.longitudinal + 1e-6:
+            return False
+        requested = sent_command.steering_ratio
+        permitted = envelope.permitted_steering
+        if permitted == 0.0:
+            return True
+        if requested == 0.0:
+            return False
+        if math.copysign(1.0, permitted) != math.copysign(1.0, requested):
+            return False
+        return abs(permitted) <= abs(requested) + 1e-6
+
+    def _send_intent(self, command: ClassifiedIntent, now: float) -> None:
         self._sequence += 1
-        steering, forward, deadman = command
         payload = {
             "v": PROTOCOL_VERSION,
             "type": "intent",
             "session": self.session_id,
             "seq": self._sequence,
-            "steering": steering,
-            "forward": forward,
-            "deadman": deadman,
+            "lateral": command.lateral,
+            "longitudinal": command.longitudinal,
+            "intent_class": command.intent_class,
+            "deadman": command.deadman,
         }
         data = json.dumps(
             payload, separators=(",", ":"), sort_keys=True
@@ -376,4 +454,5 @@ __all__ = [
     "decode_envelope",
     "pi_x_to_ros_steering",
     "ros_steering_to_pi_x",
+    "steering_ratio_to_pi_x",
 ]

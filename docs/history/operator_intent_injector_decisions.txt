@@ -178,3 +178,28 @@ holds the independent physical cutoff throughout. The previous raised-wheel
 requirement is no longer the only accepted physical gate for this installation,
 but fixed peer allowlists, five-envelope arming, the 200 ms timeout, and the
 controlled soft-obstacle sequence remain mandatory.
+
+2026-08-11T15:21:35+01:00 — Two-axis intent and correction-cone milestone
+Physical calibration separated genuine heading correction from joystick
+neutral noise. Released input was exactly (0, 0), two natural forward runs
+used repeatable left-biased corrections between roughly X=-38 and X=20, and
+deliberate turns were cleanly separated near X=-96 and X=100. Five counts
+therefore remain the electrical neutral box, while a symmetric 25-degree cone
+around forward defines the provisional supported motion family. Hard turns
+and reverse are transported and labelled but remain locally stopped.
+
+UDP protocol v2 carries normalized signed lateral/longitudinal axes and an
+explicit semantic class so pure lateral and reverse requests cannot be
+mistaken for release. Pi and Jetson must be deployed together; mixed protocol
+versions fail closed. Existing ROS steering/forward fields remain only as a
+derived compatibility projection so the separately owned Gazebo publishers
+continue to build without modification.
+
+Forward correction output preserves the operator's vector direction when the
+20-count CLEAR or 15-count SLOW ceiling reduces longitudinal output. The
+supervisor checks the swept-path union from straight through the requested
+correction before authorizing that interval. This lets the Pi safely reduce a
+same-side correction or temporarily remain straight while waiting for a new
+opposite-side envelope, without allowing a 100 Hz joystick change to reuse an
+unchecked path. Map staleness, link failure, hard turns, reverse, and invalid
+classes remain STOP conditions; shadow remains the default execution mode.

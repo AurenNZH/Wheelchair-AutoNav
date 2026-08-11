@@ -1,10 +1,14 @@
 # Physical-Joystick Shared Control
 
 This procedure feeds the measured slot-2 physical JSM into the Jetson safety
-supervisor. The first enforced scope is straight-forward only. CLEAR is capped
-at 20 raw counts, SLOW at 15, and STOP at zero. Reverse or steering outside the
-five-count deadzone stops locally and remains latched until the forward axis
-returns to neutral.
+supervisor. The enforced scope is forward motion inside the calibrated
+25-degree correction cone. CLEAR is capped at 20 raw forward counts, SLOW at
+15, and STOP at zero. Correction X scales with the permitted Y so the input
+direction is preserved. Hard turns and reverse stop locally and remain latched
+until both joystick axes return to neutral.
+
+The Pi and Jetson use lockstep UDP protocol v2. Deploy and rebuild both sides
+before testing; a mixed v1/v2 enforce setup intentionally fails closed.
 
 Use fixed Pi and Jetson addresses on the isolated router. The examples below
 use `192.168.1.20` for the Pi and `192.168.1.10` for the Jetson; substitute the
@@ -35,7 +39,7 @@ export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  min_steering:=0.0 max_steering:=0.0 slow_forward_limit:=0.15
+  slow_forward_limit:=0.15
 ```
 
 Both motion gates and UDP are explicit; they remain disabled in the normal
@@ -70,13 +74,15 @@ python3 supervise_physical_joystick.py \
   --mode shadow \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
   --jetson-address 192.168.1.10 \
+  --forward-cone-deg 25 \
   --csv /tmp/physical_shared_shadow.csv
 ```
 
 Power the chair only after the gateway banner appears. Shadow mode displays
-the safe command but forwards the physical command unchanged. Pass this gate
-only when both forwarding counters rise, intent follows the physical forward
-axis, and clear/slow/stop decisions agree with RViz and measured obstacles.
+the semantic intent, angle, and safe command but forwards the physical command
+unchanged. Pass this gate only when both forwarding counters rise, the
+recorded forward corrections remain inside the cone, hard left/right and
+reverse labels are correct, and clear/slow/stop decisions agree with RViz.
 
 ## 5. Low-speed enforcement
 
@@ -90,7 +96,7 @@ python3 supervise_physical_joystick.py \
   --mode enforce \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
   --jetson-address 192.168.1.10 \
-  --clear-cap 20 --slow-cap 15 --deadzone 5 \
+  --clear-cap 20 --slow-cap 15 --deadzone 5 --forward-cone-deg 25 \
   --csv /tmp/physical_shared_enforce.csv
 ```
 
@@ -98,11 +104,12 @@ Validate in this order:
 
 1. STOP obstacle: held forward input must transmit `(0,0)`.
 2. Clear space: five fresh envelopes are required, then transmitted Y must not
-   exceed 20.
-3. SLOW obstacle: transmitted Y must not exceed 15.
-4. Approach the soft obstacle and observe CLEAR, SLOW, then latched STOP.
-5. Release to neutral before re-arming; steering and reverse must remain zero.
-6. Stop the map, Jetson supervisor, and network separately in open space; each
+   exceed 20 and X must preserve the requested correction ratio.
+3. Repeat shallow corrections on both sides; neither may create a local latch.
+4. SLOW obstacle: transmitted Y must not exceed 15 and X must scale with it.
+5. Approach the soft obstacle and observe CLEAR, SLOW, then latched STOP.
+6. Hard turns and reverse must remain zero; centre both axes before re-arming.
+7. Stop the map, Jetson supervisor, and network separately in open space; each
    must centre output within the 200 ms envelope timeout.
 
 Stop immediately on unexplained motion, a missed STOP, decision oscillation,

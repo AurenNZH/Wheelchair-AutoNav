@@ -7,6 +7,15 @@ import math
 
 import numpy as np
 
+from wheelchair_shared_control.operator_intent import (
+    FORWARD_CLASSES,
+    LEFT_TURN,
+    RELEASED,
+    REVERSE_CLASSES,
+    RIGHT_TURN,
+    classify_normalized_axes,
+)
+
 
 STOP = 0
 SLOW = 1
@@ -17,8 +26,9 @@ CLEAR = 2
 class OperatorIntentData:
     session_id: str
     sequence: int
-    steering: float
-    forward: float
+    lateral: float
+    longitudinal: float
+    intent_class: int
     deadman: bool
 
 
@@ -33,10 +43,13 @@ class SafetyConfig:
     stop_distance_m: float = 0.70
     slow_distance_m: float = 1.20
     min_turn_radius_m: float = 1.20
-    min_steering: float = -0.35
-    max_steering: float = 0.0
+    min_steering: float = -0.466307658
+    max_steering: float = 0.466307658
     slow_forward_limit: float = 0.35
     path_sample_step_m: float = 0.05
+    steering_sample_step: float = 0.05
+    neutral_deadzone: float = 0.05
+    forward_cone_half_angle_deg: float = 25.0
     max_map_age_s: float = 0.30
 
 
@@ -90,22 +103,43 @@ def evaluate_safety(
         return _stop("invalid_map_age")
     if map_age_s > config.max_map_age_s:
         return _stop("stale_map")
-    if not intent.deadman:
+    if not math.isfinite(intent.lateral) or not math.isfinite(
+        intent.longitudinal
+    ):
+        return _stop("invalid_intent")
+    if abs(intent.lateral) > 1.0 or abs(intent.longitudinal) > 1.0:
+        return _stop("invalid_intent")
+    try:
+        classified = classify_normalized_axes(
+            intent.lateral,
+            intent.longitudinal,
+            neutral_deadzone=config.neutral_deadzone,
+            forward_cone_half_angle_deg=config.forward_cone_half_angle_deg,
+        )
+    except ValueError:
+        return _stop("invalid_intent")
+    if (
+        int(intent.intent_class) != classified.intent_class
+        or bool(intent.deadman) != classified.deadman
+    ):
+        return _stop("intent_class_mismatch")
+    if not intent.deadman or intent.intent_class == RELEASED:
         return _stop("deadman_released")
-    if not math.isfinite(intent.forward) or not math.isfinite(intent.steering):
-        return _stop("invalid_intent")
-    if intent.forward < 0.0:
-        return _stop("reverse_disabled")
-    if intent.forward > 1.0 or abs(intent.steering) > 1.0:
-        return _stop("invalid_intent")
-    if intent.forward == 0.0:
-        return _stop("no_forward_intent")
-    if intent.steering > config.max_steering:
-        return _stop("left_turn_unobserved")
-    if intent.steering < config.min_steering:
-        return _stop("right_turn_limit_exceeded")
+    if intent.intent_class in REVERSE_CLASSES:
+        return _stop("reverse_not_enabled")
+    if intent.intent_class == LEFT_TURN:
+        return _stop("left_turn_not_enabled")
+    if intent.intent_class == RIGHT_TURN:
+        return _stop("right_turn_not_enabled")
+    if intent.intent_class not in FORWARD_CLASSES:
+        return _stop("unsupported_intent")
 
-    steering = float(intent.steering)
+    steering = classified.steering_ratio
+    if steering > config.max_steering:
+        return _stop("left_correction_limit_exceeded")
+    if steering < config.min_steering:
+        return _stop("right_correction_limit_exceeded")
+
     nearest = nearest_swept_obstacle_distance(
         front_obstacles_xy, steering, config
     )
@@ -114,14 +148,14 @@ def evaluate_safety(
     if nearest is not None and nearest <= config.slow_distance_m:
         return SafetyDecision(
             SLOW,
-            min(float(intent.forward), config.slow_forward_limit),
+            min(float(intent.longitudinal), config.slow_forward_limit),
             steering,
             "obstacle_slow",
             nearest,
         )
     return SafetyDecision(
         CLEAR,
-        float(intent.forward),
+        float(intent.longitudinal),
         steering,
         "clear",
         nearest,
@@ -133,7 +167,34 @@ def nearest_swept_obstacle_distance(
     steering: float,
     config: SafetyConfig,
 ) -> float | None:
-    """Return the earliest centreline distance whose footprint hits an obstacle."""
+    """Check every path from straight through the requested correction."""
+
+    steering_step = float(config.steering_sample_step)
+    if not math.isfinite(steering_step) or steering_step <= 0.0:
+        raise ValueError("steering_sample_step must be finite and positive")
+    count = max(1, int(math.ceil(abs(float(steering)) / steering_step)))
+    nearest = None
+    for candidate in np.linspace(0.0, float(steering), count + 1):
+        candidate_nearest = _nearest_for_steering(
+            obstacles_xy,
+            float(candidate),
+            config,
+        )
+        if candidate_nearest is not None:
+            nearest = (
+                candidate_nearest
+                if nearest is None
+                else min(nearest, candidate_nearest)
+            )
+    return nearest
+
+
+def _nearest_for_steering(
+    obstacles_xy: np.ndarray,
+    steering: float,
+    config: SafetyConfig,
+) -> float | None:
+    """Return the first footprint collision along one steering ratio."""
 
     obstacles = np.asarray(obstacles_xy, dtype=np.float32)
     if obstacles.size == 0:

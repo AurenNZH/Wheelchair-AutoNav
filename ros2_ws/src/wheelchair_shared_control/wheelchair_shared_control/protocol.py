@@ -6,8 +6,10 @@ from dataclasses import dataclass
 import json
 import math
 
+from wheelchair_shared_control.operator_intent import INTENT_CLASSES, RELEASED
 
-PROTOCOL_VERSION = 1
+
+PROTOCOL_VERSION = 2
 MAX_PACKET_BYTES = 1024
 
 
@@ -19,8 +21,9 @@ class ProtocolError(ValueError):
 class IntentPacket:
     session_id: str
     sequence: int
-    steering: float
-    forward: float
+    lateral: float
+    longitudinal: float
+    intent_class: int
     deadman: bool
 
 
@@ -43,8 +46,9 @@ def encode_intent(packet: IntentPacket) -> bytes:
             "type": "intent",
             "session": packet.session_id,
             "seq": packet.sequence,
-            "steering": packet.steering,
-            "forward": packet.forward,
+            "lateral": packet.lateral,
+            "longitudinal": packet.longitudinal,
+            "intent_class": packet.intent_class,
             "deadman": packet.deadman,
         }
     )
@@ -55,8 +59,9 @@ def decode_intent(data: bytes) -> IntentPacket:
     packet = IntentPacket(
         session_id=_string(payload, "session", max_length=64),
         sequence=_integer(payload, "seq"),
-        steering=_number(payload, "steering"),
-        forward=_number(payload, "forward"),
+        lateral=_number(payload, "lateral"),
+        longitudinal=_number(payload, "longitudinal"),
+        intent_class=_integer(payload, "intent_class"),
         deadman=_boolean(payload, "deadman"),
     )
     _validate_intent(packet)
@@ -121,14 +126,20 @@ def _validate_intent(packet: IntentPacket) -> None:
         raise ProtocolError("invalid session")
     if packet.sequence < 0:
         raise ProtocolError("invalid sequence")
-    if not -1.0 <= packet.steering <= 1.0:
-        raise ProtocolError("steering outside [-1, 1]")
-    if not 0.0 <= packet.forward <= 1.0:
-        raise ProtocolError("forward outside [0, 1]")
-    if not math.isfinite(packet.steering) or not math.isfinite(packet.forward):
+    if not -1.0 <= packet.lateral <= 1.0:
+        raise ProtocolError("lateral outside [-1, 1]")
+    if not -1.0 <= packet.longitudinal <= 1.0:
+        raise ProtocolError("longitudinal outside [-1, 1]")
+    if not math.isfinite(packet.lateral) or not math.isfinite(
+        packet.longitudinal
+    ):
         raise ProtocolError("non-finite intent")
+    if packet.intent_class not in INTENT_CLASSES:
+        raise ProtocolError("unknown intent class")
     if not isinstance(packet.deadman, bool):
         raise ProtocolError("deadman must be boolean")
+    if packet.deadman == (packet.intent_class == RELEASED):
+        raise ProtocolError("deadman and intent class disagree")
 
 
 def _validate_envelope(packet: EnvelopePacket) -> None:

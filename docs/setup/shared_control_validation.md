@@ -1,9 +1,9 @@
 # Shared-Control Validation Gates
 
-This checklist validates supervised, low-speed forward motion with straight or
-bounded right steering. It does not validate autonomous navigation, left turns,
-reverse assistance, stairs/drop-offs, curbs, outdoor/public operation, or
-operation without an attendant and tested physical power cutoff.
+This checklist validates supervised, low-speed forward motion inside the
+configured correction cone. It does not validate autonomous navigation, hard
+turns, reverse assistance, stairs/drop-offs, curbs, outdoor/public operation,
+or operation without an attendant and tested physical power cutoff.
 
 Keep all three live gates off until their preceding stages pass:
 
@@ -112,8 +112,8 @@ observer continuously holding the independent physical cutoff:
 
 1. Confirm joystick release, stale input, Jetson loss, and emergency stop all
    centre the CAN command.
-2. Confirm straight-forward-only behavior, the 20% CLEAR cap, and the distinct
-   15% SLOW cap.
+2. Confirm straight and shallow-correction behavior, the 20% CLEAR cap,
+   direction-preserving X scaling, and the distinct 15% SLOW cap.
 3. Confirm the physical cutoff works while software is unresponsive.
 
 On a level, dry, controlled floor, measure worst-case stopping distance over
@@ -137,15 +137,15 @@ Use a safety observer, physical cutoff, open escape space, and command cap at
 1. Empty corridor: no false intervention.
 2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
    boundary.
-3. Every steering or reverse request must remain stopped in the initial
-   straight-forward physical mode.
+3. Every hard-turn or reverse request must remain stopped; only corrections
+   inside the validated 25-degree cone may proceed.
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
 6. Keep side/rear obstacles diagnostic-only; the current supervisor consumes
    only `/front_costmap` and does not claim full-surround protection.
-7. Defer moving-person tests and right-curved physical control until the basic
-   straight CLEAR/SLOW/STOP gates pass repeatably.
+7. Defer moving-person tests and hard-turn physical control until straight and
+   shallow-correction CLEAR/SLOW/STOP gates pass repeatably.
 
 Any collision, missed detection, oscillating permit/stop behavior, timeout
 violation, or unexplained map dropout is a failed gate.
