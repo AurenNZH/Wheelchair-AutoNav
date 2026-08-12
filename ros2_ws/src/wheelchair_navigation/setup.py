@@ -25,6 +25,7 @@ setup(
     entry_points={
         "console_scripts": [
             "local_costmap = wheelchair_navigation.local_navigation_node:main",
+            "mapping_latency_recorder = wheelchair_navigation.mapping_latency_recorder:main",
             "mapping_monitor = wheelchair_navigation.mapping_monitor:main",
         ],
     },

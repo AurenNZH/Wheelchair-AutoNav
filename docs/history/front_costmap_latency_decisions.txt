@@ -1,0 +1,25 @@
+2026-08-11T16:30:00+01:00 — Acquisition-age latency gate
+
+The first protocol-v2 shadow capture classified all joystick directions and
+transported them correctly, but every motion authorization stopped. The
+supervisor observed a 386 ms median front-map age, 687 ms p95, and 1332 ms
+maximum against its 300 ms fail-closed limit. Four stale-map envelopes caused
+the later automatic-stop latch messages; CLEAR and SLOW were never exercised.
+
+The safety meaning of age remains the original AIRY acquisition timestamp.
+Output restamping or a larger supervisor limit would conceal old evidence, so
+neither is used. The 300 ms deadline remains fixed and the engineering target
+is p99 at or below 250 ms, leaving 50 ms margin.
+
+The mapper formerly published a full local grid, then the front grid, then ran
+and published the artifact shadow and its RViz products in one callback. The
+safety profile now prioritizes and publishes the front grid, skips unused
+surround and artifact outputs, uses a latest-only AIRY queue, and displays only
+the safety map at 10 FPS. Full artifact calibration remains available under a
+separate explicit debug profile and is not an enforcement configuration.
+
+Performance acceptance uses the normal Jetson MODE_20W_6CORE profile without
+pinning maximum clocks. Measurements separate source age, callback-entry age,
+front publication age, supervisor receipt age, processing stages, map gaps,
+and system utilization so GPU load is demonstrated by A/B evidence rather
+than assumed.

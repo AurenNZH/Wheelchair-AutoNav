@@ -14,6 +14,10 @@ Keep all three live gates off until their preceding stages pass:
 Record the software revision, configuration files, chair/load, AIRY mounting
 measurements, test layout, timestamps, and pass/fail evidence for every run.
 
+Before physical output, the five-minute
+[front-costmap latency gate](front_costmap_latency_validation.md) must pass in
+the `safety` runtime profile. The `artifact_debug` profile is calibration-only.
+
 ## 1. Software and fail-closed checks
 
 From the repository root:

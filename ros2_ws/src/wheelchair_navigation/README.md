@@ -61,6 +61,17 @@ Monitor performance:
 ros2 run wheelchair_navigation mapping_monitor
 ```
 
+For repeatable acquisition-to-supervisor evidence, run
+`mapping_latency_recorder`. It writes one row per front map after a configurable
+warm-up and reports the 250 ms p99 target and 300 ms hard deadline. See the
+[latency validation procedure](../../../docs/setup/front_costmap_latency_validation.md).
+
+The top-level bringup has two explicit runtime profiles. `safety` is the
+default: it publishes `/front_costmap` first, suppresses the unused full local
+grid and artifact-shadow work, and uses a lightweight 10 FPS RViz map view.
+`artifact_debug` restores all calibration clouds, maps, and markers and must
+not be used for physical enforcement.
+
 The monitor reports effective rate, current/p95/maximum processing time, cloud
 age/p95, point and artifact-filter time, raw/shadow front cells,
 chassis-filtered and artifact-rejected points, rejected clouds, and lag spikes.

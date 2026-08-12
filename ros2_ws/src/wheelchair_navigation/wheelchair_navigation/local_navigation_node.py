@@ -66,6 +66,7 @@ class LocalNavigationNode(Node):
         self.declare_parameter("target_frame", "base_link")
         self.declare_parameter("raw_obstacles_topic", "/local_obstacles")
         self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter("publish_local_obstacles", True)
         self.declare_parameter(
             "artifact_filtered_front_topic",
             "/front_costmap_artifact_filtered",
@@ -189,15 +190,24 @@ class LocalNavigationNode(Node):
         self._metrics = MappingMetrics(
             int(self.get_parameter("latency_window_samples").value)
         )
+        map_topics = "/front_costmap"
+        if bool(self.get_parameter("publish_local_obstacles").value):
+            map_topics += " and /local_obstacles"
         self.get_logger().info(
-            "Mapping-only AIRY mapper started; publishing /local_obstacles "
-            "and /front_costmap. No motion commands are published."
+            f"Mapping-only AIRY mapper started; publishing {map_topics}. "
+            "No motion commands are published."
         )
 
     def _on_lidar(self, msg: PointCloud2) -> None:
         started = time.perf_counter()
         arrival_monotonic = time.monotonic()
+        arrival_ros_ns = self.get_clock().now().nanoseconds
         stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
+        cloud_arrival_age_ms = (
+            max(0.0, (arrival_ros_ns - stamp_ns) / 1e6)
+            if stamp_ns > 0
+            else 0.0
+        )
         source_period_ms = self._period_ms(
             stamp_ns, self._last_cloud_stamp_ns
         )
@@ -287,12 +297,6 @@ class LocalNavigationNode(Node):
                 time.perf_counter() - filter_started
             ) * 1000.0
 
-            raw_started = time.perf_counter()
-            raw = make_full_raw_grid(accepted, map_config)
-            stage_ms["raw_raster_ms"] = (
-                time.perf_counter() - raw_started
-            ) * 1000.0
-
             front_select_started = time.perf_counter()
             front_points = select_front_points(accepted, front_config)
             stage_ms["front_select_ms"] = (
@@ -303,6 +307,18 @@ class LocalNavigationNode(Node):
             stage_ms["front_raster_ms"] = (
                 time.perf_counter() - front_raster_started
             ) * 1000.0
+
+            raw = None
+            if bool(
+                self.get_parameter("publish_local_obstacles").value
+            ):
+                raw_started = time.perf_counter()
+                raw = make_full_raw_grid(accepted, map_config)
+                stage_ms["raw_raster_ms"] = (
+                    time.perf_counter() - raw_started
+                ) * 1000.0
+            else:
+                stage_ms["raw_raster_ms"] = 0.0
             stage_ms["mapping_ms"] = sum(
                 stage_ms[key]
                 for key in (
@@ -341,17 +357,32 @@ class LocalNavigationNode(Node):
         )
         header.frame_id = target_frame
         publish_started = time.perf_counter()
-        self._raw_pub.publish(build_occupancy_grid(header, raw, map_config))
-        stage_ms["publish_raw_ms"] = (
-            time.perf_counter() - publish_started
-        ) * 1000.0
-        publish_started = time.perf_counter()
         self._front_pub.publish(
             build_front_occupancy_grid(header, front, front_config)
         )
         stage_ms["publish_front_ms"] = (
             time.perf_counter() - publish_started
         ) * 1000.0
+        front_publish_monotonic = time.monotonic()
+        front_publish_age_ms = (
+            max(
+                0.0,
+                (self.get_clock().now().nanoseconds - stamp_ns) / 1e6,
+            )
+            if stamp_ns > 0
+            else 0.0
+        )
+
+        if raw is not None:
+            publish_started = time.perf_counter()
+            self._raw_pub.publish(
+                build_occupancy_grid(header, raw, map_config)
+            )
+            stage_ms["publish_raw_ms"] = (
+                time.perf_counter() - publish_started
+            ) * 1000.0
+        else:
+            stage_ms["publish_raw_ms"] = 0.0
         stage_ms["publish_ms"] = (
             stage_ms["publish_raw_ms"] + stage_ms["publish_front_ms"]
         )
@@ -491,6 +522,11 @@ class LocalNavigationNode(Node):
             arrival_monotonic,
             cloud_age_ms=cloud_age_ms,
             mapping_ms=stage_ms["mapping_ms"],
+            cloud_arrival_age_ms=cloud_arrival_age_ms,
+            front_publish_age_ms=front_publish_age_ms,
+            source_period_ms=source_period_ms,
+            arrival_period_ms=arrival_period_ms,
+            front_publish_s=front_publish_monotonic,
         )
         self._publish_diagnostics(
             diagnostic_reason,
@@ -503,6 +539,8 @@ class LocalNavigationNode(Node):
             artifact_stats=artifact_stats,
             artifact_support_stats=artifact_support_stats,
             artifact_front_cells=artifact_front_cells,
+            cloud_arrival_age_ms=cloud_arrival_age_ms,
+            front_publish_age_ms=front_publish_age_ms,
         )
 
     def _map_config(self) -> LocalCostmapConfig:
@@ -558,6 +596,8 @@ class LocalNavigationNode(Node):
         artifact_stats: ArtifactFilterStats | None = None,
         artifact_support_stats: ArtifactCellSupportStats | None = None,
         artifact_front_cells: int | None = None,
+        cloud_arrival_age_ms: float | None = None,
+        front_publish_age_ms: float | None = None,
     ) -> None:
         processing_warn = float(
             self.get_parameter("processing_warn_ms").value
@@ -580,7 +620,20 @@ class LocalNavigationNode(Node):
             "rejected_clouds": str(self._rejected_clouds),
             "source_period_ms": "%.3f" % source_period_ms,
             "arrival_period_ms": "%.3f" % arrival_period_ms,
+            "publish_local_obstacles": str(
+                bool(
+                    self.get_parameter("publish_local_obstacles").value
+                )
+            ).lower(),
         }
+        if cloud_arrival_age_ms is not None:
+            values["cloud_arrival_age_ms"] = "%.3f" % (
+                cloud_arrival_age_ms
+            )
+        if front_publish_age_ms is not None:
+            values["front_publish_age_ms"] = "%.3f" % (
+                front_publish_age_ms
+            )
         values.update(
             self._metrics.values(
                 float(self.get_parameter("lag_spike_ms").value)
@@ -865,7 +918,9 @@ def _cell_list_marker(
     if ids.ndim != 1:
         raise ValueError("artifact threshold cell IDs must have shape (N,)")
     if np.any((ids < 0) | (ids >= width * height)):
-        raise ValueError("artifact threshold marker cell ID is outside the grid")
+        raise ValueError(
+            "artifact threshold marker cell ID is outside the grid"
+        )
 
     marker = Marker()
     marker.header = header
@@ -976,7 +1031,9 @@ def build_occupancy_grid(
     msg.info.width = int(costmap.shape[1])
     msg.info.height = int(costmap.shape[0])
     default_origin = (
-        grid_origin_m(config) if isinstance(config, LocalCostmapConfig) else 0.0
+        grid_origin_m(config)
+        if isinstance(config, LocalCostmapConfig)
+        else 0.0
     )
     msg.info.origin.position.x = (
         default_origin if origin_x_m is None else float(origin_x_m)

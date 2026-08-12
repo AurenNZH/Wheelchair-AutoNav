@@ -23,7 +23,11 @@ def find_mapping_status(msg: DiagnosticArray) -> DiagnosticStatus | None:
     """Find the local mapper status without relying on array position."""
 
     return next(
-        (status for status in msg.status if status.name == MAPPING_STATUS_NAME),
+        (
+            status
+            for status in msg.status
+            if status.name == MAPPING_STATUS_NAME
+        ),
         None,
     )
 
@@ -52,8 +56,10 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
         DiagnosticStatus.STALE: "STALE",
     }
     return (
-        "state=%s message=%s rate=%sHz process=%sms p95=%sms max=%sms "
-        "mapping_p95=%sms cloud_age=%sms age_p95=%sms point_filter=%sms "
+        "state=%s message=%s rate=%sHz front_rate=%sHz process=%sms "
+        "p95=%sms p99=%sms max=%sms mapping_p95=%sms "
+        "arrival_age=%sms front_age=%sms front_p99=%sms "
+        "cloud_age=%sms age_p95=%sms front_gap_max=%sms point_filter=%sms "
         "raw_cells=%s front_cells=%s "
         "shadow_cells=%s mask_rejected=%s low_support=%s mixed_cells=%s "
         "global_min_points=%s halo_min_points=%s artifact_filter=%sms "
@@ -62,12 +68,18 @@ def format_mapping_status(status: DiagnosticStatus) -> str:
             level_names.get(status.level, str(status.level)),
             status.message or "-",
             values.get("effective_rate_hz", "-"),
+            values.get("front_publish_rate_hz", "-"),
             values.get("processing_ms", "-"),
             values.get("processing_p95_ms", "-"),
+            values.get("processing_p99_ms", "-"),
             values.get("processing_max_ms", "-"),
             values.get("mapping_p95_ms", "-"),
+            values.get("cloud_arrival_age_ms", "-"),
+            values.get("front_publish_age_ms", "-"),
+            values.get("front_publish_age_p99_ms", "-"),
             values.get("cloud_age_ms", "-"),
             values.get("cloud_age_p95_ms", "-"),
+            values.get("front_period_max_ms", "-"),
             values.get("filter_ms", "-"),
             values.get("occupied_cells", "-"),
             values.get("front_occupied_cells", "-"),

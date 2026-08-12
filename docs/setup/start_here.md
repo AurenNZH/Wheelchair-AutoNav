@@ -28,7 +28,8 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true \
+  runtime_profile:=safety
 ```
 
 In a second terminal:
@@ -40,9 +41,9 @@ export ROS_LOCALHOST_ONLY=1
 ros2 run wheelchair_navigation mapping_monitor
 ```
 
-The mapper publishes `/local_obstacles` and `/front_costmap`. Shared control
-uses only `/front_costmap`; `/local_obstacles` remains useful for RViz and
-self-filter diagnostics.
+The safety profile publishes `/front_costmap`, which is the only map consumed
+by shared control. Use `runtime_profile:=artifact_debug` separately when the
+full `/local_obstacles`, filtered points, masks, and marker view is required.
 
 ## 3. Run Gazebo Before Hardware
 

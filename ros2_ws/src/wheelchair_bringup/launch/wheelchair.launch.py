@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 from wheelchair_bringup.defaults import LAUNCH_DEFAULTS
@@ -33,6 +33,11 @@ def generate_launch_description():
         "rviz",
         "wheelchair.rviz",
     )
+    safety_rviz_config = os.path.join(
+        get_package_share_directory("wheelchair_bringup"),
+        "rviz",
+        "wheelchair_safety.rviz",
+    )
     lidar_config = os.path.join(
         get_package_share_directory("wheelchair_bringup"),
         "config",
@@ -44,6 +49,12 @@ def generate_launch_description():
         _argument("use_camera", "Start the RealSense L515 driver."),
         _argument("use_mapping", "Start non-actuating LiDAR local mapping."),
         _argument("use_rviz", "Start RViz with the wheelchair view."),
+        DeclareLaunchArgument(
+            "runtime_profile",
+            default_value=LAUNCH_DEFAULTS["runtime_profile"],
+            description="Select latency-safe or full artifact diagnostics.",
+            choices=["safety", "artifact_debug"],
+        ),
         _argument("publish_camera_tf", "Publish base_link -> camera_link."),
         _argument(
             "publish_base_lidar_tf",
@@ -116,20 +127,95 @@ def generate_launch_description():
         ],
         condition=IfCondition(LaunchConfiguration("publish_base_lidar_tf")),
     )
-    mapping = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(mapping_launch),
-        condition=IfCondition(LaunchConfiguration("use_mapping")),
+    safety_profile = PythonExpression(
+        ["'", LaunchConfiguration("runtime_profile"), "' == 'safety'"]
     )
-    rviz = Node(
+    debug_profile = PythonExpression(
+        [
+            "'",
+            LaunchConfiguration("runtime_profile"),
+            "' == 'artifact_debug'",
+        ]
+    )
+    mapping_safety = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(mapping_launch),
+        launch_arguments={
+            "publish_local_obstacles": "false",
+            "publish_artifact_shadow": "false",
+        }.items(),
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("use_mapping"),
+                    "' == 'true' and ",
+                    safety_profile,
+                ]
+            )
+        ),
+    )
+    mapping_debug = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(mapping_launch),
+        launch_arguments={
+            "publish_local_obstacles": "true",
+            "publish_artifact_shadow": "true",
+        }.items(),
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("use_mapping"),
+                    "' == 'true' and ",
+                    debug_profile,
+                ]
+            )
+        ),
+    )
+    rviz_safety = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        arguments=["-d", safety_rviz_config],
+        output="screen",
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("use_rviz"),
+                    "' == 'true' and ",
+                    safety_profile,
+                ]
+            )
+        ),
+    )
+    rviz_debug = Node(
         package="rviz2",
         executable="rviz2",
         name="rviz2",
         arguments=["-d", rviz_config],
         output="screen",
-        condition=IfCondition(LaunchConfiguration("use_rviz")),
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    LaunchConfiguration("use_rviz"),
+                    "' == 'true' and ",
+                    debug_profile,
+                ]
+            )
+        ),
     )
 
     return LaunchDescription(
         declarations
-        + [lidar, camera, camera_tf, base_lidar_tf, mapping, rviz]
+        + [
+            lidar,
+            camera,
+            camera_tf,
+            base_lidar_tf,
+            mapping_safety,
+            mapping_debug,
+            rviz_safety,
+            rviz_debug,
+        ]
     )

@@ -6,6 +6,7 @@ LAUNCH_DEFAULTS = {
     "use_camera": "false",
     "use_mapping": "false",
     "use_rviz": "false",
+    "runtime_profile": "safety",
     "publish_camera_tf": "false",
     "publish_base_lidar_tf": "true",
     # Sensor poses converted from the legacy base axes (X left, Y backward)

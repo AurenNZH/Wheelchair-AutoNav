@@ -21,7 +21,7 @@ from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 
 
 class LocalNavigationTests(unittest.TestCase):
-    def test_runtime_profile_keeps_raw_topics_and_adds_shadow_only_outputs(self):
+    def test_runtime_profile_keeps_raw_topics_and_shadow_outputs(self):
         config_path = (
             Path(__file__).resolve().parents[1]
             / "config"
@@ -33,6 +33,7 @@ class LocalNavigationTests(unittest.TestCase):
 
         self.assertEqual(parameters["raw_obstacles_topic"], "/local_obstacles")
         self.assertEqual(parameters["front_costmap_topic"], "/front_costmap")
+        self.assertTrue(parameters["publish_local_obstacles"])
         self.assertEqual(
             parameters["artifact_filtered_front_topic"],
             "/front_costmap_artifact_filtered",
@@ -236,11 +237,36 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(values["latency_window_count"], "3")
         self.assertEqual(values["processing_p50_ms"], "20.000")
         self.assertEqual(values["processing_p95_ms"], "29.000")
+        self.assertEqual(values["processing_p99_ms"], "29.800")
         self.assertEqual(values["processing_max_ms"], "30.000")
         self.assertEqual(values["mapping_p95_ms"], "29.000")
         self.assertEqual(values["cloud_age_p95_ms"], "0.000")
+        self.assertEqual(values["front_publish_age_p99_ms"], "0.000")
+        self.assertEqual(values["front_publish_rate_hz"], "10.000")
         self.assertEqual(values["lag_spike_count"], "1")
         self.assertEqual(values["effective_rate_hz"], "10.000")
+
+    def test_mapping_metrics_separate_arrival_publish_and_callback_age(self):
+        metrics = MappingMetrics(3)
+        for index in range(3):
+            metrics.record(
+                30.0 + index,
+                1.0 + index * 0.1,
+                cloud_age_ms=140.0 + index,
+                cloud_arrival_age_ms=100.0 + index,
+                front_publish_age_ms=120.0 + index,
+                source_period_ms=100.0,
+                arrival_period_ms=101.0,
+                front_publish_s=1.02 + index * 0.1,
+            )
+
+        values = metrics.values(lag_spike_ms=150.0)
+
+        self.assertEqual(values["cloud_arrival_age_p95_ms"], "101.900")
+        self.assertEqual(values["front_publish_age_p99_ms"], "121.980")
+        self.assertEqual(values["source_period_max_ms"], "100.000")
+        self.assertEqual(values["arrival_period_p99_ms"], "101.000")
+        self.assertEqual(values["front_period_max_ms"], "100.000")
 
     def test_measured_self_filter_box_removes_only_points_inside_it(self):
         config = LocalCostmapConfig(size_m=4.0)
@@ -301,7 +327,7 @@ class LocalNavigationTests(unittest.TestCase):
         self.assertEqual(counts["self_filtered_points"], 1)
         self.assertEqual(accepted.shape[0], 5)
 
-    def test_vectorized_mapper_handles_representative_dense_cloud_quickly(self):
+    def test_vectorized_mapper_handles_dense_cloud_quickly(self):
         rng = np.random.default_rng(7)
         count = 172_000
         points = np.column_stack(
@@ -316,7 +342,7 @@ class LocalNavigationTests(unittest.TestCase):
         make_local_costmaps(points, LocalCostmapConfig())
         elapsed_s = time.perf_counter() - started
 
-        # A generous unit-test guard; hardware acceptance uses the stricter 100 ms target.
+        # A generous unit guard; hardware uses the stricter 100 ms target.
         self.assertLess(elapsed_s, 1.0)
 
     def test_cloud_timestamp_accepts_recent_data(self):

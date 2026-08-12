@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import deque
 import time
 
+import numpy as np
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from nav_msgs.msg import OccupancyGrid
 import rclpy
@@ -53,6 +55,13 @@ class SafetySupervisorNode(Node):
         self._intent = None
         self._front_points = None
         self._front_stamp_ns = 0
+        self._front_received_monotonic = None
+        self._front_receive_age_ms = None
+        self._front_receipt_interval_ms = None
+        self._front_receipt_times = deque(maxlen=120)
+        self._front_receipt_intervals_ms = deque(maxlen=120)
+        self._stale_map_receipt_count = 0
+        self._stale_map_event_count = 0
         self._last_reason = None
 
         self._envelope_pub = self.create_publisher(
@@ -124,9 +133,29 @@ class SafetySupervisorNode(Node):
         self._intent = msg
 
     def _on_front_map(self, msg: OccupancyGrid) -> None:
+        now_monotonic = time.monotonic()
+        now_ns = self.get_clock().now().nanoseconds
         try:
-            self._front_points = self._grid_points(msg)
-            self._front_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
+            front_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
+            front_receive_age_ms = max(
+                0.0,
+                (now_ns - front_stamp_ns) / 1e6,
+            )
+            front_points = self._grid_points(msg)
+            if self._front_received_monotonic is not None:
+                self._front_receipt_interval_ms = (
+                    now_monotonic - self._front_received_monotonic
+                ) * 1000.0
+                self._front_receipt_intervals_ms.append(
+                    self._front_receipt_interval_ms
+                )
+            self._front_received_monotonic = now_monotonic
+            self._front_receipt_times.append(now_monotonic)
+            self._front_points = front_points
+            self._front_stamp_ns = front_stamp_ns
+            self._front_receive_age_ms = front_receive_age_ms
+            if self._front_receive_age_ms > self._config.max_map_age_s * 1000.0:
+                self._stale_map_receipt_count += 1
         except ValueError as exc:
             self.get_logger().error(
                 "Rejected invalid front costmap: %s" % exc,
@@ -224,6 +253,8 @@ class SafetySupervisorNode(Node):
         envelope.reason = decision.reason
         envelope.map_age_ms = max(0.0, map_age_s * 1000.0)
         self._envelope_pub.publish(envelope)
+        if decision.reason == "stale_map" and self._last_reason != "stale_map":
+            self._stale_map_event_count += 1
         self._publish_diagnostics(
             decision.reason,
             decision.decision,
@@ -255,8 +286,47 @@ class SafetySupervisorNode(Node):
             else DiagnosticStatus.WARN
         )
         status.message = reason
+        now_monotonic = time.monotonic()
+        map_receipt_age_ms = (
+            None
+            if self._front_received_monotonic is None
+            else max(
+                0.0,
+                (now_monotonic - self._front_received_monotonic) * 1000.0,
+            )
+        )
         status.values = [
             KeyValue(key="map_age_ms", value="%.3f" % map_age_ms),
+            KeyValue(
+                key="map_age_at_receipt_ms",
+                value=self._optional_ms(self._front_receive_age_ms),
+            ),
+            KeyValue(
+                key="map_receipt_age_ms",
+                value=self._optional_ms(map_receipt_age_ms),
+            ),
+            KeyValue(
+                key="map_receipt_interval_ms",
+                value=self._optional_ms(self._front_receipt_interval_ms),
+            ),
+            KeyValue(
+                key="map_receipt_interval_p99_ms",
+                value=self._percentile_ms(
+                    self._front_receipt_intervals_ms, 99
+                ),
+            ),
+            KeyValue(
+                key="map_receipt_rate_hz",
+                value="%.3f" % self._receipt_rate_hz(),
+            ),
+            KeyValue(
+                key="stale_map_receipt_count",
+                value=str(self._stale_map_receipt_count),
+            ),
+            KeyValue(
+                key="stale_map_event_count",
+                value=str(self._stale_map_event_count),
+            ),
             KeyValue(key="processing_ms", value="%.3f" % processing_ms),
             KeyValue(key="enable_motion", value=str(self._config.enable_motion)),
             KeyValue(
@@ -295,6 +365,24 @@ class SafetySupervisorNode(Node):
                 )
             )
             self._last_reason = reason
+
+    @staticmethod
+    def _optional_ms(value: float | None) -> str:
+        return "none" if value is None else "%.3f" % value
+
+    @staticmethod
+    def _percentile_ms(values, percentile: float) -> str:
+        if not values:
+            return "none"
+        return "%.3f" % float(np.percentile(values, percentile))
+
+    def _receipt_rate_hz(self) -> float:
+        if len(self._front_receipt_times) < 2:
+            return 0.0
+        elapsed = (
+            self._front_receipt_times[-1] - self._front_receipt_times[0]
+        )
+        return (len(self._front_receipt_times) - 1) / max(elapsed, 1e-6)
 
 
 def main() -> int:

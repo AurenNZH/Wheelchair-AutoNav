@@ -22,6 +22,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "publish_artifact_shadow", default_value="true"
             ),
+            DeclareLaunchArgument(
+                "publish_local_obstacles", default_value="true"
+            ),
             Node(
                 package="wheelchair_navigation",
                 executable="local_costmap",
@@ -39,6 +42,9 @@ def generate_launch_description():
                         ),
                         "publish_artifact_shadow": LaunchConfiguration(
                             "publish_artifact_shadow"
+                        ),
+                        "publish_local_obstacles": LaunchConfiguration(
+                            "publish_local_obstacles"
                         ),
                     },
                 ],

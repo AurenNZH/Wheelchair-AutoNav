@@ -12,15 +12,19 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true \
+  runtime_profile:=safety
 ```
 
 `ROS_LOCALHOST_ONLY=1` avoids Foxy discovery problems when the Jetson uses
 Ethernet for AIRY and Wi-Fi for the router. Leave it unset when another
 computer must join the ROS graph.
 
-The installed RViz profile shows AIRY points, `/local_obstacles`, and
-`/front_costmap`. Its RealSense display is disabled by default.
+The default `safety` runtime profile publishes `/front_costmap` first, skips
+the unused surround/artifact products, and opens a lightweight 10 FPS map
+view. Use `runtime_profile:=artifact_debug` only when calibrating the full AIRY
+point, filtered-map, rejection, and marker displays; that profile is not for
+physical enforcement.
 
 The measured AIRY transform defaults to:
 
