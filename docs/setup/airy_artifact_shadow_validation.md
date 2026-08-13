@@ -43,14 +43,25 @@ Do not use PCA or clustering.
 
 ## Replay and evidence
 
-Replay recorded data with simulated time, timestamp validation disabled, and
-output restamping enabled:
+Replay recorded data with Foxy wall time, timestamp validation disabled, and
+output restamping enabled. The Jetson's installed Foxy `ros2 bag play` does not
+provide `--clock`:
 
 ```bash
-ros2 launch wheelchair_navigation local_mapping.launch.py use_sim_time:=true \
+ros2 launch wheelchair_navigation local_mapping.launch.py use_sim_time:=false \
   validate_cloud_timestamps:=false restamp_output_with_node_time:=true
-ros2 bag play BAG_DIRECTORY --clock
+ros2 bag play BAG_DIRECTORY \
+  --qos-profile-overrides-path \
+  "$(ros2 pkg prefix --share wheelchair_navigation)/config/rosbag_reliable_lidar_qos.yaml" \
+  --topics /rslidar_points /tf /tf_static
 ```
+
+The mapper intentionally requires a reliable `/rslidar_points` publisher.
+Current AIRY recordings replay reliably; keep the override for compatibility
+with older or externally produced bags whose recorded QoS is absent or
+best-effort. Replay only the sensor and transform inputs as shown; replaying
+recorded output maps and diagnostics alongside the mapper would contaminate
+the new results.
 
 Use identical saved RViz viewpoints for raw, **SHADOW ONLY**, mask-rejected
 (magenta), low-support (yellow), staircase/halo, and threshold-cell overlays.

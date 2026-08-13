@@ -56,6 +56,17 @@ from wheelchair_navigation.point_cloud import (
 )
 
 
+def lidar_subscription_qos() -> QoSProfile:
+    """Return the fixed latest-only QoS contract for AIRY point clouds."""
+
+    return QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.VOLATILE,
+    )
+
+
 class LocalNavigationNode(Node):
     """Publish raw full and robot-forward grids without commanding motion."""
 
@@ -170,17 +181,11 @@ class LocalNavigationNode(Node):
             str(self.get_parameter("diagnostics_topic").value),
             10,
         )
-        lidar_qos = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-        )
         self.create_subscription(
             PointCloud2,
             str(self.get_parameter("lidar_topic").value),
             self._on_lidar,
-            lidar_qos,
+            lidar_subscription_qos(),
         )
 
         self._processed_clouds = 0
@@ -190,11 +195,18 @@ class LocalNavigationNode(Node):
         self._metrics = MappingMetrics(
             int(self.get_parameter("latency_window_samples").value)
         )
+        publish_local = bool(
+            self.get_parameter("publish_local_obstacles").value
+        )
+        publish_artifact = bool(
+            self.get_parameter("publish_artifact_shadow").value
+        )
         map_topics = "/front_costmap"
-        if bool(self.get_parameter("publish_local_obstacles").value):
+        if publish_local:
             map_topics += " and /local_obstacles"
         self.get_logger().info(
             f"Mapping-only AIRY mapper started; publishing {map_topics}. "
+            f"artifact_shadow={str(publish_artifact).lower()}. "
             "No motion commands are published."
         )
 

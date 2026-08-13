@@ -66,6 +66,10 @@ CSV_FIELDS = (
     "stamp_interval_ms",
     "over_250_ms",
     "over_300_ms",
+    "arrival_over_300_ms",
+    "supervisor_stale_map_receipt_delta",
+    "supervisor_stale_map_event_delta",
+    "supervisor_diagnostics_valid",
 ) + tuple("mapper_" + name for name in MAPPER_FIELDS) + tuple(
     "supervisor_" + name for name in SUPERVISOR_FIELDS
 )
@@ -86,23 +90,118 @@ def latency_summary(
     *,
     target_ms: float = 250.0,
     deadline_ms: float = 300.0,
+    minimum_rate_hz: float = 9.0,
+    stale_map_receipt_delta: int = 0,
+    stale_map_event_delta: int = 0,
+    supervisor_diagnostics_valid: bool = True,
 ) -> dict[str, float | int | bool | None]:
     """Build the stable acceptance summary used by tests and the CLI."""
 
+    age_p99_ms = percentile(ages_ms, 99)
+    arrival_over_deadline_count = sum(
+        interval > deadline_ms for interval in intervals_ms
+    )
+    map_rate_hz = (
+        1000.0 / (sum(intervals_ms) / len(intervals_ms))
+        if intervals_ms and sum(intervals_ms) > 0.0
+        else None
+    )
     return {
         "count": len(ages_ms),
         "age_p50_ms": percentile(ages_ms, 50),
         "age_p95_ms": percentile(ages_ms, 95),
-        "age_p99_ms": percentile(ages_ms, 99),
+        "age_p99_ms": age_p99_ms,
         "age_max_ms": max(ages_ms) if ages_ms else None,
         "interval_p99_ms": percentile(intervals_ms, 99),
         "interval_max_ms": max(intervals_ms) if intervals_ms else None,
         "over_target_count": sum(age > target_ms for age in ages_ms),
         "over_deadline_count": sum(age > deadline_ms for age in ages_ms),
+        "arrival_over_deadline_count": arrival_over_deadline_count,
+        "map_rate_hz": map_rate_hz,
+        "minimum_rate_hz": minimum_rate_hz,
+        "stale_map_receipt_delta": stale_map_receipt_delta,
+        "stale_map_event_delta": stale_map_event_delta,
+        "supervisor_diagnostics_valid": supervisor_diagnostics_valid,
         "passes": bool(ages_ms)
-        and percentile(ages_ms, 99) <= target_ms
-        and not any(age > deadline_ms for age in ages_ms),
+        and age_p99_ms <= target_ms
+        and not any(age > deadline_ms for age in ages_ms)
+        and arrival_over_deadline_count == 0
+        and map_rate_hz is not None
+        and map_rate_hz >= minimum_rate_hz
+        and stale_map_receipt_delta == 0
+        and stale_map_event_delta == 0
+        and supervisor_diagnostics_valid,
     }
+
+
+class SupervisorStaleTracker:
+    """Measure supervisor stale counters relative to a warm-up baseline."""
+
+    _KEYS = ("stale_map_receipt_count", "stale_map_event_count")
+
+    def __init__(self) -> None:
+        self._warmup_latest: tuple[int, int] | None = None
+        self._baseline: tuple[int, int] | None = None
+        self._latest: tuple[int, int] | None = None
+        self._capture_started = False
+        self._post_warmup_seen = False
+        self._invalid = False
+
+    @staticmethod
+    def _parse(values: dict[str, str] | None) -> tuple[int, int] | None:
+        if values is None:
+            return None
+        try:
+            counters = tuple(
+                int(values[key]) for key in SupervisorStaleTracker._KEYS
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+        if any(counter < 0 for counter in counters):
+            return None
+        return counters
+
+    def observe_warmup(self, values: dict[str, str] | None) -> None:
+        counters = self._parse(values)
+        if counters is not None:
+            self._warmup_latest = counters
+
+    def begin_capture(self) -> None:
+        if self._capture_started:
+            return
+        self._capture_started = True
+        self._baseline = self._warmup_latest
+        self._latest = self._baseline
+        if self._baseline is None:
+            self._invalid = True
+
+    def observe_capture(self, values: dict[str, str] | None) -> None:
+        self.begin_capture()
+        counters = self._parse(values)
+        if counters is None:
+            self._invalid = True
+            return
+        self._post_warmup_seen = True
+        if self._baseline is None or any(
+            current < baseline
+            for current, baseline in zip(counters, self._baseline)
+        ):
+            self._invalid = True
+        self._latest = counters
+
+    def result(self) -> tuple[int, int, bool]:
+        if self._baseline is None or self._latest is None:
+            return 0, 0, False
+        receipt_delta = self._latest[0] - self._baseline[0]
+        event_delta = self._latest[1] - self._baseline[1]
+        valid = (
+            self._capture_started
+            and self._post_warmup_seen
+            and not self._invalid
+            and receipt_delta >= 0
+            and event_delta >= 0
+        )
+        return max(0, receipt_delta), max(0, event_delta), valid
 
 
 def find_status(
@@ -132,10 +231,14 @@ class MappingLatencyRecorder(Node):
         self.declare_parameter("duration_s", 120.0)
         self.declare_parameter("target_age_ms", 250.0)
         self.declare_parameter("deadline_age_ms", 300.0)
+        self.declare_parameter("minimum_map_rate_hz", 9.0)
 
         self._target_ms = float(self.get_parameter("target_age_ms").value)
         self._deadline_ms = float(
             self.get_parameter("deadline_age_ms").value
+        )
+        self._minimum_rate_hz = float(
+            self.get_parameter("minimum_map_rate_hz").value
         )
         print_period_s = float(self.get_parameter("print_period_s").value)
         self._warmup_s = float(self.get_parameter("warmup_s").value)
@@ -143,6 +246,7 @@ class MappingLatencyRecorder(Node):
         if (
             self._target_ms <= 0.0
             or self._deadline_ms < self._target_ms
+            or self._minimum_rate_hz <= 0.0
             or print_period_s <= 0.0
             or self._warmup_s < 0.0
             or self._duration_s <= 0.0
@@ -159,6 +263,7 @@ class MappingLatencyRecorder(Node):
         self._last_stamp_ns = None
         self._latest_mapper = {}
         self._latest_supervisor = {}
+        self._stale_tracker = SupervisorStaleTracker()
         self._started_monotonic = time.monotonic()
 
         map_qos = QoSProfile(
@@ -195,13 +300,20 @@ class MappingLatencyRecorder(Node):
 
     def _on_supervisor_diagnostics(self, msg: DiagnosticArray) -> None:
         status = find_status(msg, SUPERVISOR_STATUS_NAME)
+        values = None
         if status is not None:
-            self._latest_supervisor = diagnostic_values(status)
+            values = diagnostic_values(status)
+            self._latest_supervisor = values
+        if time.monotonic() - self._started_monotonic < self._warmup_s:
+            self._stale_tracker.observe_warmup(values)
+        else:
+            self._stale_tracker.observe_capture(values)
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         now_monotonic = time.monotonic()
         if now_monotonic - self._started_monotonic < self._warmup_s:
             return
+        self._stale_tracker.begin_capture()
         stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
         age_ms = max(
             0.0,
@@ -218,6 +330,9 @@ class MappingLatencyRecorder(Node):
         self._ages_ms.append(age_ms)
         if interval_ms is not None:
             self._intervals_ms.append(interval_ms)
+        receipt_delta, event_delta, diagnostics_valid = (
+            self._stale_tracker.result()
+        )
 
         row = {
             "wall_time_s": "%.6f" % time.time(),
@@ -227,6 +342,12 @@ class MappingLatencyRecorder(Node):
             "stamp_interval_ms": self._optional(stamp_interval_ms),
             "over_250_ms": int(age_ms > self._target_ms),
             "over_300_ms": int(age_ms > self._deadline_ms),
+            "arrival_over_300_ms": int(
+                interval_ms is not None and interval_ms > self._deadline_ms
+            ),
+            "supervisor_stale_map_receipt_delta": receipt_delta,
+            "supervisor_stale_map_event_delta": event_delta,
+            "supervisor_diagnostics_valid": int(diagnostics_valid),
         }
         row.update(
             {
@@ -261,26 +382,29 @@ class MappingLatencyRecorder(Node):
                 flush=True,
             )
             return
-        summary = latency_summary(
-            self._ages_ms,
-            self._intervals_ms,
-            target_ms=self._target_ms,
-            deadline_ms=self._deadline_ms,
-        )
+        summary = self._summary()
         if not summary["count"]:
             print("front_map=WAITING", flush=True)
             self._finish_if_expired(elapsed_s)
             return
         print(
             "front_map=count:%d p50:%0.1fms p95:%0.1fms p99:%0.1fms "
-            "max:%0.1fms over_300:%d"
+            "max:%0.1fms rate:%0.2fHz over_300:%d gaps_over_300:%d "
+            "stale_receipts:%d stale_events:%d diagnostics:%s"
             % (
                 summary["count"],
                 summary["age_p50_ms"],
                 summary["age_p95_ms"],
                 summary["age_p99_ms"],
                 summary["age_max_ms"],
+                summary["map_rate_hz"],
                 summary["over_deadline_count"],
+                summary["arrival_over_deadline_count"],
+                summary["stale_map_receipt_delta"],
+                summary["stale_map_event_delta"],
+                "valid"
+                if summary["supervisor_diagnostics_valid"]
+                else "invalid",
             ),
             flush=True,
         )
@@ -296,25 +420,44 @@ class MappingLatencyRecorder(Node):
     def close(self) -> None:
         if self._file is None:
             return
-        summary = latency_summary(
-            self._ages_ms,
-            self._intervals_ms,
-            target_ms=self._target_ms,
-            deadline_ms=self._deadline_ms,
-        )
+        summary = self._summary()
         if summary["count"]:
             print(
-                "front_map=FINAL pass=%s p99=%.1fms max=%.1fms over_300=%d"
+                "front_map=FINAL pass=%s p99=%.1fms max=%.1fms "
+                "rate=%.2fHz over_300=%d gaps_over_300=%d stale_receipts=%d "
+                "stale_events=%d diagnostics=%s"
                 % (
                     summary["passes"],
                     summary["age_p99_ms"],
                     summary["age_max_ms"],
+                    summary["map_rate_hz"],
                     summary["over_deadline_count"],
+                    summary["arrival_over_deadline_count"],
+                    summary["stale_map_receipt_delta"],
+                    summary["stale_map_event_delta"],
+                    "valid"
+                    if summary["supervisor_diagnostics_valid"]
+                    else "invalid",
                 ),
                 flush=True,
             )
         self._file.close()
         self._file = None
+
+    def _summary(self) -> dict[str, float | int | bool | None]:
+        receipt_delta, event_delta, diagnostics_valid = (
+            self._stale_tracker.result()
+        )
+        return latency_summary(
+            self._ages_ms,
+            self._intervals_ms,
+            target_ms=self._target_ms,
+            deadline_ms=self._deadline_ms,
+            minimum_rate_hz=self._minimum_rate_hz,
+            stale_map_receipt_delta=receipt_delta,
+            stale_map_event_delta=event_delta,
+            supervisor_diagnostics_valid=diagnostics_valid,
+        )
 
 
 def main() -> int:

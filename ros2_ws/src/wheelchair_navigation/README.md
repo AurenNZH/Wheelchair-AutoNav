@@ -17,7 +17,8 @@ convention.
 
 ## Interfaces
 
-- Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, best effort, depth 1)
+- Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, reliable, volatile,
+  keep-last depth 1)
 - Full local raw obstacles: `/local_obstacles`
 - Robot-forward 180-degree raw obstacles: `/front_costmap`
 - Diagnostic artifact shadow: `/front_costmap_artifact_filtered`
@@ -63,7 +64,10 @@ ros2 run wheelchair_navigation mapping_monitor
 
 For repeatable acquisition-to-supervisor evidence, run
 `mapping_latency_recorder`. It writes one row per front map after a configurable
-warm-up and reports the 250 ms p99 target and 300 ms hard deadline. See the
+warm-up and reports the 250 ms p99 target and 300 ms hard deadline. A pass also
+requires zero map-arrival deadline misses, zero supervisor stale-map receipts
+or events during capture, and valid supervisor diagnostics on both sides of
+the warm-up boundary. The default minimum measured map rate is 9 Hz. See the
 [latency validation procedure](../../../docs/setup/front_costmap_latency_validation.md).
 
 The top-level bringup has two explicit runtime profiles. `safety` is the

@@ -28,6 +28,21 @@ LAUNCH_DEFAULTS = {
 }
 
 
+# Runtime switches intentionally live outside local_mapping.yaml. ROS Foxy
+# gives its node-specific YAML selector precedence over wildcard launch
+# overrides, which would otherwise defeat the selected runtime profile.
+RUNTIME_PROFILES = {
+    "safety": {
+        "publish_local_obstacles": "false",
+        "publish_artifact_shadow": "false",
+    },
+    "artifact_debug": {
+        "publish_local_obstacles": "true",
+        "publish_artifact_shadow": "true",
+    },
+}
+
+
 SENSOR_TRANSFORMS = {
     "rslidar": {
         "x": LAUNCH_DEFAULTS["base_lidar_x"],

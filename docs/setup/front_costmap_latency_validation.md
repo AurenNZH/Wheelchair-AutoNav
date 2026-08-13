@@ -91,6 +91,25 @@ Stop `tegrastats` after the recorder exits. Run these profiles in order:
      runtime_profile:=safety
    ```
 
+   Before recording, verify the effective node parameters in another sourced
+   terminal:
+
+   ```bash
+   ros2 param get /local_costmap publish_local_obstacles
+   ros2 param get /local_costmap publish_artifact_shadow
+   ```
+
+   Both commands must report `False`. The mapper startup message must say it
+   is publishing `/front_costmap` only with `artifact_shadow=false`. Stop and
+   correct the launch environment if any of these checks disagree.
+
+   Confirm that the live AIRY publisher and mapper subscriber both report
+   `RELIABLE`, `VOLATILE`, keep-last depth 1:
+
+   ```bash
+   ros2 topic info /rslidar_points --verbose
+   ```
+
 3. Safety mapper with the lightweight RViz view:
 
    ```bash
@@ -132,6 +151,11 @@ five minutes by setting `duration_s:=300.0`. It passes only when:
 - safety RViz adds no more than 25 ms to p99 age and reduces rate by less than
   5% relative to the headless safety profile;
 - timestamp, TF, rejected-cloud, and thermal-throttling errors remain zero.
+
+The recorder's final line must explicitly report `pass=True`, `rate` at or
+above `9.00Hz`,
+`gaps_over_300=0`, `stale_receipts=0`, `stale_events=0`, and
+`diagnostics=valid`. A fresh-map p99 alone is insufficient for acceptance.
 
 Do not raise `max_map_age_s`, set `restamp_output_with_node_time`, or enable
 physical enforcement to compensate for a failed latency gate.

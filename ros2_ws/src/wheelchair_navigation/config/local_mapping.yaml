@@ -4,7 +4,6 @@ local_costmap:
     target_frame: base_link
     raw_obstacles_topic: /local_obstacles
     front_costmap_topic: /front_costmap
-    publish_local_obstacles: true
     artifact_filtered_front_topic: /front_costmap_artifact_filtered
     artifact_rejected_points_topic: /artifact_filter/rejected_points
     artifact_low_support_points_topic: /artifact_filter/low_support_points
@@ -28,7 +27,8 @@ local_costmap:
     self_filter_boxes: [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
     self_filter_padding_m: 0.0
     # Diagnostic shadow only. Shared control continues to consume /front_costmap.
-    publish_artifact_shadow: true
+    # Runtime output switches are launch-owned so ROS parameter selector
+    # precedence cannot override the selected safety/debug profile.
     artifact_filter_frame: base_link
     # Flat groups: [region_id, forward_cell, lateral_cell, min_z, max_z].
     # XY indices refer directly to the 10 cm front costmap. The 76 records

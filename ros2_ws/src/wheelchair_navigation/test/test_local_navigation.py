@@ -3,6 +3,11 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    ReliabilityPolicy,
+)
 import yaml
 
 from wheelchair_navigation.local_navigation import (
@@ -16,11 +21,41 @@ from wheelchair_navigation.local_navigation import (
     parse_self_filter_boxes,
     world_to_cell,
 )
-from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
+from wheelchair_navigation.local_navigation_node import (
+    cloud_timestamp_error,
+    lidar_subscription_qos,
+)
 from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 
 
 class LocalNavigationTests(unittest.TestCase):
+    def test_lidar_subscription_is_reliable_latest_only_and_volatile(self):
+        qos = lidar_subscription_qos()
+
+        self.assertEqual(qos.history, HistoryPolicy.KEEP_LAST)
+        self.assertEqual(qos.depth, 1)
+        self.assertEqual(qos.reliability, ReliabilityPolicy.RELIABLE)
+        self.assertEqual(qos.durability, DurabilityPolicy.VOLATILE)
+
+    def test_rosbag_override_offers_compatible_reliable_lidar(self):
+        config_path = (
+            Path(__file__).resolve().parents[1]
+            / "config"
+            / "rosbag_reliable_lidar_qos.yaml"
+        )
+
+        profile = yaml.safe_load(config_path.read_text())["/rslidar_points"]
+
+        self.assertEqual(
+            profile,
+            {
+                "history": "keep_last",
+                "depth": 1,
+                "reliability": "reliable",
+                "durability": "volatile",
+            },
+        )
+
     def test_runtime_profile_keeps_raw_topics_and_shadow_outputs(self):
         config_path = (
             Path(__file__).resolve().parents[1]
@@ -33,7 +68,7 @@ class LocalNavigationTests(unittest.TestCase):
 
         self.assertEqual(parameters["raw_obstacles_topic"], "/local_obstacles")
         self.assertEqual(parameters["front_costmap_topic"], "/front_costmap")
-        self.assertTrue(parameters["publish_local_obstacles"])
+        self.assertNotIn("publish_local_obstacles", parameters)
         self.assertEqual(
             parameters["artifact_filtered_front_topic"],
             "/front_costmap_artifact_filtered",
@@ -51,7 +86,7 @@ class LocalNavigationTests(unittest.TestCase):
             "/artifact_filter/threshold_cells",
         )
         self.assertEqual(parameters["artifact_filter_frame"], "base_link")
-        self.assertTrue(parameters["publish_artifact_shadow"])
+        self.assertNotIn("publish_artifact_shadow", parameters)
         records = np.asarray(
             parameters["artifact_grid_mask_cells"], dtype=np.float64
         ).reshape(-1, 5)

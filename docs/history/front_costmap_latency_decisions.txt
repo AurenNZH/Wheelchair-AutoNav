@@ -23,3 +23,54 @@ pinning maximum clocks. Measurements separate source age, callback-entry age,
 front publication age, supervisor receipt age, processing stages, map gaps,
 and system utilization so GPU load is demonstrated by A/B evidence rather
 than assumed.
+
+2026-08-12T18:01:02+01:00 — Runtime profile parameter authority
+
+The first headless safety capture still performed local-grid and artifact
+debug work even though the top-level launch requested both switches false.
+ROS Foxy applied the node-specific true values from local_mapping.yaml over
+the wildcard launch parameter file. Artifact filtering and publication alone
+averaged about 97 ms per cloud, reducing the observed map rate to 6.42 Hz.
+
+The two output switches are therefore launch-owned and removed from the
+node-specific mapping YAML. Direct local-mapping launches retain full-debug
+defaults, while the top-level safety and artifact_debug profiles explicitly
+select false/false and true/true respectively. Runtime validation checks the
+effective node parameters before measuring latency.
+
+2026-08-12T22:37:14+01:00 — Reliable latest-only LiDAR delivery
+
+The AIRY source, Ethernet input, and RoboSense core produced complete clouds
+at 10 Hz. SDK instrumentation measured about 1.6 ms to convert each 1.38 MB
+cloud and 1.6 ms to publish it, with assembled-cloud gaps below 103 ms. A
+minimal best-effort ROS subscriber received only 7.4 Hz and saw gaps up to
+1402 ms, while an otherwise identical reliable subscriber received 10.0 Hz
+without a gap over 160 ms. Large fragmented samples were therefore being lost
+between the reliable SDK publisher and the mapper's best-effort reader.
+
+The production mapper now uses reliable, volatile, keep-last depth one. Depth
+one preserves latest-only processing while DDS reliability repairs missing
+fragments instead of discarding a whole cloud. A three-minute temporary A/B
+run of this contract delivered 1803 front maps with 198.1 ms p99 age, 236.6 ms
+maximum age, and zero supervisor stale-map events. Acquisition timestamps and
+the 300 ms fail-closed deadline remain unchanged.
+
+Latency acceptance now fails on any map-arrival gap over 300 ms, any increase
+in the supervisor's stale receipt/event counters during measurement, or
+missing, malformed, or reset supervisor diagnostics. Warm-up counter values
+form the baseline so startup transitions are not misclassified as capture
+failures. This prevents a low received-map age from hiding dropped intervals.
+
+2026-08-12T23:15:28+01:00 — Production acceptance
+
+The installed production path passed both five-minute non-actuating captures.
+Headless safety delivered 2994 maps at 9.97 Hz with 213.4 ms p99 age and
+268.2 ms maximum age. The lightweight RViz safety view delivered 2989 maps at
+9.95 Hz with 187.4 ms p99 age and 241.2 ms maximum age. Both captures had zero
+map ages or arrival gaps above 300 ms, zero supervisor stale receipts/events,
+and valid supervisor diagnostics. RViz reduced measured rate by about 0.2%
+and did not increase p99 age, satisfying the visualization overhead gate.
+
+The recorder now also requires its measured map rate to remain at or above
+9 Hz. This closes the last case where a uniformly slow stream could avoid the
+300 ms gap threshold yet still report a misleading pass.

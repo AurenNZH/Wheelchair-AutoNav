@@ -8,7 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
-from wheelchair_bringup.defaults import LAUNCH_DEFAULTS
+from wheelchair_bringup.defaults import LAUNCH_DEFAULTS, RUNTIME_PROFILES
 
 
 def _argument(name: str, description: str) -> DeclareLaunchArgument:
@@ -21,7 +21,9 @@ def _argument(name: str, description: str) -> DeclareLaunchArgument:
 
 def generate_launch_description():
     realsense_launch = os.path.join(
-        get_package_share_directory("realsense2_camera"), "launch", "rs_launch.py"
+        get_package_share_directory("realsense2_camera"),
+        "launch",
+        "rs_launch.py",
     )
     mapping_launch = os.path.join(
         get_package_share_directory("wheelchair_navigation"),
@@ -53,7 +55,7 @@ def generate_launch_description():
             "runtime_profile",
             default_value=LAUNCH_DEFAULTS["runtime_profile"],
             description="Select latency-safe or full artifact diagnostics.",
-            choices=["safety", "artifact_debug"],
+            choices=list(RUNTIME_PROFILES),
         ),
         _argument("publish_camera_tf", "Publish base_link -> camera_link."),
         _argument(
@@ -139,10 +141,7 @@ def generate_launch_description():
     )
     mapping_safety = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(mapping_launch),
-        launch_arguments={
-            "publish_local_obstacles": "false",
-            "publish_artifact_shadow": "false",
-        }.items(),
+        launch_arguments=RUNTIME_PROFILES["safety"].items(),
         condition=IfCondition(
             PythonExpression(
                 [
@@ -156,10 +155,7 @@ def generate_launch_description():
     )
     mapping_debug = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(mapping_launch),
-        launch_arguments={
-            "publish_local_obstacles": "true",
-            "publish_artifact_shadow": "true",
-        }.items(),
+        launch_arguments=RUNTIME_PROFILES["artifact_debug"].items(),
         condition=IfCondition(
             PythonExpression(
                 [
