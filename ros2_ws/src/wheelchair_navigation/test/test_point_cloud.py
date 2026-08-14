@@ -8,6 +8,7 @@ from sensor_msgs.msg import PointCloud2, PointField
 from wheelchair_navigation.point_cloud import (
     point_cloud_to_arrays,
     quaternion_to_matrix,
+    select_point_cloud_records,
     transform_points,
     xyz_to_point_cloud,
 )
@@ -146,6 +147,94 @@ class PointCloudTests(unittest.TestCase):
         self.assertEqual(msg.header.stamp.nanosec, 456)
         self.assertEqual(msg.width, 1)
         np.testing.assert_allclose(point_cloud_to_arrays(msg).xyz, [[1, 2, 3]])
+
+    def test_record_selection_preserves_fields_header_and_record_bytes(self):
+        msg = PointCloud2()
+        msg.header.frame_id = "rslidar"
+        msg.header.stamp.sec = 123
+        msg.height = 1
+        msg.width = 3
+        msg.point_step = 18
+        msg.row_step = 54
+        msg.fields = self._xyz_fields() + [
+            PointField(
+                name="intensity",
+                offset=12,
+                datatype=PointField.FLOAT32,
+                count=1,
+            ),
+            PointField(
+                name="ring",
+                offset=16,
+                datatype=PointField.UINT16,
+                count=1,
+            ),
+        ]
+        records = []
+        for index in range(3):
+            records.append(
+                struct.pack(
+                    "<ffffH",
+                    float(index),
+                    2.0,
+                    3.0,
+                    10.0 + index,
+                    20 + index,
+                )
+            )
+        msg.data = b"".join(records)
+
+        selected = select_point_cloud_records(
+            msg, np.array([True, False, True])
+        )
+
+        self.assertEqual(selected.header, msg.header)
+        self.assertEqual(selected.fields, msg.fields)
+        self.assertEqual(selected.point_step, msg.point_step)
+        self.assertEqual(selected.width, 2)
+        self.assertEqual(selected.height, 1)
+        self.assertEqual(selected.row_step, 36)
+        self.assertEqual(bytes(selected.data), records[0] + records[2])
+
+    def test_record_selection_handles_big_endian_padding_and_empty_output(self):
+        msg = PointCloud2()
+        msg.height = 2
+        msg.width = 1
+        msg.point_step = 12
+        msg.row_step = 16
+        msg.is_bigendian = True
+        msg.fields = self._xyz_fields()
+        first = struct.pack(">fff", 1.0, 2.0, 3.0)
+        second = struct.pack(">fff", 4.0, 5.0, 6.0)
+        msg.data = first + b"PAD!" + second
+
+        selected = select_point_cloud_records(
+            msg, np.array([False, True])
+        )
+        empty = select_point_cloud_records(
+            msg, np.array([False, False])
+        )
+
+        self.assertTrue(selected.is_bigendian)
+        self.assertEqual(bytes(selected.data), second)
+        np.testing.assert_allclose(
+            point_cloud_to_arrays(selected).xyz, [[4.0, 5.0, 6.0]]
+        )
+        self.assertEqual(empty.width, 0)
+        self.assertEqual(empty.row_step, 0)
+        self.assertEqual(bytes(empty.data), b"")
+
+    def test_record_selection_rejects_wrong_mask_shape(self):
+        msg = PointCloud2()
+        msg.height = 1
+        msg.width = 1
+        msg.point_step = 12
+        msg.row_step = 12
+        msg.fields = self._xyz_fields()
+        msg.data = struct.pack("<fff", 1.0, 2.0, 3.0)
+
+        with self.assertRaises(ValueError):
+            select_point_cloud_records(msg, np.array([True, False]))
 
     @staticmethod
     def _xyz_fields():

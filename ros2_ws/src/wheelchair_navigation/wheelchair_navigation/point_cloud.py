@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass
 
 import numpy as np
@@ -158,10 +159,68 @@ def xyz_to_point_cloud(points: np.ndarray, header: Header) -> PointCloud2:
     return msg
 
 
+def select_point_cloud_records(
+    msg: PointCloud2, keep_mask: np.ndarray
+) -> PointCloud2:
+    """Select complete point records while preserving the input schema.
+
+    The result is compacted to an unorganized cloud because removing arbitrary
+    points cannot preserve the source image layout. Every byte in each retained
+    point record is copied unchanged, including AIRY diagnostic fields that the
+    filtering algorithm does not interpret.
+    """
+
+    if msg.point_step <= 0:
+        raise ValueError("PointCloud2 point_step must be positive.")
+    height = max(1, int(msg.height))
+    width = int(msg.width)
+    if width < 0:
+        raise ValueError("PointCloud2 width must be non-negative.")
+    row_step = int(msg.row_step) or width * int(msg.point_step)
+    packed_row_step = width * int(msg.point_step)
+    if row_step < packed_row_step:
+        raise ValueError("PointCloud2 row_step is shorter than one row.")
+    required_bytes = (height - 1) * row_step + packed_row_step
+    if len(msg.data) < required_bytes:
+        raise ValueError("PointCloud2 data is shorter than its declared dimensions.")
+
+    keep = np.asarray(keep_mask, dtype=bool)
+    if keep.shape != (height * width,):
+        raise ValueError("keep_mask must have shape (height * width,)")
+    record_dtype = np.dtype((np.void, int(msg.point_step)))
+    records = np.ndarray(
+        shape=(height, width),
+        dtype=record_dtype,
+        buffer=msg.data,
+        strides=(row_step, int(msg.point_step)),
+    ).reshape(-1)
+    selected_data = records[keep].tobytes(order="C")
+
+    result = PointCloud2()
+    result.header = msg.header
+    result.height = 1
+    result.width = int(np.count_nonzero(keep))
+    result.fields = list(msg.fields)
+    result.is_bigendian = msg.is_bigendian
+    result.point_step = int(msg.point_step)
+    result.row_step = result.width * result.point_step
+    packed_data = array("B")
+    packed_data.frombytes(selected_data)
+    # Assigning bytes to Foxy's generated uint8[] setter performs a slow
+    # Python-level conversion. Supplying the native array avoids that second
+    # per-byte pass while preserving exactly the same serialized payload.
+    result.data = packed_data
+    # Preserve the conservative source claim. The filter node removes invalid
+    # XYZ records, but this generic helper does not interpret arbitrary fields.
+    result.is_dense = msg.is_dense
+    return result
+
+
 __all__ = [
     "PointCloudArrays",
     "point_cloud_to_arrays",
     "quaternion_to_matrix",
+    "select_point_cloud_records",
     "transform_points",
     "xyz_to_point_cloud",
 ]

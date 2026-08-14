@@ -1,6 +1,7 @@
-local_costmap:
+/**:
   ros__parameters:
     lidar_topic: /rslidar_points
+    artifact_filtered_cloud_topic: /rslidar_points_artifact_filtered
     target_frame: base_link
     raw_obstacles_topic: /local_obstacles
     front_costmap_topic: /front_costmap
@@ -26,7 +27,8 @@ local_costmap:
     # Keep zero padding so the effective filter exactly matches these bounds.
     self_filter_boxes: [0.0, 0.53, -0.465, 0.2, 0.32, 0.82]
     self_filter_padding_m: 0.0
-    # Diagnostic shadow only. Shared control continues to consume /front_costmap.
+    # The legacy mapper keeps this as a diagnostic shadow. The Nav2 launch uses
+    # the same calibration upstream on /rslidar_points_artifact_filtered.
     publish_artifact_shadow: true
     artifact_filter_frame: base_link
     # Flat groups: [region_id, forward_cell, lateral_cell, min_z, max_z].

@@ -28,8 +28,7 @@ from wheelchair_navigation.artifact_filter import (
     ArtifactGridCell,
     ArtifactHaloSpan,
     artifact_configured_halo_cell_ids,
-    artifact_grid_membership,
-    minimum_cell_support_filter,
+    filter_artifact_points,
     parse_artifact_grid_cells,
     parse_artifact_grid_halo_spans,
     validate_artifact_filter_frame,
@@ -38,7 +37,6 @@ from wheelchair_navigation.local_navigation import (
     CostmapStats,
     FrontCostmapConfig,
     LocalCostmapConfig,
-    front_point_cell_ids,
     grid_origin_m,
     make_costmap_stats,
     make_front_grid,
@@ -375,31 +373,13 @@ class LocalNavigationNode(Node):
                 validate_artifact_filter_frame(
                     artifact_frame, target_frame
                 )
-                front_valid_mask, cell_ids, cell_count = (
-                    front_point_cell_ids(points_base, front_config)
-                )
-                mask_rejected, artifact_stats = artifact_grid_membership(
+                filter_result = filter_artifact_points(
                     points_base,
-                    cell_ids,
-                    front_valid_mask,
+                    accepted_mask,
+                    boxes,
                     cells,
+                    halo_spans,
                     front_config,
-                    accepted_mask,
-                )
-                threshold_candidate_cells = (
-                    artifact_configured_halo_cell_ids(
-                        halo_spans,
-                        cells,
-                        front_config,
-                    )
-                )
-                support_result = minimum_cell_support_filter(
-                    cell_ids,
-                    front_valid_mask,
-                    accepted_mask,
-                    mask_rejected,
-                    threshold_candidate_cells,
-                    cell_count=cell_count,
                     min_points_per_cell=self.get_parameter(
                         "artifact_min_points_per_cell"
                     ).value,
@@ -407,14 +387,19 @@ class LocalNavigationNode(Node):
                         "artifact_global_min_points_per_cell"
                     ).value,
                 )
+                artifact_stats = filter_result.artifact_stats
+                support_result = filter_result.support
                 artifact_support_stats = support_result.stats
                 shadow_front_points = points_base[
-                    support_result.shadow_mask & front_valid_mask
+                    support_result.shadow_mask
+                    & filter_result.front_valid_mask
                 ]
                 artifact_front = make_front_grid(
                     shadow_front_points, front_config
                 )
-                rejected_sensor = cloud.xyz[mask_rejected]
+                rejected_sensor = cloud.xyz[
+                    filter_result.artifact_rejected_mask
+                ]
                 low_support_sensor = cloud.xyz[
                     support_result.low_support_mask
                 ]

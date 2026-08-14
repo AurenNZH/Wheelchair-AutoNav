@@ -27,12 +27,16 @@ class LocalNavigationTests(unittest.TestCase):
             / "config"
             / "local_mapping.yaml"
         )
-        parameters = yaml.safe_load(config_path.read_text())["local_costmap"][
+        parameters = yaml.safe_load(config_path.read_text())["/**"][
             "ros__parameters"
         ]
 
         self.assertEqual(parameters["raw_obstacles_topic"], "/local_obstacles")
         self.assertEqual(parameters["front_costmap_topic"], "/front_costmap")
+        self.assertEqual(
+            parameters["artifact_filtered_cloud_topic"],
+            "/rslidar_points_artifact_filtered",
+        )
         self.assertEqual(
             parameters["artifact_filtered_front_topic"],
             "/front_costmap_artifact_filtered",

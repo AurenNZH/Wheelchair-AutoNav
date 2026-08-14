@@ -9,6 +9,7 @@ from wheelchair_navigation.artifact_filter import (
     artifact_configured_halo_cell_ids,
     artifact_grid_membership,
     artifact_halo_cell_ids,
+    filter_artifact_points,
     minimum_cell_support_filter,
     parse_artifact_grid_cells,
     parse_artifact_grid_halo_spans,
@@ -19,6 +20,7 @@ from wheelchair_navigation.artifact_filter import (
 from wheelchair_navigation.local_navigation import (
     FrontCostmapConfig,
     LocalCostmapConfig,
+    SelfFilterBox,
     front_point_cell_ids,
     make_front_grid,
     make_full_raw_grid,
@@ -32,6 +34,44 @@ from wheelchair_navigation.local_navigation_node import (
 
 
 class ArtifactFilterTests(unittest.TestCase):
+    def test_upstream_keep_mask_retains_nav2_owned_points(self):
+        config = FrontCostmapConfig(
+            length_m=2.0, width_m=2.0, resolution_m=1.0
+        )
+        points = np.array(
+            [
+                [0.5, 0.5, 0.4],
+                [0.2, -0.5, 0.4],
+                [1.5, -0.5, 0.4],
+                [1.6, -0.5, 0.4],
+                [5.0, 0.0, 0.4],
+                [np.nan, 0.0, 0.4],
+            ],
+            dtype=np.float32,
+        )
+        eligible = np.array([True, False, True, True, False, False])
+        boxes = (SelfFilterBox(0.0, 0.4, -1.0, 0.0, 0.0, 1.0),)
+        cells = (ArtifactGridCell(0, 0, 0, 0.3, 0.5),)
+        spans = (ArtifactHaloSpan(0, 0, 0, 0),)
+
+        result = filter_artifact_points(
+            points,
+            eligible,
+            boxes,
+            cells,
+            spans,
+            config,
+            min_points_per_cell=3,
+            global_min_points_per_cell=3,
+        )
+
+        np.testing.assert_array_equal(
+            result.keep_mask,
+            [False, False, False, False, True, False],
+        )
+        self.assertEqual(result.artifact_stats.unique_rejected_points, 1)
+        self.assertEqual(result.support.stats.low_support_points, 2)
+
     def test_parser_accepts_empty_valid_and_cross_region_overlap(self):
         self.assertEqual(parse_artifact_grid_cells(None), ())
         self.assertEqual(parse_artifact_grid_cells([]), ())
@@ -399,6 +439,7 @@ class ArtifactFilterTests(unittest.TestCase):
         ).markers
         self.assertEqual(cleared[0].action, cleared[0].DELETE)
         self.assertEqual(cleared[1].action, cleared[1].DELETE)
+
 
 if __name__ == "__main__":
     unittest.main()

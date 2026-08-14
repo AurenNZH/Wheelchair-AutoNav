@@ -6,7 +6,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from wheelchair_navigation.local_navigation import FrontCostmapConfig
+from wheelchair_navigation.local_navigation import (
+    FrontCostmapConfig,
+    SelfFilterBox,
+    front_point_cell_ids,
+    points_in_box,
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,110 @@ class ArtifactCellSupportResult:
     candidate_cell_ids: np.ndarray
     low_support_cell_ids: np.ndarray
     stats: ArtifactCellSupportStats
+
+
+@dataclass(frozen=True)
+class ArtifactPointFilterResult:
+    """Masks and statistics shared by grid and PointCloud filter outputs."""
+
+    keep_mask: np.ndarray
+    front_valid_mask: np.ndarray
+    self_rejected_mask: np.ndarray
+    artifact_rejected_mask: np.ndarray
+    support: ArtifactCellSupportResult
+    artifact_stats: ArtifactFilterStats
+
+
+def filter_artifact_points(
+    points_base: np.ndarray,
+    eligible_mask: np.ndarray,
+    self_filter_boxes: tuple[SelfFilterBox, ...],
+    cells: tuple[ArtifactGridCell, ...],
+    halo_spans: tuple[ArtifactHaloSpan, ...],
+    config: FrontCostmapConfig,
+    *,
+    min_points_per_cell: int,
+    global_min_points_per_cell: int,
+    threshold_candidate_cell_ids: np.ndarray | None = None,
+) -> ArtifactPointFilterResult:
+    """Apply the calibrated masks and support thresholds to one cloud.
+
+    ``eligible_mask`` defines points that Nav2 may mark in the calibrated front
+    grid. The returned upstream keep mask deliberately retains finite points
+    outside that marking window so Nav2 remains responsible for its own height,
+    range, and ray-tracing policy.
+    """
+
+    points = _points_array(points_base, "points_base")
+    eligible = np.asarray(eligible_mask, dtype=bool)
+    if eligible.shape != (points.shape[0],):
+        raise ValueError("artifact eligible mask must have shape (N,)")
+
+    finite = np.isfinite(points).all(axis=1)
+    finite_indices = np.flatnonzero(finite)
+    self_rejected = np.zeros(points.shape[0], dtype=bool)
+    for box in self_filter_boxes:
+        self_rejected[finite_indices] |= points_in_box(
+            points[finite_indices], box
+        )
+
+    eligible_indices = np.flatnonzero(eligible)
+    eligible_points = points[eligible_indices]
+    eligible_front_valid, cell_ids, cell_count = front_point_cell_ids(
+        eligible_points, config
+    )
+    eligible_artifact_rejected, artifact_stats = artifact_grid_membership(
+        eligible_points,
+        cell_ids,
+        eligible_front_valid,
+        cells,
+        config,
+    )
+    threshold_cells = (
+        artifact_configured_halo_cell_ids(halo_spans, cells, config)
+        if threshold_candidate_cell_ids is None
+        else np.asarray(threshold_candidate_cell_ids, dtype=np.int64)
+    )
+    eligible_support = minimum_cell_support_filter(
+        cell_ids,
+        eligible_front_valid,
+        np.ones(eligible_indices.size, dtype=bool),
+        eligible_artifact_rejected,
+        threshold_cells,
+        cell_count=cell_count,
+        min_points_per_cell=min_points_per_cell,
+        global_min_points_per_cell=global_min_points_per_cell,
+    )
+
+    front_valid = np.zeros(points.shape[0], dtype=bool)
+    artifact_rejected = np.zeros(points.shape[0], dtype=bool)
+    low_support = np.zeros(points.shape[0], dtype=bool)
+    shadow = np.zeros(points.shape[0], dtype=bool)
+    front_valid[eligible_indices] = eligible_front_valid
+    artifact_rejected[eligible_indices] = eligible_artifact_rejected
+    low_support[eligible_indices] = eligible_support.low_support_mask
+    shadow[eligible_indices] = eligible_support.shadow_mask
+    support = ArtifactCellSupportResult(
+        shadow_mask=shadow,
+        low_support_mask=low_support,
+        candidate_cell_ids=eligible_support.candidate_cell_ids,
+        low_support_cell_ids=eligible_support.low_support_cell_ids,
+        stats=eligible_support.stats,
+    )
+    keep = (
+        finite
+        & ~self_rejected
+        & ~artifact_rejected
+        & ~low_support
+    )
+    return ArtifactPointFilterResult(
+        keep_mask=keep,
+        front_valid_mask=front_valid,
+        self_rejected_mask=self_rejected,
+        artifact_rejected_mask=artifact_rejected,
+        support=support,
+        artifact_stats=artifact_stats,
+    )
 
 
 def parse_artifact_grid_cells(
@@ -493,7 +602,9 @@ __all__ = [
     "ArtifactFilterStats",
     "ArtifactGridCell",
     "ArtifactHaloSpan",
+    "ArtifactPointFilterResult",
     "artifact_configured_halo_cell_ids",
+    "filter_artifact_points",
     "artifact_grid_membership",
     "artifact_halo_cell_ids",
     "artifact_region_cell_ids",
