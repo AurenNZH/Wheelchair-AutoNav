@@ -34,3 +34,8 @@ List every option with:
 ```bash
 ros2 launch wheelchair_bringup wheelchair.launch.py --show-args
 ```
+
+The experimental stock Nav2 mapper is launched separately so it cannot be
+confused with the supervisor's `/front_costmap`. Follow
+`docs/setup/nav2_costmap_evaluation.md`; do not run the legacy mapper and Nav2
+experiment at the same time.

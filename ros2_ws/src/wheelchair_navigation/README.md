@@ -55,6 +55,41 @@ source install/setup.bash
 ros2 launch wheelchair_navigation local_mapping.launch.py
 ```
 
+## Stock Nav2 Evaluation
+
+`nav2_mapping.launch.py` is an isolated evaluation of Foxy Nav2's unmodified
+`ObstacleLayer`. It reads raw `/rslidar_points` and publishes
+`/nav2_front_costmap`; it does not publish `/front_costmap`, launch the safety
+supervisor, or command the wheelchair. The initial profile intentionally has
+no artifact masks, minimum-support rule, denoise layer, voxel layer, or
+inflation layer.
+
+Install the Foxy runtime once:
+
+```bash
+sudo apt-get install ros-foxy-nav2-costmap-2d \
+  ros-foxy-nav2-lifecycle-manager
+```
+
+Build this package, start the AIRY driver without the legacy mapper, and then
+launch the stock Nav2 profile:
+
+```bash
+ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=false
+```
+
+Measure both source and map continuity for six minutes:
+
+```bash
+ros2 run wheelchair_navigation nav2_costmap_monitor
+```
+
+The monitor deliberately does not report Nav2's OccupancyGrid header as sensor
+latency: Foxy does not preserve the cloud acquisition timestamp there. A
+`pass=true` result means only that both streams maintained the configured rate
+and avoided gaps over 300 ms. See
+`docs/setup/nav2_costmap_evaluation.md` for the complete procedure.
+
 Monitor performance:
 
 ```bash

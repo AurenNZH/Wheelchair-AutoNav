@@ -1,0 +1,24 @@
+2026-08-13 20:45 BST
+Decision: Evaluate Nav2 costmap infrastructure before further optimizing the
+project's Python grid generator.
+Philosophy: Reuse mature infrastructure where it fits, but measure it on the
+actual Foxy/Jetson/AIRY combination instead of assuming it solves the freeze.
+
+2026-08-13 20:52 BST
+Decision: Keep modern Nav2 Collision Monitor out of the Foxy implementation.
+Philosophy: Collision Monitor matches direct stop/slow sensing conceptually,
+but backporting a post-Foxy control component would expand scope and duplicate
+the already validated operator-intent and Pi enforcement pipeline.
+
+2026-08-13 20:59 BST
+Decision: First launch the unmodified Foxy ObstacleLayer on raw AIRY data and
+publish it on isolated /nav2_front_costmap.
+Philosophy: Establish a clean stability and map-behaviour baseline before
+adding artifact filters, timestamp adapters, or safety-supervisor coupling.
+
+2026-08-13 21:05 BST
+Decision: Treat the first Nav2 result as publication continuity, not map
+latency, and remove any multi-scan arming requirement.
+Philosophy: Foxy's visual grid does not retain the sensor acquisition stamp.
+The experiment should state only what it measures and let the first valid map
+appear without an invented five-scan policy.
