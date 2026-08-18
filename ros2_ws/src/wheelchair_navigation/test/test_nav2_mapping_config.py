@@ -22,17 +22,49 @@ def test_stock_costmap_is_forward_base_link_grid():
     assert parameters["resolution"] == 0.1
 
 
-def test_initial_experiment_uses_only_stock_obstacle_layer():
+def test_filtered_pipeline_has_disabled_optional_inflation_after_obstacles():
     parameters = _parameters()
     obstacle = parameters["obstacle_layer"]
     airy = obstacle["airy"]
 
-    assert parameters["plugins"] == ["obstacle_layer"]
+    assert parameters["plugins"] == ["obstacle_layer", "inflation_layer"]
     assert obstacle["plugin"] == "nav2_costmap_2d::ObstacleLayer"
-    assert airy["topic"] == "/rslidar_points"
+    assert airy["topic"] == "/nav2_obstacle_points"
     assert airy["data_type"] == "PointCloud2"
     assert airy["marking"] is True
     assert airy["clearing"] is True
     assert airy["observation_persistence"] == 0.0
+    assert (
+        parameters["inflation_layer.plugin"]
+        == "nav2_costmap_2d::InflationLayer"
+    )
+    assert parameters["inflation_layer.enabled"] is False
+    assert parameters["inflation_layer.inflation_radius"] == 0.55
+    assert parameters["inflation_layer.cost_scaling_factor"] == 3.0
     assert "denoise_layer" not in parameters
     assert "artifact_grid_mask_cells" not in parameters
+
+
+def test_launch_defaults_to_filter_and_retains_raw_ab_switch():
+    path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
+    source = path.read_text()
+
+    assert '"use_artifact_filter", default_value="true"' in source
+    assert 'executable="artifact_point_filter"' in source
+    assert '"/rslidar_points_artifact_filtered"' in source
+    assert '"/rslidar_points"' in source
+    assert 'UnlessCondition(' in source
+
+
+def test_launch_exposes_disabled_tunable_inflation_profile():
+    path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
+    source = path.read_text()
+
+    assert '"use_inflation", default_value="false"' in source
+    assert '"inflation_radius", default_value="0.55"' in source
+    assert '"cost_scaling_factor", default_value="3.0"' in source
+    assert "RewrittenYaml(" in source
+    assert '"inflation_layer.enabled"' in source
+    assert '"inflation_layer.inflation_radius"' in source
+    assert '"inflation_layer.cost_scaling_factor"' in source
+    assert "convert_types=True" in source

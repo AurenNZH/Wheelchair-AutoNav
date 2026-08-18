@@ -21,14 +21,16 @@ costmap:
       publish_frequency: 10.0
       always_send_full_costmap: true
 
-      # Match the measured 0.80 m by 0.70 m base. No inflation layer is used:
-      # the existing supervisor remains responsible for swept-chair geometry.
+      # Match the measured 0.80 m by 0.70 m base. Inflation is an optional,
+      # non-authoritative RViz/evaluation overlay; the existing supervisor
+      # remains disconnected and responsible for swept-chair geometry.
       footprint: "[[0.40, 0.35], [0.40, -0.35], [-0.40, -0.35], [-0.40, 0.35]]"
       footprint_padding: 0.0
 
-      # Deliberately evaluate Foxy's unmodified obstacle layer first. Do not
-      # add the project artifact masks, support thresholds, or inflation here.
-      plugins: ["obstacle_layer"]
+      # Keep Foxy's ObstacleLayer unmodified. The launch remaps this stable
+      # internal input to the calibrated filtered cloud by default, or to the
+      # raw AIRY cloud for an explicit A/B run.
+      plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
@@ -37,7 +39,7 @@ costmap:
         combination_method: 1
         observation_sources: airy
         airy:
-          topic: /rslidar_points
+          topic: /nav2_obstacle_points
           sensor_frame: ""
           data_type: PointCloud2
           min_obstacle_height: 0.05
@@ -49,3 +51,13 @@ costmap:
           inf_is_valid: false
           marking: true
           clearing: true
+
+      # Disabled unless nav2_mapping.launch.py receives use_inflation:=true.
+      # These weights are an uncalibrated Nav2 baseline and do not yet encode
+      # the supervisor's CLEAR, SLOW, or STOP policy.
+      # Keep these keys flat so Foxy's RewrittenYaml can preserve their
+      # bool/float types while applying launch-time substitutions.
+      inflation_layer.plugin: "nav2_costmap_2d::InflationLayer"
+      inflation_layer.enabled: false
+      inflation_layer.inflation_radius: 0.55
+      inflation_layer.cost_scaling_factor: 3.0

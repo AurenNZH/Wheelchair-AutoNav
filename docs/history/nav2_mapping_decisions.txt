@@ -22,3 +22,69 @@ latency, and remove any multi-scan arming requirement.
 Philosophy: Foxy's visual grid does not retain the sensor acquisition stamp.
 The experiment should state only what it measures and let the first valid map
 appear without an invented five-scan policy.
+
+2026-08-14 17:40 BST
+Decision: Reintroduce the calibrated AIRY artifact filter as a standalone
+PointCloud2 stage upstream of an otherwise-unmodified Nav2 ObstacleLayer.
+Philosophy: Keep the stable mapping implementation and the project-specific
+sensor correction separate so each component has one clear responsibility.
+
+2026-08-14 17:40 BST
+Decision: Preserve every retained AIRY point record, source-frame coordinate,
+and acquisition stamp instead of rebuilding an XYZ-only cloud.
+Philosophy: Filtering should remove known bad observations without discarding
+diagnostic fields or obscuring where and when the sensor measured good ones.
+
+2026-08-14 17:40 BST
+Decision: Stop filtered publication on invalid input, timestamps, transforms,
+or calibration rather than silently passing raw points through.
+Philosophy: A visible missing-input fault is safer and easier to diagnose than
+quietly reintroducing artifacts into a map labelled as filtered.
+
+2026-08-14 17:40 BST
+Decision: Make filtered input the Nav2 default while retaining an explicit raw
+A/B launch switch and keeping physical shared control disconnected.
+Philosophy: Use the only practically useful map for normal observation, retain
+a cheap diagnostic comparison, and validate stability before actuation.
+
+2026-08-14 18:03 BST
+Decision: Evaluate calibrated cells only for the subset of points eligible for
+front marking, while retaining other finite non-self points for Nav2.
+Philosophy: Spend CPU where the filter can change a decision without taking
+height, range, or clearing policy away from Nav2.
+
+2026-08-14 18:03 BST
+Decision: Populate PointCloud2 byte data with Python's native unsigned-byte
+array rather than assigning bytes through Foxy's generated message setter.
+Philosophy: Preserve the full AIRY schema while avoiding a hidden second
+per-byte conversion that cost roughly 80 ms per recorded cloud on the Jetson.
+
+2026-08-14 18:03 BST
+Decision: Build debug clouds only when subscribed, publish static markers once,
+and rate-limit changing threshold markers and success diagnostics.
+Philosophy: Diagnostic detail should remain available on demand without taxing
+the headless production path every LiDAR callback.
+
+2026-08-14 18:03 BST
+Result: A warmed recorded-rate replay measured raw-to-filter delay p95 80.45 ms
+and p99 93.02 ms; Nav2 published at 6.42 Hz with a 231.56 ms maximum map gap.
+Philosophy: Record the bounded replay result as evidence, while reserving the
+six-minute live run as the production endurance gate.
+
+2026-08-14 19:13 BST
+Decision: Register Foxy's InflationLayer behind a default-off launch toggle,
+with a 0.55 m radius and 3.0 scaling factor exposed for A/B tuning.
+Philosophy: Make Nav2's weighted representation easy to inspect without
+changing the performance-validated obstacle-only default.
+
+2026-08-14 19:13 BST
+Decision: Keep optional inflation on the isolated /nav2_front_costmap and do
+not connect it to /front_costmap or the safety supervisor.
+Philosophy: Graded costs need an explicit CLEAR/SLOW/STOP interpretation and
+freshness contract before they are allowed to affect physical shared control.
+
+2026-08-14 19:33 BST
+Decision: Apply inflation launch arguments by rewriting the exact Foxy Nav2
+parameter section while preserving bool and float types.
+Philosophy: A launch banner is not proof of runtime configuration; verify the
+live lifecycle node and work with Foxy's exact-node parameter precedence.

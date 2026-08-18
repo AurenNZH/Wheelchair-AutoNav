@@ -1,14 +1,14 @@
-# Stock Foxy Nav2 Costmap Evaluation
+# Filtered Foxy Nav2 Costmap Evaluation
 
-This is a non-actuating evaluation of Foxy Nav2's unmodified ObstacleLayer.
-It determines whether Nav2 continues receiving the AIRY cloud and publishing
-a raw obstacle grid beyond the legacy mapper's approximately four-minute
-failure point.
+This is a non-actuating evaluation of Foxy Nav2's ObstacleLayer with the
+calibrated AIRY artifact filter upstream. It determines whether the filtered
+cloud and Nav2 grid remain continuous beyond the legacy mapper's approximately
+four-minute failure point.
 
 The experiment publishes `/nav2_front_costmap`, not `/front_costmap`. Do not
 start the safety supervisor or the Pi enforcement program during this stage.
-No project artifact filtering, minimum point threshold, freshness bridge,
-Collision Monitor, planner, or controller is involved.
+No freshness bridge, Collision Monitor, planner, controller, or physical
+shared control is involved. Optional inflation is for visual evaluation only.
 
 ## One-time installation and build
 
@@ -50,10 +50,12 @@ ros2 launch wheelchair_bringup wheelchair.launch.py \
   use_lidar:=true use_camera:=false use_mapping:=false use_rviz:=false
 ```
 
-Terminal 2 starts only the stock Nav2 costmap and lifecycle manager:
+Terminal 2 starts the artifact filter, Nav2 costmap, and lifecycle manager.
+Inflation remains off for the validated baseline:
 
 ```bash
-ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=false
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  use_inflation:=false use_rviz:=false
 ```
 
 Confirm Nav2 is active and the isolated map type is correct:
@@ -61,6 +63,7 @@ Confirm Nav2 is active and the isolated map type is correct:
 ```bash
 ros2 lifecycle get /costmap/costmap
 ros2 topic info /rslidar_points --verbose
+ros2 topic info /rslidar_points_artifact_filtered --verbose
 ros2 topic info /nav2_front_costmap --verbose
 ```
 
@@ -82,15 +85,16 @@ monitor exits:
 tegrastats --interval 1000 --logfile /tmp/nav2_costmap_tegrastats.txt
 ```
 
-The final monitor line must show nonzero cloud and map counts. `pass=true`
-means the cloud and map stayed at least 9 Hz and neither arrival stream had a
-gap above 300 ms. This is a continuity result, not sensor-to-map latency: the
-stock Foxy OccupancyGrid does not identify which cloud produced it.
+The final monitor line must show nonzero raw, filtered, and map counts.
+`pass=true` requires a map rate of at least 5.7 Hz, a maximum map gap of
+300 ms, at least 90 percent filter publication, and no rejected input clouds.
+This is a continuity result, not sensor-to-map latency: the Foxy OccupancyGrid
+does not identify which cloud produced it.
 
 ## RViz observation
 
-After the headless run, stop terminal 2 and restart it with the dedicated raw
-view:
+After the headless run, stop terminal 2 and restart it with the dedicated
+obstacle-only view:
 
 ```bash
 ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true
@@ -99,12 +103,24 @@ ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true
 Inspect these displays:
 
 - `AIRY PointCloud2 (raw)` is the unfiltered sensor input.
-- `Stock Nav2 ObstacleLayer` is the unfiltered Nav2 grid.
+- `AIRY PointCloud2 (artifact filtered)` is the Nav2 sensor input.
+- `Nav2 Front Costmap (optional inflation)` is the obstacle-only Nav2 grid.
 
 Observe an open scene and place a large soft object at the established clear,
 slow, and stop distances. At this stage record whether cells appear and clear;
 do not expect supervisor decisions because `/front_costmap` remains
 disconnected.
+
+For an inflated A/B run, stop the obstacle-only launch and restart it:
+
+```bash
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  use_inflation:=true inflation_radius:=0.55 \
+  cost_scaling_factor:=3.0 use_rviz:=true
+```
+
+The intermediate cost gradient is intentionally uncalibrated. It must not be
+interpreted as a safety decision, and the supervisor remains disconnected.
 
 ## Interpretation and next decision
 

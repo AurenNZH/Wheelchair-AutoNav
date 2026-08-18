@@ -18,7 +18,7 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: Intensity
-      Enabled: true
+      Enabled: false
       Name: AIRY PointCloud2 (raw)
       Position Transformer: XYZ
       Size (Pixels): 2
@@ -30,11 +30,76 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /rslidar_points
       Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: Intensity
+      Enabled: true
+      Name: AIRY PointCloud2 (artifact filtered)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /rslidar_points_artifact_filtered
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 0; 255
+      Color Transformer: FlatColor
+      Enabled: false
+      Name: Artifact-rejected points (magenta)
+      Position Transformer: XYZ
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /artifact_filter/rejected_points
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 220; 0
+      Color Transformer: FlatColor
+      Enabled: false
+      Name: Low-support points (yellow)
+      Position Transformer: XYZ
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /artifact_filter/low_support_points
+      Use Fixed Frame: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Artifact calibration boxes
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /artifact_filter/masks
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: false
+      Name: Support-threshold cells
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /artifact_filter/threshold_cells
     - Alpha: 0.75
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Enabled: true
-      Name: Stock Nav2 ObstacleLayer
+      Name: Nav2 Front Costmap (optional inflation)
       Topic:
         Depth: 1
         Durability Policy: Transient Local

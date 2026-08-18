@@ -58,11 +58,11 @@ ros2 launch wheelchair_navigation local_mapping.launch.py
 ## Stock Nav2 Evaluation
 
 `nav2_mapping.launch.py` is an isolated evaluation of Foxy Nav2's unmodified
-`ObstacleLayer`. It reads raw `/rslidar_points` and publishes
-`/nav2_front_costmap`; it does not publish `/front_costmap`, launch the safety
-supervisor, or command the wheelchair. The initial profile intentionally has
-no artifact masks, minimum-support rule, denoise layer, voxel layer, or
-inflation layer.
+`ObstacleLayer`, fed by the calibrated artifact-filtered PointCloud2 by
+default. It publishes `/nav2_front_costmap`; it does not publish
+`/front_costmap`, launch the safety supervisor, or command the wheelchair.
+An optional Nav2 `InflationLayer` is disabled by default and remains a
+non-authoritative RViz/evaluation feature.
 
 Install the Foxy runtime once:
 
@@ -77,6 +77,17 @@ launch the stock Nav2 profile:
 ```bash
 ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=false
 ```
+
+Enable the uncalibrated weighted-cost A/B profile explicitly:
+
+```bash
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  use_inflation:=true inflation_radius:=0.55 \
+  cost_scaling_factor:=3.0 use_rviz:=true
+```
+
+Both modes publish `/nav2_front_costmap`; restart the launch to switch. The
+inflated costs do not yet encode the supervisor's CLEAR, SLOW, or STOP policy.
 
 Measure both source and map continuity for six minutes:
 
