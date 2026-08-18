@@ -35,12 +35,12 @@ Launch shared control with its defaults. Confirm diagnostics say
 `live_control_disabled` once maps and intent exist, UDP reports disabled, and
 no node publishes a physical `cmd_vel` or accesses CAN.
 
-## 2. AIRY mapping acceptance
+## 2. AIRY and weighted Nav2 mapping acceptance
 
 With drive power physically isolated, run the AIRY mapper and inspect
-`/local_obstacles` and `/front_costmap` in RViz. Shared control consumes only
-the forward map; the full local map remains diagnostic evidence for reflections
-and blind side/rear coverage.
+`/rslidar_points_artifact_filtered` and `/nav2_front_costmap` in RViz. Shared
+control consumes only the robot-relative Nav2 map; raw and rejected clouds
+remain diagnostic evidence for reflections and blind side/rear coverage.
 
 Pass only if all of the following hold:
 
@@ -142,8 +142,10 @@ Use a safety observer, physical cutoff, open escape space, and command cap at
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
-6. Keep side/rear obstacles diagnostic-only; the current supervisor consumes
-   only `/front_costmap` and does not claim full-surround protection.
+6. Keep side/rear obstacles outside the requested trajectory diagnostic-only;
+   the current supervisor samples `/nav2_front_costmap` only along the
+   straight-to-requested correction union and does not claim full-surround
+   protection.
 7. Defer moving-person tests and hard-turn physical control until straight and
    shallow-correction CLEAR/SLOW/STOP gates pass repeatably.
 

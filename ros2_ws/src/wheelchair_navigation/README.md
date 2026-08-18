@@ -61,8 +61,9 @@ ros2 launch wheelchair_navigation local_mapping.launch.py
 `ObstacleLayer`, fed by the calibrated artifact-filtered PointCloud2 by
 default. It publishes `/nav2_front_costmap`; it does not publish
 `/front_costmap`, launch the safety supervisor, or command the wheelchair.
-An optional Nav2 `InflationLayer` is disabled by default and remains a
-non-authoritative RViz/evaluation feature.
+The supervisor may subscribe separately for non-actuating shadow decisions.
+The optional Nav2 `InflationLayer` remains disabled by default so weighted
+policy calibration must be enabled explicitly.
 
 Install the Foxy runtime once:
 
@@ -87,7 +88,9 @@ ros2 launch wheelchair_navigation nav2_mapping.launch.py \
 ```
 
 Both modes publish `/nav2_front_costmap`; restart the launch to switch. The
-inflated costs do not yet encode the supervisor's CLEAR, SLOW, or STOP policy.
+supervisor initially interprets costs `1..98` as SLOW candidates and
+`99..100` as STOP candidates along the requested path. These thresholds and
+the inflation profile are shadow-only until physically calibrated.
 
 Measure both source and map continuity for six minutes:
 

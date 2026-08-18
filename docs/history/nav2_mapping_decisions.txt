@@ -88,3 +88,25 @@ Decision: Apply inflation launch arguments by rewriting the exact Foxy Nav2
 parameter section while preserving bool and float types.
 Philosophy: A launch banner is not proof of runtime configuration; verify the
 live lifecycle node and work with Foxy's exact-node parameter precedence.
+
+2026-08-18 18:42 BST
+Decision: Replace the supervisor's binary occupied-point input with weighted
+cost sampling from /nav2_front_costmap, while retaining explicit legacy replay
+wiring on /front_costmap.
+Philosophy: Integrate one proven boundary at a time: first make Nav2's graded
+representation observable in shadow decisions without changing joystick,
+UDP, or message contracts.
+
+2026-08-18 18:42 BST
+Decision: Sample Nav2 costs at prospective robot-centre poses from straight
+through the requested correction, using initial SLOW 1..98 and STOP 99..100
+bands inside the existing 1.20 m and 0.70 m horizons.
+Philosophy: Nav2 inflation is already configuration-space evidence, so
+sweeping the physical footprint over it again would double-count chair size
+and make tight passages unnecessarily restrictive.
+
+2026-08-18 18:42 BST
+Decision: Keep OccupancyGrid publication time as the provisional freshness
+input for this cost-policy shadow stage and keep physical enforcement out.
+Philosophy: Cost semantics can be measured independently, but a visually
+credible stale map must not later be mistaken for fresh LiDAR evidence.

@@ -7,12 +7,12 @@ AIRY /rslidar_points
         |
         v
 Jetson wheelchair_navigation
-  /local_obstacles ---- mapper diagnostics / RViz
-  /front_costmap ------ forward/right swept-path evidence
+  artifact-filtered PointCloud2 ---- sensor diagnostics / RViz
+  /nav2_front_costmap -------------- weighted trajectory evidence
         |
         v
 Jetson wheelchair_shared_control
-  OperatorIntent + fresh /front_costmap
+  OperatorIntent + provisional-fresh /nav2_front_costmap
         |
         v
   SafetyEnvelope: STOP / SLOW / CLEAR
@@ -33,10 +33,10 @@ a route and never publishes a physical `Twist` or CAN frame.
 ## Responsibilities
 
 - `wheelchair_bringup` owns sensor launch and calibrated static transforms.
-- `wheelchair_navigation` decodes AIRY clouds, transforms them to
-  `base_link`, applies range/height/self filtering, and publishes two raw maps.
-- `wheelchair_shared_control` checks the requested swept footprint against the
-  forward map and emits a normalized safety envelope.
+- `wheelchair_navigation` filters calibrated AIRY artifacts and feeds the
+  retained PointCloud2 records to Nav2's obstacle and inflation layers.
+- `wheelchair_shared_control` samples weighted costs from straight through the
+  requested correction and emits a normalized safety envelope.
 - `wheelchair_teleop` owns keyboard input, CAN timing, command ramping, the
   physical deadman, and the fail-closed UDP client.
 - `wheelchair_simulation` substitutes Gazebo differential drive for CAN and
@@ -58,11 +58,13 @@ observed height remain outside the validated scope.
 
 ## Fail-Closed Layers
 
-Motion is zero when the required front map, intent, timestamp, sequence, peer,
-session, or heartbeat is invalid or stale. Side and rear obstacles are outside
-the current forward-only supervisor contract. STOP latches on the Pi until the
-operator releases the motion key. Gazebo uses the same intent and envelope
-contracts but can publish velocity only to `/sim/safe_cmd_vel`.
+Motion is zero when the required costmap, intent, timestamp, sequence, peer,
+session, or heartbeat is invalid or stale. Nav2 publication time is still a
+provisional freshness source, so physical enforcement remains blocked pending
+LiDAR-derived freshness. Side and rear obstacles outside the sampled path are
+outside the current forward-only supervisor contract. STOP latches on the Pi
+until the operator releases the motion key. Gazebo uses the same intent and
+envelope contracts but can publish velocity only to `/sim/safe_cmd_vel`.
 
 Future autonomous route selection must enter through a separate arbitration
 interface; it must not impersonate operator intent.

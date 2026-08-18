@@ -13,11 +13,78 @@ from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
 
 from wheelchair_shared_control.safety import (
     SafetyConfig,
+    SafetyDecision,
     OperatorIntentData,
     evaluate_safety,
-    occupied_points_from_grid,
+    validate_cost_policy,
+    weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
+
+
+def safety_diagnostic_values(
+    decision: SafetyDecision,
+    config: SafetyConfig,
+    map_age_ms: float,
+    processing_ms: float,
+) -> list[KeyValue]:
+    """Build stable, machine-readable evidence for one decision."""
+
+    return [
+        KeyValue(key="map_age_ms", value="%.3f" % map_age_ms),
+        KeyValue(key="processing_ms", value="%.3f" % processing_ms),
+        KeyValue(key="enable_motion", value=str(config.enable_motion)),
+        KeyValue(
+            key="geometry_calibrated",
+            value=str(config.geometry_calibrated),
+        ),
+        KeyValue(key="min_steering", value="%.3f" % config.min_steering),
+        KeyValue(key="max_steering", value="%.3f" % config.max_steering),
+        KeyValue(
+            key="nearest_path_distance_m",
+            value=(
+                "none"
+                if decision.nearest_path_distance_m is None
+                else "%.3f" % decision.nearest_path_distance_m
+            ),
+        ),
+        KeyValue(
+            key="maximum_path_cost",
+            value=(
+                "none"
+                if decision.maximum_path_cost is None
+                else str(decision.maximum_path_cost)
+            ),
+        ),
+        KeyValue(
+            key="nearest_slow_cost_distance_m",
+            value=(
+                "none"
+                if decision.nearest_slow_cost_distance_m is None
+                else "%.3f" % decision.nearest_slow_cost_distance_m
+            ),
+        ),
+        KeyValue(
+            key="nearest_stop_cost_distance_m",
+            value=(
+                "none"
+                if decision.nearest_stop_cost_distance_m is None
+                else "%.3f" % decision.nearest_stop_cost_distance_m
+            ),
+        ),
+        KeyValue(
+            key="slow_cost_threshold",
+            value=str(config.slow_cost_threshold),
+        ),
+        KeyValue(
+            key="stop_cost_threshold",
+            value=str(config.stop_cost_threshold),
+        ),
+        KeyValue(
+            key="path_cost_valid",
+            value=str(decision.path_cost_valid),
+        ),
+    ]
 
 
 class SafetySupervisorNode(Node):
@@ -27,16 +94,14 @@ class SafetySupervisorNode(Node):
         super().__init__("safety_supervisor")
         self.declare_parameter("operator_intent_topic", "/operator_intent")
         self.declare_parameter("safety_envelope_topic", "/safety_envelope")
-        self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter(
+            "front_costmap_topic", "/nav2_front_costmap"
+        )
         self.declare_parameter("diagnostics_topic", "/shared_control/diagnostics")
         self.declare_parameter("decision_rate_hz", 20.0)
         self.declare_parameter("max_intent_age_s", 0.20)
         self.declare_parameter("enable_motion", False)
         self.declare_parameter("geometry_calibrated", False)
-        self.declare_parameter("chair_width_m", 0.70)
-        self.declare_parameter("front_extent_m", 0.40)
-        self.declare_parameter("rear_extent_m", 0.40)
-        self.declare_parameter("lateral_margin_m", 0.15)
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
@@ -48,10 +113,12 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("neutral_deadzone", 0.05)
         self.declare_parameter("forward_cone_half_angle_deg", 25.0)
         self.declare_parameter("max_map_age_s", 0.30)
+        self.declare_parameter("slow_cost_threshold", 1)
+        self.declare_parameter("stop_cost_threshold", 99)
 
         self._config = self._load_config()
         self._intent = None
-        self._front_points = None
+        self._front_costmap = None
         self._front_stamp_ns = 0
         self._last_reason = None
 
@@ -78,22 +145,23 @@ class SafetySupervisorNode(Node):
             raise ValueError("decision_rate_hz must be positive")
         self.create_timer(1.0 / rate_hz, self._publish_decision)
         self.get_logger().info(
-            "Shared-control supervisor started fail-closed: "
-            "enable_motion=%s geometry_calibrated=%s"
-            % (self._config.enable_motion, self._config.geometry_calibrated)
+            "Nav2-cost shared-control supervisor started fail-closed: "
+            "map=%s slow_cost=%d stop_cost=%d enable_motion=%s "
+            "geometry_calibrated=%s"
+            % (
+                self.get_parameter("front_costmap_topic").value,
+                self._config.slow_cost_threshold,
+                self._config.stop_cost_threshold,
+                self._config.enable_motion,
+                self._config.geometry_calibrated,
+            )
         )
 
     def _load_config(self) -> SafetyConfig:
-        return SafetyConfig(
+        config = SafetyConfig(
             enable_motion=bool(self.get_parameter("enable_motion").value),
             geometry_calibrated=bool(
                 self.get_parameter("geometry_calibrated").value
-            ),
-            chair_width_m=float(self.get_parameter("chair_width_m").value),
-            front_extent_m=float(self.get_parameter("front_extent_m").value),
-            rear_extent_m=float(self.get_parameter("rear_extent_m").value),
-            lateral_margin_m=float(
-                self.get_parameter("lateral_margin_m").value
             ),
             stop_distance_m=float(self.get_parameter("stop_distance_m").value),
             slow_distance_m=float(self.get_parameter("slow_distance_m").value),
@@ -118,32 +186,48 @@ class SafetySupervisorNode(Node):
                 self.get_parameter("forward_cone_half_angle_deg").value
             ),
             max_map_age_s=float(self.get_parameter("max_map_age_s").value),
+            slow_cost_threshold=int(
+                self.get_parameter("slow_cost_threshold").value
+            ),
+            stop_cost_threshold=int(
+                self.get_parameter("stop_cost_threshold").value
+            ),
         )
+        validate_cost_policy(config)
+        return config
 
     def _on_intent(self, msg: OperatorIntent) -> None:
         self._intent = msg
 
     def _on_front_map(self, msg: OccupancyGrid) -> None:
         try:
-            self._front_points = self._grid_points(msg)
+            self._front_costmap = self._grid_costmap(msg)
             self._front_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
         except ValueError as exc:
             self.get_logger().error(
                 "Rejected invalid front costmap: %s" % exc,
                 throttle_duration_sec=5.0,
             )
-            self._front_points = None
+            self._front_costmap = None
             self._front_stamp_ns = 0
 
     @staticmethod
-    def _grid_points(msg: OccupancyGrid):
-        return occupied_points_from_grid(
+    def _grid_costmap(msg: OccupancyGrid):
+        orientation = msg.info.origin.orientation
+        return weighted_costmap_from_grid(
             msg.data,
+            frame_id=str(msg.header.frame_id),
             width=int(msg.info.width),
             height=int(msg.info.height),
             resolution_m=float(msg.info.resolution),
             origin_x_m=float(msg.info.origin.position.x),
             origin_y_m=float(msg.info.origin.position.y),
+            origin_orientation_xyzw=(
+                float(orientation.x),
+                float(orientation.y),
+                float(orientation.z),
+                float(orientation.w),
+            ),
         )
 
     def _publish_decision(self) -> None:
@@ -167,7 +251,7 @@ class SafetySupervisorNode(Node):
                 self.get_parameter("max_intent_age_s").value
             ):
                 decision = self._stop("stale_intent")
-            elif self._front_points is None:
+            elif self._front_costmap is None:
                 decision = self._stop("missing_map")
             elif self._front_stamp_ns <= 0:
                 decision = self._stop("invalid_map_timestamp")
@@ -208,7 +292,7 @@ class SafetySupervisorNode(Node):
                 )
                 decision = evaluate_safety(
                     intent,
-                    self._front_points,
+                    self._front_costmap,
                     map_age_s,
                     self._config,
                 )
@@ -225,11 +309,9 @@ class SafetySupervisorNode(Node):
         envelope.map_age_ms = max(0.0, map_age_s * 1000.0)
         self._envelope_pub.publish(envelope)
         self._publish_diagnostics(
-            decision.reason,
-            decision.decision,
+            decision,
             envelope.map_age_ms,
             (time.perf_counter() - started) * 1000.0,
-            decision.nearest_path_distance_m,
         )
 
     @staticmethod
@@ -240,61 +322,40 @@ class SafetySupervisorNode(Node):
 
     def _publish_diagnostics(
         self,
-        reason: str,
-        decision: int,
+        decision,
         map_age_ms: float,
         processing_ms: float,
-        nearest_path_distance_m: float | None,
     ) -> None:
         status = DiagnosticStatus()
         status.name = "wheelchair_shared_control/safety_supervisor"
         status.hardware_id = "jetson"
         status.level = (
             DiagnosticStatus.OK
-            if decision == SafetyEnvelope.CLEAR
+            if decision.decision == SafetyEnvelope.CLEAR
             else DiagnosticStatus.WARN
         )
-        status.message = reason
-        status.values = [
-            KeyValue(key="map_age_ms", value="%.3f" % map_age_ms),
-            KeyValue(key="processing_ms", value="%.3f" % processing_ms),
-            KeyValue(key="enable_motion", value=str(self._config.enable_motion)),
-            KeyValue(
-                key="geometry_calibrated",
-                value=str(self._config.geometry_calibrated),
-            ),
-            KeyValue(
-                key="min_steering",
-                value="%.3f" % self._config.min_steering,
-            ),
-            KeyValue(
-                key="max_steering",
-                value="%.3f" % self._config.max_steering,
-            ),
-            KeyValue(
-                key="nearest_path_distance_m",
-                value=(
-                    "none"
-                    if nearest_path_distance_m is None
-                    else "%.3f" % nearest_path_distance_m
-                ),
-            ),
-        ]
+        status.message = decision.reason
+        status.values = safety_diagnostic_values(
+            decision, self._config, map_age_ms, processing_ms
+        )
         diagnostics = DiagnosticArray()
         diagnostics.header.stamp = self.get_clock().now().to_msg()
         diagnostics.status = [status]
         self._diagnostics_pub.publish(diagnostics)
-        if reason != self._last_reason:
+        if decision.reason != self._last_reason:
             self.get_logger().info(
-                "Safety decision changed: %s (nearest=%s)"
+                "Safety decision changed: %s (nearest=%s max_cost=%s)"
                 % (
-                    reason,
+                    decision.reason,
                     "none"
-                    if nearest_path_distance_m is None
-                    else "%.3f m" % nearest_path_distance_m,
+                    if decision.nearest_path_distance_m is None
+                    else "%.3f m" % decision.nearest_path_distance_m,
+                    "none"
+                    if decision.maximum_path_cost is None
+                    else str(decision.maximum_path_cost),
                 )
             )
-            self._last_reason = reason
+            self._last_reason = decision.reason
 
 
 def main() -> int:

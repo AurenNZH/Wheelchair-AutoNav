@@ -2,7 +2,7 @@
 
 Fail-safe supervisor for operator-requested forward motion. It checks straight
 motion or a correction inside the configured forward cone against
-`/front_costmap`.
+the weighted Nav2 `/nav2_front_costmap`.
 It never selects a path, publishes `cmd_vel`, or accesses CAN.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`. The UDP
@@ -44,14 +44,49 @@ path from straight through the requested correction so the Pi can safely
 reduce that correction while applying CLEAR/SLOW caps. Hard turns and reverse
 remain classified but return explicit STOP reasons.
 
-The measured 0.80 m base is centred on `base_link`, so its configured forward
-and rear extents are both 0.40 m. STOP and SLOW distances are additional
-travel-to-contact distances beyond that swept footprint.
+The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in
+Nav2. STOP and SLOW distances are trajectory lookahead distances. The cost
+policy samples prospective robot-centre poses because Nav2 inflation already
+incorporates configuration-space clearance; applying the chair footprint a
+second time would double count it.
+
+The initial weighted policy treats costs `1..98` as the SLOW band and costs
+`99..100` as the STOP band. A STOP-band cost within 0.70 m produces STOP; any
+nonzero cost within 1.20 m produces SLOW. Unknown cost `-1`, invalid geometry,
+or a trajectory leaving the grid fails closed. The thresholds are launch
+arguments for shadow calibration:
+
+```bash
+ros2 launch wheelchair_shared_control shared_control.launch.py \
+  enable_motion:=true geometry_calibrated:=true \
+  slow_cost_threshold:=1 stop_cost_threshold:=99
+```
+
+This enables supervisor decisions only; the supervisor still has no actuator
+interface. For the current shadow stage, keep the Pi gateway non-actuating.
+Nav2's OccupancyGrid header is still treated as provisional map freshness and
+does not prove which filtered LiDAR cloud produced the map. Sensor-derived
+freshness remains required before physical enforcement.
+
+For a weighted shadow capture, enable inflation in the navigation launch and
+record the decision evidence on the Jetson:
+
+```bash
+ros2 bag record /operator_intent /nav2_front_costmap \
+  /safety_envelope /shared_control/diagnostics
+```
+
+Exercise a clear scene, a graded-cost obstacle that should produce SLOW, an
+inscribed/lethal obstacle that should produce STOP, and shallow corrections
+on both sides. Diagnostics report `maximum_path_cost`, nearest slow/stop cost
+distances, both thresholds, and `path_cost_valid`. A side obstacle outside all
+sampled correction trajectories must not change CLEAR.
 
 ## Recorded-map decision replay
 
-The replay pipeline injects straight-forward operator intent into recorded
-`/front_costmap` messages. It reports the supervisor's `STOP`, `SLOW`, and
+The replay pipeline explicitly injects straight-forward operator intent into
+legacy recorded `/front_costmap` messages. It reports the supervisor's
+`STOP`, `SLOW`, and
 `CLEAR` transitions without launching UDP, CAN, Gazebo, or any velocity
 adapter. Use a dedicated ROS domain in every terminal:
 
@@ -113,6 +148,10 @@ sensor latency. Record suitable derived maps with:
 ```bash
 ros2 bag record /front_costmap
 ```
+
+Binary `0/100` recordings remain useful for transport and fail-closed
+regression, but they do not contain Nav2's inflation gradient and are no
+longer distance-calibration evidence for the weighted production policy.
 
 `/local_obstacles` may still be published and inspected in RViz for lidar and
 self-filter diagnostics, but it is intentionally outside the supervisor's

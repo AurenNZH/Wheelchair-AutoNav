@@ -14,7 +14,13 @@ Use fixed Pi and Jetson addresses on the isolated router. The examples below
 use `192.168.1.20` for the Pi and `192.168.1.10` for the Jetson; substitute the
 actual fixed addresses.
 
-## 1. Jetson mapping
+This procedure is currently approved through **shadow mode only**. Weighted
+cost transitions must be calibrated and LiDAR-derived map freshness must be
+implemented before section 5 enforcement is attempted.
+
+## 1. Jetson LiDAR and Nav2 mapping
+
+Start the AIRY and measured transform without the legacy mapper:
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
@@ -22,14 +28,27 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=false use_rviz:=false
 ```
 
-Confirm RViz shows a current, credible `/front_costmap` before continuing.
+In a second Jetson terminal, start the artifact filter, inflated Nav2 map, and
+RViz:
+
+```bash
+cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
+source /opt/ros/foxy/setup.bash
+source ros2_ws/install/setup.bash
+export ROS_LOCALHOST_ONLY=1
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  use_artifact_filter:=true use_inflation:=true use_rviz:=true
+```
+
+Confirm RViz shows a current, credible `/nav2_front_costmap` before
+continuing.
 
 ## 2. Jetson supervisor and UDP bridge
 
-In a second Jetson terminal:
+In a third Jetson terminal:
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
@@ -39,7 +58,8 @@ export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.15
+  slow_forward_limit:=0.15 \
+  slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
 
 Both motion gates and UDP are explicit; they remain disabled in the normal
@@ -85,6 +105,10 @@ recorded forward corrections remain inside the cone, hard left/right and
 reverse labels are correct, and clear/slow/stop decisions agree with RViz.
 
 ## 5. Low-speed enforcement
+
+**Blocked for the current implementation:** do not run this section until the
+weighted transition calibration passes and the supervisor derives freshness
+from LiDAR acquisition time rather than Nav2 map publication time.
 
 Use the controlled open area with clear escape space and an attendant holding
 the tested physical cutoff. Start with the operator joystick centred and a

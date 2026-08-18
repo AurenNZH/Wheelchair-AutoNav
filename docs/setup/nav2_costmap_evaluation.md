@@ -5,10 +5,10 @@ calibrated AIRY artifact filter upstream. It determines whether the filtered
 cloud and Nav2 grid remain continuous beyond the legacy mapper's approximately
 four-minute failure point.
 
-The experiment publishes `/nav2_front_costmap`, not `/front_costmap`. Do not
-start the safety supervisor or the Pi enforcement program during this stage.
-No freshness bridge, Collision Monitor, planner, controller, or physical
-shared control is involved. Optional inflation is for visual evaluation only.
+The experiment publishes `/nav2_front_costmap`, not `/front_costmap`. Its
+weighted costs may now feed the safety supervisor during an explicitly
+non-actuating shadow run. No freshness bridge, Collision Monitor, planner,
+controller, or physical enforcement is involved.
 
 ## One-time installation and build
 
@@ -107,9 +107,10 @@ Inspect these displays:
 - `Nav2 Front Costmap (optional inflation)` is the obstacle-only Nav2 grid.
 
 Observe an open scene and place a large soft object at the established clear,
-slow, and stop distances. At this stage record whether cells appear and clear;
-do not expect supervisor decisions because `/front_costmap` remains
-disconnected.
+slow, and stop distances. First record whether cells appear and clear. For a
+separate shadow decision run, start `shared_control.launch.py` with motion and
+geometry decision gates enabled while keeping UDP enforcement disabled; the
+supervisor subscribes to `/nav2_front_costmap` by default.
 
 For an inflated A/B run, stop the obstacle-only launch and restart it:
 
@@ -119,8 +120,10 @@ ros2 launch wheelchair_navigation nav2_mapping.launch.py \
   cost_scaling_factor:=3.0 use_rviz:=true
 ```
 
-The intermediate cost gradient is intentionally uncalibrated. It must not be
-interpreted as a safety decision, and the supervisor remains disconnected.
+The initial gradient is uncalibrated. The supervisor maps costs `1..98` to a
+SLOW candidate and `99..100` to a STOP candidate along the requested
+trajectory, but those transitions are shadow evidence only until radius,
+scaling, and cost thresholds have been physically measured.
 
 ## Interpretation and next decision
 

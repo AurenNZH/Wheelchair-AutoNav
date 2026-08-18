@@ -138,8 +138,8 @@ def generate_launch_description():
                     LaunchConfiguration("inflation_radius"),
                     " m, scaling=",
                     LaunchConfiguration("cost_scaling_factor"),
-                    "); publishing /nav2_front_costmap; /front_costmap and "
-                    "physical shared control are not connected.",
+                    "); publishing /nav2_front_costmap; no supervisor or "
+                    "physical command process is launched.",
                 ]
             ),
             artifact_filter,

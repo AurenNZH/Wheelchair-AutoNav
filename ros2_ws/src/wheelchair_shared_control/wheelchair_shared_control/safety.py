@@ -36,10 +36,6 @@ class OperatorIntentData:
 class SafetyConfig:
     enable_motion: bool = False
     geometry_calibrated: bool = False
-    chair_width_m: float = 0.70
-    front_extent_m: float = 0.40
-    rear_extent_m: float = 0.40
-    lateral_margin_m: float = 0.15
     stop_distance_m: float = 0.70
     slow_distance_m: float = 1.20
     min_turn_radius_m: float = 1.20
@@ -51,6 +47,31 @@ class SafetyConfig:
     neutral_deadzone: float = 0.05
     forward_cone_half_angle_deg: float = 25.0
     max_map_age_s: float = 0.30
+    slow_cost_threshold: int = 1
+    stop_cost_threshold: int = 99
+
+
+@dataclass(frozen=True)
+class WeightedCostmap:
+    """Validated robot-relative Nav2 costs with an axis-aligned origin."""
+
+    costs: np.ndarray
+    width: int
+    height: int
+    resolution_m: float
+    origin_x_m: float
+    origin_y_m: float
+
+
+@dataclass(frozen=True)
+class PathCostSummary:
+    """Cost evidence sampled across the requested trajectory union."""
+
+    maximum_cost: int | None = None
+    nearest_slow_distance_m: float | None = None
+    nearest_stop_distance_m: float | None = None
+    valid: bool = False
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -60,40 +81,69 @@ class SafetyDecision:
     permitted_steering: float
     reason: str
     nearest_path_distance_m: float | None = None
+    maximum_path_cost: int | None = None
+    nearest_slow_cost_distance_m: float | None = None
+    nearest_stop_cost_distance_m: float | None = None
+    path_cost_valid: bool = False
 
 
-def occupied_points_from_grid(
+def weighted_costmap_from_grid(
     data,
     *,
+    frame_id: str,
     width: int,
     height: int,
     resolution_m: float,
     origin_x_m: float,
     origin_y_m: float,
-    occupied_threshold: int = 100,
-) -> np.ndarray:
-    """Return XY centres for occupied cells from an OccupancyGrid-like array."""
+    origin_orientation_xyzw: tuple[float, float, float, float],
+) -> WeightedCostmap:
+    """Validate and retain every Nav2 OccupancyGrid cost."""
+
+    if frame_id != "base_link":
+        raise ValueError("costmap frame must be base_link")
+    if width <= 0 or height <= 0:
+        raise ValueError("costmap dimensions must be positive")
+    if not math.isfinite(resolution_m) or resolution_m <= 0.0:
+        raise ValueError("costmap resolution must be finite and positive")
+    if not math.isfinite(origin_x_m) or not math.isfinite(origin_y_m):
+        raise ValueError("costmap origin must be finite")
+    orientation = tuple(float(value) for value in origin_orientation_xyzw)
+    if len(orientation) != 4 or not all(map(math.isfinite, orientation)):
+        raise ValueError("costmap origin orientation must be finite")
+    x, y, z, w = orientation
+    if (
+        abs(x) > 1e-6
+        or abs(y) > 1e-6
+        or abs(z) > 1e-6
+        or abs(abs(w) - 1.0) > 1e-6
+    ):
+        raise ValueError("costmap origin orientation must be identity")
 
     values = np.asarray(data, dtype=np.int16)
-    if width <= 0 or height <= 0 or values.size != width * height:
-        raise ValueError("occupancy grid dimensions do not match its data")
-    grid = values.reshape(height, width)
-    rows, cols = np.nonzero(grid >= occupied_threshold)
-    return np.column_stack(
-        (
-            origin_x_m + (cols.astype(np.float32) + 0.5) * resolution_m,
-            origin_y_m + (rows.astype(np.float32) + 0.5) * resolution_m,
-        )
-    ).astype(np.float32, copy=False)
+    if values.size != width * height:
+        raise ValueError("costmap dimensions do not match its data")
+    if np.any(values < -1) or np.any(values > 100):
+        raise ValueError("costmap values must be within [-1, 100]")
+    costs = values.reshape(height, width).copy()
+    costs.setflags(write=False)
+    return WeightedCostmap(
+        costs=costs,
+        width=width,
+        height=height,
+        resolution_m=float(resolution_m),
+        origin_x_m=float(origin_x_m),
+        origin_y_m=float(origin_y_m),
+    )
 
 
 def evaluate_safety(
     intent: OperatorIntentData,
-    front_obstacles_xy: np.ndarray,
+    front_costmap: WeightedCostmap,
     map_age_s: float,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
-    """Limit one operator request without selecting or initiating a path."""
+    """Limit one operator request using weighted Nav2 trajectory costs."""
 
     if not config.enable_motion:
         return _stop("live_control_disabled")
@@ -140,111 +190,222 @@ def evaluate_safety(
     if steering < config.min_steering:
         return _stop("right_correction_limit_exceeded")
 
-    nearest = nearest_swept_obstacle_distance(
-        front_obstacles_xy, steering, config
-    )
-    if nearest is not None and nearest <= config.stop_distance_m:
-        return _stop("obstacle_stop", nearest)
-    if nearest is not None and nearest <= config.slow_distance_m:
+    summary = swept_path_costs(front_costmap, steering, config)
+    if not summary.valid:
+        return _stop_from_costs(
+            summary.failure_reason or "invalid_costmap", summary
+        )
+    if (
+        summary.nearest_stop_distance_m is not None
+        and summary.nearest_stop_distance_m <= config.stop_distance_m
+    ):
+        return _stop_from_costs("nav2_cost_stop", summary)
+    if (
+        summary.nearest_slow_distance_m is not None
+        and summary.nearest_slow_distance_m <= config.slow_distance_m
+    ):
         return SafetyDecision(
             SLOW,
             min(float(intent.longitudinal), config.slow_forward_limit),
             steering,
-            "obstacle_slow",
-            nearest,
+            "nav2_cost_slow",
+            summary.nearest_slow_distance_m,
+            summary.maximum_cost,
+            summary.nearest_slow_distance_m,
+            summary.nearest_stop_distance_m,
+            True,
         )
     return SafetyDecision(
         CLEAR,
         float(intent.longitudinal),
         steering,
-        "clear",
-        nearest,
+        "nav2_cost_clear",
+        summary.nearest_slow_distance_m,
+        summary.maximum_cost,
+        summary.nearest_slow_distance_m,
+        summary.nearest_stop_distance_m,
+        True,
     )
 
 
-def nearest_swept_obstacle_distance(
-    obstacles_xy: np.ndarray,
+def swept_path_costs(
+    costmap: WeightedCostmap,
     steering: float,
     config: SafetyConfig,
-) -> float | None:
-    """Check every path from straight through the requested correction."""
+) -> PathCostSummary:
+    """Sample Nav2 costs from straight through the requested correction."""
 
+    validate_cost_policy(config)
     steering_step = float(config.steering_sample_step)
-    if not math.isfinite(steering_step) or steering_step <= 0.0:
-        raise ValueError("steering_sample_step must be finite and positive")
     count = max(1, int(math.ceil(abs(float(steering)) / steering_step)))
-    nearest = None
-    for candidate in np.linspace(0.0, float(steering), count + 1):
-        candidate_nearest = _nearest_for_steering(
-            obstacles_xy,
-            float(candidate),
-            config,
+    candidates = np.linspace(0.0, float(steering), count + 1)
+    if abs(float(steering)) < 1e-9:
+        candidates = np.array([0.0])
+
+    maximum_cost = None
+    nearest_slow = None
+    nearest_stop = None
+    for candidate in candidates:
+        summary = _costs_for_steering(costmap, float(candidate), config)
+        if not summary.valid:
+            return summary
+        maximum_cost = _maximum(maximum_cost, summary.maximum_cost)
+        nearest_slow = _nearest(
+            nearest_slow, summary.nearest_slow_distance_m
         )
-        if candidate_nearest is not None:
-            nearest = (
-                candidate_nearest
-                if nearest is None
-                else min(nearest, candidate_nearest)
-            )
-    return nearest
+        nearest_stop = _nearest(
+            nearest_stop, summary.nearest_stop_distance_m
+        )
+    return PathCostSummary(
+        maximum_cost=maximum_cost,
+        nearest_slow_distance_m=nearest_slow,
+        nearest_stop_distance_m=nearest_stop,
+        valid=True,
+    )
 
 
-def _nearest_for_steering(
-    obstacles_xy: np.ndarray,
+def _costs_for_steering(
+    costmap: WeightedCostmap,
     steering: float,
     config: SafetyConfig,
-) -> float | None:
-    """Return the first footprint collision along one steering ratio."""
-
-    obstacles = np.asarray(obstacles_xy, dtype=np.float32)
-    if obstacles.size == 0:
-        return None
-    if obstacles.ndim != 2 or obstacles.shape[1] != 2:
-        raise ValueError("obstacles_xy must have shape (N, 2)")
-
-    step = config.path_sample_step_m
-    samples = max(1, int(np.ceil(config.slow_distance_m / step)))
+) -> PathCostSummary:
+    step = float(config.path_sample_step_m)
+    samples = max(1, int(math.ceil(config.slow_distance_m / step)))
     distances = np.linspace(0.0, config.slow_distance_m, samples + 1)
     curvature = steering / config.min_turn_radius_m
     if abs(curvature) < 1e-6:
         xs = distances
         ys = np.zeros_like(distances)
-        yaws = np.zeros_like(distances)
     else:
         yaws = curvature * distances
         xs = np.sin(yaws) / curvature
         ys = (1.0 - np.cos(yaws)) / curvature
 
-    half_width = config.chair_width_m / 2.0 + config.lateral_margin_m
-    for distance, x_m, y_m, yaw_rad in zip(distances, xs, ys, yaws):
-        dx = obstacles[:, 0] - x_m
-        dy = obstacles[:, 1] - y_m
-        cosine = np.cos(yaw_rad)
-        sine = np.sin(yaw_rad)
-        longitudinal = cosine * dx + sine * dy
-        lateral = -sine * dx + cosine * dy
-        collision = (
-            (longitudinal >= -config.rear_extent_m)
-            & (longitudinal <= config.front_extent_m)
-            & (np.abs(lateral) <= half_width)
+    maximum_cost = None
+    nearest_slow = None
+    nearest_stop = None
+    for distance, x_m, y_m in zip(distances, xs, ys):
+        col = math.floor(
+            (float(x_m) - costmap.origin_x_m) / costmap.resolution_m
         )
-        if np.any(collision):
-            return float(distance)
-    return None
+        row = math.floor(
+            (float(y_m) - costmap.origin_y_m) / costmap.resolution_m
+        )
+        if (
+            col < 0
+            or col >= costmap.width
+            or row < 0
+            or row >= costmap.height
+        ):
+            return PathCostSummary(
+                maximum_cost=maximum_cost,
+                nearest_slow_distance_m=nearest_slow,
+                nearest_stop_distance_m=nearest_stop,
+                valid=False,
+                failure_reason="trajectory_outside_costmap",
+            )
+        cost = int(costmap.costs[row, col])
+        if cost < 0:
+            return PathCostSummary(
+                maximum_cost=maximum_cost,
+                nearest_slow_distance_m=nearest_slow,
+                nearest_stop_distance_m=nearest_stop,
+                valid=False,
+                failure_reason="unknown_nav2_cost",
+            )
+        maximum_cost = (
+            cost if maximum_cost is None else max(maximum_cost, cost)
+        )
+        if nearest_slow is None and cost >= config.slow_cost_threshold:
+            nearest_slow = float(distance)
+        if nearest_stop is None and cost >= config.stop_cost_threshold:
+            nearest_stop = float(distance)
+
+    return PathCostSummary(
+        maximum_cost=maximum_cost,
+        nearest_slow_distance_m=nearest_slow,
+        nearest_stop_distance_m=nearest_stop,
+        valid=True,
+    )
+
+
+def validate_cost_policy(config: SafetyConfig) -> None:
+    finite_positive = (
+        config.path_sample_step_m,
+        config.steering_sample_step,
+        config.min_turn_radius_m,
+        config.stop_distance_m,
+        config.slow_distance_m,
+    )
+    if not all(
+        math.isfinite(value) and value > 0.0 for value in finite_positive
+    ):
+        raise ValueError("cost-policy geometry must be finite and positive")
+    if config.stop_distance_m > config.slow_distance_m:
+        raise ValueError("stop distance must not exceed slow distance")
+    if not (
+        1
+        <= config.slow_cost_threshold
+        < config.stop_cost_threshold
+        <= 100
+    ):
+        raise ValueError(
+            "cost thresholds must satisfy 1 <= slow < stop <= 100"
+        )
+
+
+def _nearest(first: float | None, second: float | None) -> float | None:
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return min(first, second)
+
+
+def _maximum(first: int | None, second: int | None) -> int | None:
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return max(first, second)
 
 
 def _stop(reason: str, nearest: float | None = None) -> SafetyDecision:
     return SafetyDecision(STOP, 0.0, 0.0, reason, nearest)
 
 
+def _stop_from_costs(
+    reason: str, summary: PathCostSummary
+) -> SafetyDecision:
+    nearest = (
+        summary.nearest_stop_distance_m
+        if reason == "nav2_cost_stop"
+        else summary.nearest_slow_distance_m
+    )
+    return SafetyDecision(
+        STOP,
+        0.0,
+        0.0,
+        reason,
+        nearest,
+        summary.maximum_cost,
+        summary.nearest_slow_distance_m,
+        summary.nearest_stop_distance_m,
+        summary.valid,
+    )
+
+
 __all__ = [
     "CLEAR",
+    "PathCostSummary",
     "SLOW",
     "STOP",
     "OperatorIntentData",
     "SafetyConfig",
     "SafetyDecision",
+    "WeightedCostmap",
     "evaluate_safety",
-    "nearest_swept_obstacle_distance",
-    "occupied_points_from_grid",
+    "swept_path_costs",
+    "validate_cost_policy",
+    "weighted_costmap_from_grid",
 ]

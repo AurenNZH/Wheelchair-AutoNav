@@ -90,6 +90,10 @@ def generate_launch_description():
                     {
                         "enable_motion": True,
                         "geometry_calibrated": True,
+                        # Existing bags and the replay restamper retain the
+                        # legacy topic explicitly; production defaults to the
+                        # weighted Nav2 costmap.
+                        "front_costmap_topic": "/front_costmap",
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),

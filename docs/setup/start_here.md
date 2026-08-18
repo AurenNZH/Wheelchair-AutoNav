@@ -28,7 +28,7 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=false use_rviz:=false
 ```
 
 In a second terminal:
@@ -37,12 +37,13 @@ In a second terminal:
 source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
-ros2 run wheelchair_navigation mapping_monitor
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  use_artifact_filter:=true use_inflation:=true use_rviz:=true
 ```
 
-The mapper publishes `/local_obstacles` and `/front_costmap`. Shared control
-uses only `/front_costmap`; `/local_obstacles` remains useful for RViz and
-self-filter diagnostics.
+The artifact filter publishes `/rslidar_points_artifact_filtered`, and Nav2
+publishes `/nav2_front_costmap`. Shared control samples the weighted Nav2 map
+only along the requested forward trajectory union.
 
 ## 3. Run Gazebo Before Hardware
 
@@ -77,9 +78,9 @@ Follow [shared_control_validation.md](shared_control_validation.md) in order:
 1. clean-dome, hood, coverage, and latency validation;
 2. measured swept geometry;
 3. `vcan` Jetson–Pi failure tests;
-4. live shadow, then lowest-speed controlled-area tests with an independent cutoff;
-5. empty-corridor movement at the lowest effective speed;
-6. controlled foam-obstacle SLOW/STOP tests.
+4. live weighted-cost shadow and CLEAR/SLOW/STOP calibration;
+5. LiDAR-derived costmap freshness validation;
+6. only then, lowest-speed controlled-area tests with an independent cutoff.
 
 Never jump directly from RViz validation to obstacle-driving tests.
 
@@ -88,4 +89,5 @@ Before physical-JSM shared control, complete the transparent-pass-through
 forwards the split bus unchanged and does not generate an actuator command.
 Then follow the staged
 [physical joystick shared-control test](physical_joystick_shared_control.md)
-for UDP shadow validation and explicit low-speed enforcement.
+for UDP shadow validation. Its low-speed enforcement section remains blocked
+until weighted costs and source freshness pass their documented gates.

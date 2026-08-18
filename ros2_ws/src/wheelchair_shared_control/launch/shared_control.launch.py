@@ -15,7 +15,13 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_motion", default_value="false"),
             DeclareLaunchArgument("geometry_calibrated", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "front_costmap_topic",
+                default_value="/nav2_front_costmap",
+            ),
             DeclareLaunchArgument("max_map_age_s", default_value="0.30"),
+            DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
+            DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.35"),
             DeclareLaunchArgument("min_steering", default_value="-0.466307658"),
             DeclareLaunchArgument("max_steering", default_value="0.466307658"),
@@ -36,6 +42,9 @@ def generate_launch_description():
                             "geometry_calibrated"
                         ),
                         "use_sim_time": LaunchConfiguration("use_sim_time"),
+                        "front_costmap_topic": LaunchConfiguration(
+                            "front_costmap_topic"
+                        ),
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),
@@ -44,6 +53,12 @@ def generate_launch_description():
                         ),
                         "min_steering": LaunchConfiguration("min_steering"),
                         "max_steering": LaunchConfiguration("max_steering"),
+                        "slow_cost_threshold": LaunchConfiguration(
+                            "slow_cost_threshold"
+                        ),
+                        "stop_cost_threshold": LaunchConfiguration(
+                            "stop_cost_threshold"
+                        ),
                     },
                 ],
             ),

@@ -21,9 +21,8 @@ costmap:
       publish_frequency: 10.0
       always_send_full_costmap: true
 
-      # Match the measured 0.80 m by 0.70 m base. Inflation is an optional,
-      # non-authoritative RViz/evaluation overlay; the existing supervisor
-      # remains disconnected and responsible for swept-chair geometry.
+      # Match the measured 0.80 m by 0.70 m base. This is the authoritative
+      # footprint for the supervisor's weighted configuration-space policy.
       footprint: "[[0.40, 0.35], [0.40, -0.35], [-0.40, -0.35], [-0.40, 0.35]]"
       footprint_padding: 0.0
 
@@ -53,8 +52,8 @@ costmap:
           clearing: true
 
       # Disabled unless nav2_mapping.launch.py receives use_inflation:=true.
-      # These weights are an uncalibrated Nav2 baseline and do not yet encode
-      # the supervisor's CLEAR, SLOW, or STOP policy.
+      # These weights feed shadow CLEAR/SLOW/STOP decisions but remain
+      # physically uncalibrated and must not enable enforcement.
       # Keep these keys flat so Foxy's RewrittenYaml can preserve their
       # bool/float types while applying launch-time substitutions.
       inflation_layer.plugin: "nav2_costmap_2d::InflationLayer"
