@@ -13,6 +13,7 @@ import uuid
 from .operator_intent import (
     FORWARD_CLASSES,
     RELEASED,
+    REVERSE_CLASSES,
     ClassifiedIntent,
     classify_raw_axes,
     intent_label,
@@ -153,7 +154,7 @@ class SafetyLink:
         )
 
     def apply(self, x_pos: int, y_pos: int, deadman: bool) -> tuple[int, int]:
-        """Return steering/forward values permitted by a fresh matching envelope."""
+        """Return joystick axes permitted by a fresh matching envelope."""
 
         if not self.enabled:
             return int(x_pos), int(y_pos)
@@ -183,7 +184,7 @@ class SafetyLink:
             self._clear_count = 0
             self._reason = "operator_released"
             return 0, 0
-        if command.intent_class not in FORWARD_CLASSES:
+        if command.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
             self._clear_count = 0
             self._reason = "%s_not_enabled" % intent_label(
                 command.intent_class
@@ -216,6 +217,11 @@ class SafetyLink:
             self._last_counted_intent_sequence = envelope.intent_sequence
             self._reason = envelope.reason
             return 0, 0
+        if command.is_reverse and envelope.decision != SLOW:
+            self._stop_latched = True
+            self._clear_count = 0
+            self._reason = "reverse_requires_slow_envelope"
+            return 0, 0
 
         if envelope.intent_sequence != self._last_counted_intent_sequence:
             self._clear_count += 1
@@ -232,21 +238,27 @@ class SafetyLink:
 
         decision_cap = (
             self.slow_command_cap
-            if envelope.decision == SLOW
+            if envelope.decision == SLOW or command.is_reverse
             else self.command_cap
         )
         permitted_forward = min(
             envelope.permitted_forward,
             decision_cap,
-            command.longitudinal,
+            abs(command.longitudinal),
         )
         permitted_steering = self._steering_inside_authorized_interval(
             command.steering_ratio,
             envelope.permitted_steering,
         )
         self._reason = envelope.reason
-        output_y = int(round(permitted_forward * 100.0))
-        return steering_ratio_to_pi_x(permitted_steering, output_y), output_y
+        output_magnitude = int(round(permitted_forward * 100.0))
+        output_y = (
+            -output_magnitude if command.is_reverse else output_magnitude
+        )
+        return (
+            steering_ratio_to_pi_x(permitted_steering, output_magnitude),
+            output_y,
+        )
 
     @staticmethod
     def _authorization_family(intent_class: int) -> str:
@@ -254,6 +266,8 @@ class SafetyLink:
             return "released"
         if intent_class in FORWARD_CLASSES:
             return "forward_cone"
+        if intent_class in REVERSE_CLASSES:
+            return "reverse_cone"
         return "unsupported"
 
     @staticmethod
@@ -279,18 +293,24 @@ class SafetyLink:
         sent_command: ClassifiedIntent | None,
         current_command: ClassifiedIntent,
     ) -> bool:
-        """Allow a fresh envelope only within the active forward family."""
+        """Allow a fresh envelope only within the active motion family."""
 
         if sent_command is None:
             return False
-        return sent_command.is_forward and current_command.is_forward
+        return (
+            sent_command.is_forward
+            and current_command.is_forward
+        ) or (
+            sent_command.is_reverse
+            and current_command.is_reverse
+        )
 
     @staticmethod
     def _envelope_limit_is_valid(
         envelope: Envelope,
         sent_command: ClassifiedIntent,
     ) -> bool:
-        if envelope.permitted_forward > sent_command.longitudinal + 1e-6:
+        if envelope.permitted_forward > abs(sent_command.longitudinal) + 1e-6:
             return False
         requested = sent_command.steering_ratio
         permitted = envelope.permitted_steering

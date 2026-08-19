@@ -19,6 +19,8 @@ from wheelchair_shared_control.operator_intent import (
     FORWARD_RIGHT,
     LEFT_TURN,
     REVERSE,
+    REVERSE_LEFT,
+    REVERSE_RIGHT,
     RIGHT_TURN,
 )
 
@@ -76,20 +78,44 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(decision.maximum_path_cost, 0)
         self.assertTrue(decision.path_cost_valid)
 
-    def test_stale_map_and_reverse_are_stopped(self):
+    def test_stale_map_is_stopped(self):
         stale = evaluate_safety(
             self.intent, self.empty, 0.51, self.enabled
         )
-        reverse = evaluate_safety(
+        stale_reverse = evaluate_safety(
             OperatorIntentData(
-                "session", 2, 0.0, -0.1, REVERSE, True
+                "session", 2, 0.0, -1.0, REVERSE, True
             ),
             self.empty,
-            0.1,
+            0.51,
             self.enabled,
         )
         self.assertEqual(stale.reason, "stale_map")
-        self.assertEqual(reverse.reason, "reverse_not_enabled")
+        self.assertEqual(stale_reverse.reason, "stale_map")
+
+    def test_reverse_cone_is_unmonitored_and_capped_slow(self):
+        fixtures = (
+            (0.0, -1.0, REVERSE, 0.0),
+            (0.2, -1.0, REVERSE_LEFT, 0.2),
+            (-0.2, -1.0, REVERSE_RIGHT, -0.2),
+        )
+        blocked_front = self._costmap({(1, 40): 100})
+        for lateral, longitudinal, intent_class, steering in fixtures:
+            with self.subTest(intent_class=intent_class):
+                decision = evaluate_safety(
+                    OperatorIntentData(
+                        "session", 2, lateral, longitudinal,
+                        intent_class, True
+                    ),
+                    blocked_front,
+                    0.1,
+                    self.enabled,
+                )
+                self.assertEqual(decision.decision, SLOW)
+                self.assertEqual(decision.reason, "reverse_unmonitored_slow")
+                self.assertAlmostEqual(decision.permitted_forward, 0.4)
+                self.assertAlmostEqual(decision.permitted_steering, steering)
+                self.assertFalse(decision.path_cost_valid)
 
     def test_cost_bands_produce_stop_slow_and_clear(self):
         stop = evaluate_safety(
@@ -241,6 +267,8 @@ class SafetyPolicyTests(unittest.TestCase):
             SafetyConfig(slow_cost_threshold=50, stop_cost_threshold=101),
             SafetyConfig(stop_distance_m=1.3, slow_distance_m=1.2),
             SafetyConfig(path_sample_step_m=math.nan),
+            SafetyConfig(slow_forward_limit=0.0),
+            SafetyConfig(slow_forward_limit=1.01),
         )
         for config in invalid:
             with self.subTest(config=config):

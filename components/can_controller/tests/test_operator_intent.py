@@ -60,6 +60,15 @@ class OperatorIntentClassificationTests(unittest.TestCase):
         correction = classify_raw_axes(-14, 99)
         self.assertAlmostEqual(correction.steering_ratio, 14.0 / 99.0)
 
+    def test_reverse_steering_ratio_preserves_raw_correction_direction(self):
+        left = classify_raw_axes(-20, -100)
+        right = classify_raw_axes(20, -100)
+
+        self.assertTrue(left.is_reverse)
+        self.assertTrue(right.is_reverse)
+        self.assertAlmostEqual(left.steering_ratio, 0.2)
+        self.assertAlmostEqual(right.steering_ratio, -0.2)
+
 
 if __name__ == "__main__":
     unittest.main()

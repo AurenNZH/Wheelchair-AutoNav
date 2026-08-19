@@ -33,7 +33,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
-            DeclareLaunchArgument("slow_forward_limit", default_value="0.35"),
+            DeclareLaunchArgument("slow_forward_limit", default_value="0.40"),
             DeclareLaunchArgument("min_steering", default_value="-0.466307658"),
             DeclareLaunchArgument("max_steering", default_value="0.466307658"),
             DeclareLaunchArgument("enable_udp", default_value="false"),

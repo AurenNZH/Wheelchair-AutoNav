@@ -1,8 +1,9 @@
 # Wheelchair Shared Control
 
-Fail-safe supervisor for operator-requested forward motion. It checks straight
-motion or a correction inside the configured forward cone against
-the weighted Nav2 `/nav2_front_costmap`.
+Fail-safe supervisor for operator-requested motion. It checks straight forward
+motion or a correction inside the configured forward cone against the weighted
+Nav2 `/nav2_front_costmap`. Reverse inside the matching cone is not monitored
+by a rear map and is therefore always limited to SLOW.
 It never selects a path, publishes `cmd_vel`, or accesses CAN.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`. The UDP
@@ -31,7 +32,7 @@ options are explicit rather than stored as enabled defaults:
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.15
+  slow_forward_limit:=0.40
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow
@@ -40,10 +41,11 @@ the [physical-JSM procedure](../../../../docs/setup/physical_joystick_shared_con
 The normal command above reports `live_control_disabled`, even with valid maps
 and intent. UDP protocol v2 carries normalized left-positive lateral and
 forward-positive longitudinal axes plus a semantic class. The supervisor
-permits only the symmetric 25-degree forward-correction cone. It checks every
-path from straight through the requested correction so the Pi can safely
-reduce that correction while applying CLEAR/SLOW caps. Hard turns and reverse
-remain classified but return explicit STOP reasons.
+permits the symmetric 25-degree forward- and reverse-correction cones. It
+checks every forward path from straight through the requested correction so
+the Pi can safely reduce that correction while applying CLEAR/SLOW caps.
+Reverse returns `reverse_unmonitored_slow` with a 0.40 magnitude limit without
+consulting the front map. Hard turns remain classified and return STOP.
 
 The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in
 Nav2. STOP and SLOW distances are trajectory lookahead distances. The cost
@@ -160,8 +162,8 @@ longer distance-calibration evidence for the weighted production policy.
 
 `/local_obstacles` may still be published and inspected in RViz for lidar and
 self-filter diagnostics, but it is intentionally outside the supervisor's
-forward-only decision contract. Obstacles initially beside or behind the chair
-do not veto motion.
+forward decision contract. Obstacles initially beside or behind the chair do
+not veto forward motion, and reverse has no obstacle-map protection.
 
 See the
 [shared-control validation checklist](../../../../docs/setup/shared_control_validation.md)

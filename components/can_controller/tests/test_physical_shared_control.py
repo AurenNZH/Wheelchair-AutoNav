@@ -82,12 +82,27 @@ class StraightPhysicalJsmControlTests(unittest.TestCase):
         self.assertEqual(control.last_result.intent_label, "forward_left")
         self.assertFalse(control.last_result.local_stop_latched)
 
-    def test_reverse_is_locally_stopped_and_latched(self):
+    def test_reverse_cone_is_supervised_without_local_latch(self):
+        link = FakeSafetyLink(
+            safe_output=(8, -40),
+            reason="reverse_unmonitored_slow",
+            decision=1,
+        )
+        control = StraightPhysicalJsmControl(link, mode="enforce")
+
+        self.assertEqual(control.transform(sample(20, -100)), (8, -40))
+        self.assertEqual(link.calls[-1], (20, -100, True))
+        self.assertEqual(
+            control.last_result.reason, "reverse_unmonitored_slow"
+        )
+        self.assertFalse(control.last_result.local_stop_latched)
+
+    def test_hard_reverse_turn_remains_locally_stopped_and_latched(self):
         link = FakeSafetyLink()
         control = StraightPhysicalJsmControl(link, mode="enforce")
 
-        self.assertEqual(control.transform(sample(0, -20)), (0, 0))
-        self.assertEqual(control.last_result.reason, "reverse_not_enabled")
+        self.assertEqual(control.transform(sample(100, -20)), (0, 0))
+        self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
         self.assertTrue(control.last_result.local_stop_latched)
 
     def test_pure_lateral_input_is_not_treated_as_release(self):

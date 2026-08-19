@@ -41,7 +41,7 @@ class SafetyConfig:
     min_turn_radius_m: float = 1.20
     min_steering: float = -0.466307658
     max_steering: float = 0.466307658
-    slow_forward_limit: float = 0.35
+    slow_forward_limit: float = 0.40
     path_sample_step_m: float = 0.05
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05
@@ -143,7 +143,7 @@ def evaluate_safety(
     map_age_s: float,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
-    """Limit one operator request using weighted Nav2 trajectory costs."""
+    """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
 
     if not config.enable_motion:
         return _stop("live_control_disabled")
@@ -175,13 +175,11 @@ def evaluate_safety(
         return _stop("intent_class_mismatch")
     if not intent.deadman or intent.intent_class == RELEASED:
         return _stop("deadman_released")
-    if intent.intent_class in REVERSE_CLASSES:
-        return _stop("reverse_not_enabled")
     if intent.intent_class == LEFT_TURN:
         return _stop("left_turn_not_enabled")
     if intent.intent_class == RIGHT_TURN:
         return _stop("right_turn_not_enabled")
-    if intent.intent_class not in FORWARD_CLASSES:
+    if intent.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
         return _stop("unsupported_intent")
 
     steering = classified.steering_ratio
@@ -189,6 +187,14 @@ def evaluate_safety(
         return _stop("left_correction_limit_exceeded")
     if steering < config.min_steering:
         return _stop("right_correction_limit_exceeded")
+
+    if intent.intent_class in REVERSE_CLASSES:
+        return SafetyDecision(
+            SLOW,
+            min(abs(float(intent.longitudinal)), config.slow_forward_limit),
+            steering,
+            "reverse_unmonitored_slow",
+        )
 
     summary = swept_path_costs(front_costmap, steering, config)
     if not summary.valid:
@@ -343,6 +349,11 @@ def validate_cost_policy(config: SafetyConfig) -> None:
         raise ValueError("cost-policy geometry must be finite and positive")
     if config.stop_distance_m > config.slow_distance_m:
         raise ValueError("stop distance must not exceed slow distance")
+    if not (
+        math.isfinite(config.slow_forward_limit)
+        and 0.0 < config.slow_forward_limit <= 1.0
+    ):
+        raise ValueError("slow forward limit must be in (0, 1]")
     if not (
         1
         <= config.slow_cost_threshold

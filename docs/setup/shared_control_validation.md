@@ -118,8 +118,8 @@ observer continuously holding the independent physical cutoff:
 
 1. Confirm joystick release, stale input, Jetson loss, and emergency stop all
    centre the CAN command.
-2. Confirm straight and shallow-correction behavior, the 20% CLEAR cap,
-   direction-preserving X scaling, and the distinct 15% SLOW cap.
+2. Confirm straight and shallow-correction behavior, the 70-count CLEAR cap,
+   direction-preserving X scaling, and the distinct 40-count SLOW cap.
 3. Confirm the physical cutoff works while software is unresponsive.
 
 On a level, dry, controlled floor, measure worst-case stopping distance over
@@ -137,14 +137,15 @@ Do not infer braking distance from nominal motor speed.
 
 ## 6. Controlled obstacle gates
 
-Use a safety observer, physical cutoff, open escape space, and command cap at
-20% or lower.
+Use a safety observer, physical cutoff, open escape space, and the explicitly
+configured 70-count CLEAR / 40-count SLOW caps.
 
 1. Empty corridor: no false intervention.
 2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
    boundary.
-3. Every hard-turn or reverse request must remain stopped; only corrections
-   inside the validated 25-degree cone may proceed.
+3. Every hard-turn request must remain stopped. Reverse corrections inside the
+   validated 25-degree cone may proceed only at the fixed 40-count SLOW cap;
+   maintain open rear clearance because no rear obstacle map is consulted.
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.

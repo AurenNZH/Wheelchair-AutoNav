@@ -205,7 +205,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("min_turn_radius_m", 1.20)
         self.declare_parameter("min_steering", -0.466307658)
         self.declare_parameter("max_steering", 0.466307658)
-        self.declare_parameter("slow_forward_limit", 0.35)
+        self.declare_parameter("slow_forward_limit", 0.40)
         self.declare_parameter("path_sample_step_m", 0.05)
         self.declare_parameter("steering_sample_step", 0.05)
         self.declare_parameter("neutral_deadzone", 0.05)

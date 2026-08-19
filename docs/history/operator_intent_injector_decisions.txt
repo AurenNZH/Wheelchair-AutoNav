@@ -220,3 +220,24 @@ and release/re-authorization. The runbook makes enforcement explicit, keeps
 the current four-count Pi deadzone as a documented temporary compatibility
 setting, records both Jetson and Pi evidence, and treats any stale-source event
 during an approach as a safe aborted run rather than a successful trial.
+
+2026-08-19T20:05:27+01:00 — Second physical run: usable caps and reverse scope
+The first enforcement capture showed correct forward STOP/SLOW/CLEAR behavior,
+zero transform errors, and continued slot-2 forwarding. It also confirmed that
+shallow forward-left and forward-right corrections already pass through the
+existing swept-corridor policy, so no new turn-corridor implementation was
+introduced. Hard left and right turns remain locally stopped and latched.
+
+For the next controlled run, the physical-JSM CLEAR ceiling is 70 raw counts
+and SLOW is 40. The Jetson SLOW magnitude is correspondingly 0.40. These
+physical defaults do not alter the older keyboard teleop caps. Reverse and
+shallow reverse corrections within the existing 25-degree cone are now
+permitted only as fixed SLOW, with reason `reverse_unmonitored_slow`. Reverse
+does not consult the front costmap and makes no rear-obstacle safety claim.
+
+Protocol v2 remains unchanged: `permitted_forward` carries a nonnegative
+longitudinal magnitude. The Pi restores the negative sign only when the fresh
+envelope matches a stored reverse-family request, and scales correction X from
+that same magnitude. Forward/reverse family changes discard earlier arming,
+while stale source/map/intent, UDP loss, peer/session/sequence mismatch,
+malformed data, STOP, and timeout continue to centre output and fail closed.

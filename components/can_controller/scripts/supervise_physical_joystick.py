@@ -123,14 +123,14 @@ def _arguments(argv=None):
     parser.add_argument(
         "--clear-cap",
         type=_positive_integer,
-        default=20,
-        help="local CLEAR ceiling in raw JSM counts (default: 20)",
+        default=70,
+        help="local CLEAR ceiling in raw JSM counts (default: 70)",
     )
     parser.add_argument(
         "--slow-cap",
         type=_positive_integer,
-        default=15,
-        help="local SLOW ceiling in raw JSM counts (default: 15)",
+        default=40,
+        help="local SLOW ceiling in raw JSM counts (default: 40)",
     )
     parser.add_argument(
         "--deadzone",
@@ -142,7 +142,7 @@ def _arguments(argv=None):
         "--forward-cone-deg",
         type=_positive_float,
         default=25.0,
-        help="supported forward correction half-angle (default: 25 degrees)",
+        help="supported motion correction half-angle (default: 25 degrees)",
     )
     parser.add_argument("--display-rate-hz", type=_positive_float, default=5.0)
     parser.add_argument("--duration-s", type=_positive_float, default=None)

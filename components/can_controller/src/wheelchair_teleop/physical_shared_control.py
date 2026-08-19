@@ -1,4 +1,4 @@
-"""Forward-cone shared control for a physical in-line R-Net JSM."""
+"""Motion-cone shared control for a physical in-line R-Net JSM."""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ class PhysicalJsmSharedControl:
                 # Neutral is an unconditional local stop even if a malformed
                 # or stale safety-link implementation returned motion.
                 would_x, would_y = 0, 0
-            elif not intent.is_forward:
+            elif not (intent.is_forward or intent.is_reverse):
                 self._local_stop_latched = True
                 self.safety_link.apply(input_x, input_y, True)
                 would_x, would_y = 0, 0

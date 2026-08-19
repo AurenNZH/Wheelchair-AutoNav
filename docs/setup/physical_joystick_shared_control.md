@@ -1,11 +1,12 @@
 # Physical-Joystick Shared Control
 
 This procedure feeds the measured slot-2 physical JSM into the Jetson safety
-supervisor. The enforced scope is forward motion inside the calibrated
-25-degree correction cone. CLEAR is capped at 20 raw forward counts, SLOW at
-15, and STOP at zero. Correction X scales with the permitted Y so the input
-direction is preserved. Hard turns and reverse stop locally and remain latched
-until both joystick axes return to neutral.
+supervisor. Forward motion and reverse motion inside the calibrated 25-degree
+cones are supported. Forward CLEAR is capped at 70 raw counts and SLOW at 40.
+Reverse is deliberately unmonitored by the front costmap and is always capped
+at SLOW 40 with reason `reverse_unmonitored_slow`. Correction X scales with
+the permitted Y magnitude so the input direction is preserved. Hard turns
+stop locally and remain latched until both joystick axes return to neutral.
 
 The Pi and Jetson use lockstep UDP protocol v2. Deploy and rebuild both sides
 before testing; a mixed v1/v2 enforce setup intentionally fails closed.
@@ -59,7 +60,7 @@ export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=10.0.0.222 allowed_pi_address:=10.0.0.222 \
-  slow_forward_limit:=0.15 \
+  slow_forward_limit:=0.40 \
   slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
 
@@ -137,7 +138,7 @@ python3 supervise_physical_joystick.py \
   --mode enforce \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
   --jetson-address 10.0.0.48 \
-  --clear-cap 20 --slow-cap 15 --deadzone 4 --forward-cone-deg 25 \
+  --clear-cap 70 --slow-cap 40 --deadzone 4 --forward-cone-deg 25 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
   --csv /tmp/physical_shared_enforce_01.csv
 ```
@@ -146,14 +147,17 @@ Validate in this order:
 
 1. STOP obstacle: held forward input must transmit `(0,0)`.
 2. Return to neutral, place the obstacle in the SLOW region, and request
-   forward motion. Transmitted Y must not exceed 15 and X must scale with it.
+   forward motion. Transmitted Y must not exceed 40 and X must scale with it.
 3. Return to neutral and establish a clear lane. Five fresh envelopes are
-   required before transmitted Y may rise, and it must never exceed 20.
+   required before transmitted Y may rise, and it must never exceed 70.
 4. Repeat shallow corrections on both sides; neither may create a local latch,
    and the reduced X/Y ratio must preserve the requested direction.
 5. Make one straight approach to the soft obstacle and observe transmitted Y
-   change in order from CLEAR `<=20`, to SLOW `<=15`, to latched STOP `0`.
-6. Hard turns and reverse must remain zero; centre both axes before re-arming.
+   change in order from CLEAR `<=70`, to SLOW `<=40`, to latched STOP `0`.
+6. Confirm straight and shallow-correction reverse requests never exceed a
+   magnitude of 40 and report `reverse_unmonitored_slow`. Rear obstacles are
+   not observed in this scope; use open rear clearance and the physical cutoff.
+   Hard turns must remain zero; centre both axes before re-arming.
 7. At the capped CLEAR speed, stop the artifact filter, Jetson supervisor, and
    network separately. Each must centre output within the 200 ms envelope
    timeout. Restart the full pipeline and return to neutral between drills.
@@ -166,7 +170,7 @@ than counting that approach as a CLEAR/SLOW pass.
 
 The run passes only when RViz, the Jetson decision, Pi `safe`/`sent` fields,
 and physical response agree for all three states; the sent command never
-exceeds the operator request or its 20/15 cap; failure drills centre within
+exceeds the operator request or its 70/40 cap; failure drills centre within
 200 ms; both forwarding counters continue increasing; and `errors=0` for the
 entire capture.
 

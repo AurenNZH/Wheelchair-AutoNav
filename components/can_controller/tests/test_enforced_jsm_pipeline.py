@@ -116,8 +116,8 @@ class EnforcedJsmPipeline:
             jetson_address=JETSON_ADDRESS,
             allowed_jetson_address=JETSON_ADDRESS,
             required_clear_envelopes=1,
-            command_cap=0.20,
-            slow_command_cap=0.15,
+            command_cap=0.70,
+            slow_command_cap=0.40,
             heartbeat_hz=20.0,
             envelope_timeout_s=0.20,
             neutral_deadzone=4,
@@ -186,8 +186,8 @@ class EnforcedJsmPipeline:
 class EnforcedJsmPipelineTests(unittest.TestCase):
     def test_clear_slow_and_stop_rewrite_slot_two_frame_axes(self):
         cases = (
-            (CLEAR, 0.80, "nav2_cost_clear", (0, 20)),
-            (SLOW, 0.35, "nav2_cost_slow", (0, 15)),
+            (CLEAR, 0.80, "nav2_cost_clear", (0, 70)),
+            (SLOW, 0.40, "nav2_cost_slow", (0, 40)),
             (STOP, 0.0, "nav2_cost_stop", (0, 0)),
         )
         for decision, permitted, reason, expected in cases:
@@ -224,7 +224,29 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
         pipeline.clock.advance(0.01)
 
         _, _, axes, _ = pipeline.forward_once()
-        self.assertEqual(axes, (-4, 20))
+        self.assertEqual(axes, (-12, 70))
+
+    def test_reverse_correction_rewrites_signed_slot_two_axes(self):
+        pipeline = EnforcedJsmPipeline(
+            (jsm_frame(20, -100), jsm_frame(20, -100))
+        )
+
+        pipeline.forward_once()
+        intent = pipeline.latest_intent()
+        steering_ratio = intent["lateral"] / abs(intent["longitudinal"])
+        pipeline.queue_envelope(
+            SLOW,
+            0.40,
+            steering_ratio,
+            "reverse_unmonitored_slow",
+        )
+        pipeline.clock.advance(0.01)
+
+        can_id, dlc, axes, trailing = pipeline.forward_once()
+        self.assertEqual(can_id, CAN_EFF_FLAG | 0x02000200)
+        self.assertEqual(dlc, 2)
+        self.assertEqual(axes, (8, -40))
+        self.assertEqual(trailing, b"safety")
 
     def test_wrong_sender_and_expired_envelope_never_forward_raw_motion(self):
         pipeline = EnforcedJsmPipeline(
@@ -251,7 +273,7 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
         pipeline.queue_envelope(CLEAR, 0.80, 0.0, "nav2_cost_clear")
         pipeline.clock.advance(0.01)
         _, _, authorized_axes, _ = pipeline.forward_once()
-        self.assertEqual(authorized_axes, (0, 20))
+        self.assertEqual(authorized_axes, (0, 70))
 
         pipeline.clock.advance(0.21)
         _, _, expired_axes, _ = pipeline.forward_once()

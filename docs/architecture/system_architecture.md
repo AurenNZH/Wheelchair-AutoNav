@@ -53,8 +53,9 @@ base_link -> rslidar: 0.330 -0.265 0.320 1.04720 0 0
 
 The software supports a symmetric forward-correction cone, but physical use on
 either side remains conditional on RViz coverage and controlled obstacle gates.
-Hard turns, reverse, drop-offs, steps, curbs, and low hazards beneath the
-observed height remain outside the validated scope.
+Hard turns, rear obstacle avoidance, drop-offs, steps, curbs, and low hazards
+beneath the observed height remain outside the validated scope. Reverse-cone
+input is speed-limited only and requires independently verified rear clearance.
 
 ## Fail-Closed Layers
 
@@ -64,7 +65,8 @@ watches monotonic costmap receipt and the original timestamp of each
 successfully filtered AIRY cloud; it does not claim exact scan-to-map latency.
 Physical enforcement remains blocked until those watchdogs pass the documented
 fault tests. Side and rear obstacles outside the sampled path are outside the
-current forward-only supervisor contract. STOP latches on the Pi until the
+current front-map supervisor contract. Reverse-cone input is capped to SLOW
+without rear obstacle monitoring. STOP latches on the Pi until the
 operator releases the motion key. Gazebo uses the same intent and envelope
 contracts but can publish velocity only to `/sim/safe_cmd_vel`.
 

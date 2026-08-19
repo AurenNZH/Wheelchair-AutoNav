@@ -49,6 +49,15 @@ class OperatorIntentClassificationTests(unittest.TestCase):
             LEFT_TURN,
         )
 
+    def test_reverse_corrections_report_signed_steering_ratio(self):
+        left = classify_normalized_axes(0.2, -1.0)
+        right = classify_normalized_axes(-0.2, -1.0)
+
+        self.assertTrue(left.is_reverse)
+        self.assertTrue(right.is_reverse)
+        self.assertAlmostEqual(left.steering_ratio, 0.2)
+        self.assertAlmostEqual(right.steering_ratio, -0.2)
+
 
 if __name__ == "__main__":
     unittest.main()

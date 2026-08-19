@@ -51,10 +51,15 @@ class ClassifiedIntent:
         return self.intent_class in FORWARD_CLASSES
 
     @property
+    def is_reverse(self) -> bool:
+        return self.intent_class in REVERSE_CLASSES
+
+    @property
     def steering_ratio(self) -> float:
-        if not self.is_forward or self.longitudinal <= 0.0:
+        moving = self.is_forward or self.is_reverse
+        if not moving or self.longitudinal == 0.0:
             return 0.0
-        return self.lateral / self.longitudinal
+        return self.lateral / abs(self.longitudinal)
 
 
 def classify_raw_axes(

@@ -71,9 +71,11 @@ measured slot-2 JSM request to the Jetson and applying its safety envelope.
 It defaults to `shadow`, where physical commands remain unchanged. Protocol
 v2 classifies the complete signed joystick vector. In `enforce`, forward and
 corrections inside the measured 25-degree cone are supervised; CLEAR is
-locally capped at 20 raw forward counts and SLOW at 15. Lateral output scales
-with the permitted forward output so the joystick direction is preserved.
-Hard turns, reverse, every STOP, and every link failure are centred.
+locally capped at 70 raw forward counts and SLOW at 40. Reverse requests in
+the matching 25-degree cone are intentionally unmonitored by the front map and
+fixed to SLOW 40. Lateral output scales with the permitted longitudinal
+magnitude so the joystick direction is preserved. Hard turns, every STOP, and
+every link failure are centred.
 
 ```bash
 python scripts/supervise_physical_joystick.py \

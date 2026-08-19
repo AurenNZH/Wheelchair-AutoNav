@@ -335,6 +335,123 @@ class SafetyLinkTests(unittest.TestCase):
         clock.advance(0.01)
         self.assertEqual(link.apply(-14, 99, True), (-3, 20))
 
+    def test_reverse_slow_cap_preserves_signed_direction_and_correction(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.70,
+            slow_command_cap=0.40,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        self.assertEqual(link.apply(20, -100, True), (0, 0))
+        intent = json.loads(udp.sent[-1][0].decode())
+        ratio = intent["lateral"] / abs(intent["longitudinal"])
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 1, 0.40,
+                        ratio, "reverse_unmonitored_slow", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(20, -100, True), (8, -40))
+        self.assertEqual(
+            link.get_status()["reason"], "reverse_unmonitored_slow"
+        )
+
+    def test_reverse_rejects_non_slow_envelope(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.70,
+            slow_command_cap=0.40,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, -100, True)
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 0.70, 0.0,
+                        "unexpected_reverse_clear", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(0, -100, True), (0, 0))
+        self.assertEqual(
+            link.get_status()["reason"], "reverse_requires_slow_envelope"
+        )
+        self.assertTrue(link.get_status()["stop_latched"])
+
+    def test_direction_family_change_requires_five_new_envelopes(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=5,
+            command_cap=0.70,
+            slow_command_cap=0.40,
+            heartbeat_hz=1.0,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+
+        def accept_latest(decision, permitted, reason, x_pos, y_pos):
+            intent = json.loads(udp.sent[-1][0].decode())
+            ratio = intent["lateral"] / abs(intent["longitudinal"])
+            udp.received.append(
+                (
+                    encode_envelope(
+                        EnvelopePacket(
+                            intent["session"], intent["seq"], decision,
+                            permitted, ratio, reason, 10.0
+                        )
+                    ),
+                    ("192.0.2.10", 45451),
+                )
+            )
+            clock.advance(0.01)
+            return link.apply(x_pos, y_pos, True)
+
+        link.apply(0, -100, True)
+        for index in range(5):
+            output = accept_latest(
+                1, 0.40, "reverse_unmonitored_slow", 0, -100
+            )
+            self.assertEqual(output, (0, -40) if index == 4 else (0, 0))
+            if index < 4:
+                link._last_send_monotonic = 0.0
+                link.apply(0, -100, True)
+
+        link._last_send_monotonic = 0.0
+        self.assertEqual(link.apply(0, 100, True), (0, 0))
+        self.assertEqual(link.get_status()["clear_count"], 0)
+        for index in range(5):
+            output = accept_latest(2, 1.0, "nav2_cost_clear", 0, 100)
+            self.assertEqual(output, (0, 70) if index == 4 else (0, 0))
+            if index < 4:
+                link._last_send_monotonic = 0.0
+                link.apply(0, 100, True)
+
     def test_opposite_correction_uses_authorized_straight_path(self):
         udp = FakeSocket()
         clock = FakeClock()
