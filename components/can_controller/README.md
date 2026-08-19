@@ -79,13 +79,15 @@ Hard turns, reverse, every STOP, and every link failure are centred.
 python scripts/supervise_physical_joystick.py \
   --mode shadow \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 192.168.1.10 --forward-cone-deg 25
+  --jetson-address 10.0.0.48 --deadzone 4 --forward-cone-deg 25
 ```
 
 Do not run this alongside `cangw`, keyboard teleop, the observer, or another
 gateway. Follow the
 [physical shared-control test guide](../../docs/setup/physical_joystick_shared_control.md)
-before selecting `--mode enforce`.
+before selecting `--mode enforce`. The explicit four-count deadzone is a
+temporary workaround for the measured Pi/Jetson float32 boundary mismatch;
+the permanent shared-classification fix is tracked separately.
 
 ## Optional Jetson safety envelope
 

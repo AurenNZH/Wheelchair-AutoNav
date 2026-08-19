@@ -10,13 +10,14 @@ until both joystick axes return to neutral.
 The Pi and Jetson use lockstep UDP protocol v2. Deploy and rebuild both sides
 before testing; a mixed v1/v2 enforce setup intentionally fails closed.
 
-Use fixed Pi and Jetson addresses on the isolated router. The examples below
-use `192.168.1.20` for the Pi and `192.168.1.10` for the Jetson; substitute the
-actual fixed addresses.
+Use the measured fixed addresses on the isolated router: `10.0.0.222` for the
+Pi and `10.0.0.48` for the Jetson.
 
-This procedure is currently approved through **shadow mode only**. Weighted
-cost transitions and the new LiDAR-source/map-receipt watchdogs must pass the
-documented fault tests before section 5 enforcement is attempted.
+The only enforced use covered here is one attended, controlled-floor,
+low-speed validation. It is not approval for normal operation. The Pi changes
+only the two signed axes in each live slot-2 JSM frame; it does not send the
+older teleop speed-profile frame. All enforcement gates remain disabled by
+default and must be selected explicitly for this test.
 
 ## 1. Jetson LiDAR and Nav2 mapping
 
@@ -57,7 +58,7 @@ source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
-  pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
+  pi_address:=10.0.0.222 allowed_pi_address:=10.0.0.222 \
   slow_forward_limit:=0.15 \
   slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
@@ -93,9 +94,9 @@ cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controlle
 python3 supervise_physical_joystick.py \
   --mode shadow \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 192.168.1.10 \
-  --forward-cone-deg 25 \
-  --csv /tmp/physical_shared_shadow.csv
+  --jetson-address 10.0.0.48 \
+  --deadzone 4 --forward-cone-deg 25 \
+  --csv /tmp/physical_shared_shadow_01.csv
 ```
 
 Power the chair only after the gateway banner appears. Shadow mode displays
@@ -103,41 +104,71 @@ the semantic intent, angle, and safe command but forwards the physical command
 unchanged. Pass this gate only when both forwarding counters rise, the
 recorded forward corrections remain inside the cone, hard left/right and
 reverse labels are correct, and clear/slow/stop decisions agree with RViz.
+The four-count Pi deadzone is a temporary compatibility setting for the
+known float32 boundary mismatch; it must stay explicit until that issue is
+fixed on both machines.
 
 ## 5. Low-speed enforcement
 
-**Blocked pending validation:** do not run this section until the weighted
-transition calibration passes and deliberate filter and Nav2 shutdowns produce
-`stale_source` and `stale_map` within their configured limits.
-
 Use the controlled open area with clear escape space and an attendant holding
 the tested physical cutoff. Start with the operator joystick centred and a
-large soft obstacle already inside the STOP region. Replace `shadow` with
-`enforce` and use a new CSV path:
+large soft obstacle already inside the STOP region. Do not carry a passenger,
+run keyboard teleop, install `cangw` rules, or use another CAN gateway during
+this first validation.
+
+Before enforcement, record the Jetson evidence in a fourth terminal:
+
+```bash
+cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
+source /opt/ros/foxy/setup.bash
+source ros2_ws/install/setup.bash
+export ROS_LOCALHOST_ONLY=1
+ros2 bag record -o /tmp/physical_shared_enforce_01 \
+  /operator_intent /artifact_filter/source_header \
+  /nav2_front_costmap /safety_envelope /shared_control/diagnostics
+```
+
+Stop the shadow gateway, power-cycle the wheelchair if required by the R-Net
+communication fault, and start a single explicit enforcing gateway. The CSV
+path must not already exist:
 
 ```bash
 python3 supervise_physical_joystick.py \
   --mode enforce \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 192.168.1.10 \
-  --clear-cap 20 --slow-cap 15 --deadzone 5 --forward-cone-deg 25 \
-  --csv /tmp/physical_shared_enforce.csv
+  --jetson-address 10.0.0.48 \
+  --clear-cap 20 --slow-cap 15 --deadzone 4 --forward-cone-deg 25 \
+  --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
+  --csv /tmp/physical_shared_enforce_01.csv
 ```
 
 Validate in this order:
 
 1. STOP obstacle: held forward input must transmit `(0,0)`.
-2. Clear space: five fresh envelopes are required, then transmitted Y must not
-   exceed 20 and X must preserve the requested correction ratio.
-3. Repeat shallow corrections on both sides; neither may create a local latch.
-4. SLOW obstacle: transmitted Y must not exceed 15 and X must scale with it.
-5. Approach the soft obstacle and observe CLEAR, SLOW, then latched STOP.
+2. Return to neutral, place the obstacle in the SLOW region, and request
+   forward motion. Transmitted Y must not exceed 15 and X must scale with it.
+3. Return to neutral and establish a clear lane. Five fresh envelopes are
+   required before transmitted Y may rise, and it must never exceed 20.
+4. Repeat shallow corrections on both sides; neither may create a local latch,
+   and the reduced X/Y ratio must preserve the requested direction.
+5. Make one straight approach to the soft obstacle and observe transmitted Y
+   change in order from CLEAR `<=20`, to SLOW `<=15`, to latched STOP `0`.
 6. Hard turns and reverse must remain zero; centre both axes before re-arming.
-7. Stop the map, Jetson supervisor, and network separately in open space; each
-   must centre output within the 200 ms envelope timeout.
+7. At the capped CLEAR speed, stop the artifact filter, Jetson supervisor, and
+   network separately. Each must centre output within the 200 ms envelope
+   timeout. Restart the full pipeline and return to neutral between drills.
 
 Stop immediately on unexplained motion, a missed STOP, decision oscillation,
-CAN errors, map dropout, or a forwarding counter that stops increasing.
+CAN errors, loss of the physical cutoff, or a forwarding counter that stops
+increasing. A `stale_source` during an approach is a safe abort only if the Pi
+immediately sends `(0,0)` and latches STOP; return to neutral and repeat rather
+than counting that approach as a CLEAR/SLOW pass.
+
+The run passes only when RViz, the Jetson decision, Pi `safe`/`sent` fields,
+and physical response agree for all three states; the sent command never
+exceeds the operator request or its 20/15 cap; failure drills centre within
+200 ms; both forwarding counters continue increasing; and `errors=0` for the
+entire capture.
 
 Stopping the Pi program also stops its in-line gateway. The resulting R-Net
 communication loss is expected to fail safe and may require a wheelchair power

@@ -203,3 +203,20 @@ same-side correction or temporarily remain straight while waiting for a new
 opposite-side envelope, without allowing a 100 Hz joystick change to reuse an
 unchecked path. Map staleness, link failure, hard turns, reverse, and invalid
 classes remain STOP conditions; shadow remains the default execution mode.
+
+2026-08-19T18:37:07+01:00 — Controlled-floor enforcement validation gate
+The physical STOP/SLOW/CLEAR path already existed and was kept unchanged:
+the Pi rewrites only the signed X/Y bytes of each live slot-2 JSM frame while
+all other R-Net traffic passes through. The earlier teleop speed-profile frame
+is intentionally not combined with this mechanism because two simultaneous
+speed controls would complicate failure behavior. CLEAR remains capped at 20
+raw forward counts, SLOW at 15, STOP at zero, and stale or invalid authority
+continues to fail closed and latch until operator release.
+
+Before the first controlled-floor run, an end-to-end software regression now
+checks the actual forwarded CAN payload after UDP envelope handling. It covers
+CLEAR, SLOW, STOP, correction scaling, wrong-peer rejection, envelope expiry,
+and release/re-authorization. The runbook makes enforcement explicit, keeps
+the current four-count Pi deadzone as a documented temporary compatibility
+setting, records both Jetson and Pi evidence, and treats any stale-source event
+during an approach as a safe aborted run rather than a successful trial.
