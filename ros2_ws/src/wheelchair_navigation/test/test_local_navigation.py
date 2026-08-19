@@ -38,6 +38,10 @@ class LocalNavigationTests(unittest.TestCase):
             "/rslidar_points_artifact_filtered",
         )
         self.assertEqual(
+            parameters["artifact_filtered_source_header_topic"],
+            "/artifact_filter/source_header",
+        )
+        self.assertEqual(
             parameters["artifact_filtered_front_topic"],
             "/front_costmap_artifact_filtered",
         )
@@ -104,11 +108,7 @@ class LocalNavigationTests(unittest.TestCase):
         ).reshape(-1, 4)
         self.assertEqual(halo_spans.shape, (23, 4))
         expected_halo_spans = {
-            (0, 4, -4, 0), (0, 5, -5, 0),
-        } | {
-            (0, x, -6, 0) for x in range(6, 8)
-        } | {
-            (0, x, -7, 0) for x in range(8, 14)
+            (0, x, -8, 0) for x in range(4, 14)
         } | {
             (1, x, -1, 5) for x in range(4, 10)
         } | {

@@ -15,8 +15,8 @@ use `192.168.1.20` for the Pi and `192.168.1.10` for the Jetson; substitute the
 actual fixed addresses.
 
 This procedure is currently approved through **shadow mode only**. Weighted
-cost transitions must be calibrated and LiDAR-derived map freshness must be
-implemented before section 5 enforcement is attempted.
+cost transitions and the new LiDAR-source/map-receipt watchdogs must pass the
+documented fault tests before section 5 enforcement is attempted.
 
 ## 1. Jetson LiDAR and Nav2 mapping
 
@@ -106,9 +106,9 @@ reverse labels are correct, and clear/slow/stop decisions agree with RViz.
 
 ## 5. Low-speed enforcement
 
-**Blocked for the current implementation:** do not run this section until the
-weighted transition calibration passes and the supervisor derives freshness
-from LiDAR acquisition time rather than Nav2 map publication time.
+**Blocked pending validation:** do not run this section until the weighted
+transition calibration passes and deliberate filter and Nav2 shutdowns produce
+`stale_source` and `stale_map` within their configured limits.
 
 Use the controlled open area with clear escape space and an attendant holding
 the tested physical cutoff. Start with the operator joystick centred and a

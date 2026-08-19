@@ -78,7 +78,7 @@ class SafetyPolicyTests(unittest.TestCase):
 
     def test_stale_map_and_reverse_are_stopped(self):
         stale = evaluate_safety(
-            self.intent, self.empty, 0.31, self.enabled
+            self.intent, self.empty, 0.51, self.enabled
         )
         reverse = evaluate_safety(
             OperatorIntentData(

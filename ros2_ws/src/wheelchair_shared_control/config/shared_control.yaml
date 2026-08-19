@@ -3,6 +3,8 @@
     operator_intent_topic: /operator_intent
     safety_envelope_topic: /safety_envelope
     front_costmap_topic: /nav2_front_costmap
+    source_header_topic: /artifact_filter/source_header
+    freshness_mode: nav2_live
     diagnostics_topic: /shared_control/diagnostics
     decision_rate_hz: 20.0
     max_intent_age_s: 0.20
@@ -23,7 +25,11 @@
     steering_sample_step: 0.05
     neutral_deadzone: 0.05
     forward_cone_half_angle_deg: 25.0
-    max_map_age_s: 0.30
+    # Nav2 does not preserve sensor acquisition time in OccupancyGrid. Live
+    # mode therefore gates map receipt and the filtered-source stamp separately.
+    max_map_age_s: 0.50
+    max_source_age_s: 0.50
+    max_future_source_offset_s: 0.10
     # Foxy's OccupancyGrid conversion publishes inflated costs as 1..98,
     # inscribed collision cost as 99, and lethal obstacles as 100.
     slow_cost_threshold: 1

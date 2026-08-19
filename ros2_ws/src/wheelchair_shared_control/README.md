@@ -13,6 +13,7 @@ stopping-distance acceptance are complete.
 Interfaces:
 
 - `/operator_intent` (`wheelchair_msgs/OperatorIntent`)
+- `/artifact_filter/source_header` (`std_msgs/Header`)
 - `/safety_envelope` (`wheelchair_msgs/SafetyEnvelope`)
 - `/shared_control/diagnostics` (`diagnostic_msgs/DiagnosticArray`)
 - UDP intent port `45450`, envelope port `45451` when explicitly enabled
@@ -64,15 +65,18 @@ ros2 launch wheelchair_shared_control shared_control.launch.py \
 
 This enables supervisor decisions only; the supervisor still has no actuator
 interface. For the current shadow stage, keep the Pi gateway non-actuating.
-Nav2's OccupancyGrid header is still treated as provisional map freshness and
-does not prove which filtered LiDAR cloud produced the map. Sensor-derived
-freshness remains required before physical enforcement.
+Foxy's Nav2 OccupancyGrid does not preserve LiDAR acquisition time. Live mode
+therefore requires both a recent `/nav2_front_costmap` arrival and a recent
+successful-filter heartbeat carrying the original AIRY stamp. Both default to
+a 0.50-second limit. `map_age_ms` is explicitly receipt age in this mode; it is
+not an exact LiDAR-to-map latency measurement.
 
 For a weighted shadow capture, enable inflation in the navigation launch and
 record the decision evidence on the Jetson:
 
 ```bash
-ros2 bag record /operator_intent /nav2_front_costmap \
+ros2 bag record /operator_intent /artifact_filter/source_header \
+  /nav2_front_costmap \
   /safety_envelope /shared_control/diagnostics
 ```
 
@@ -112,9 +116,10 @@ The launch console is intentionally limited to three pipeline states:
   `CLEAR`).
 
 The replay-only map timeout defaults to 2.0 seconds because low-rate recorded
-maps may have gaps greater than the production limit. The normal shared-control
-launch and configuration retain the 0.30-second fail-closed timeout. To test
-that stricter behavior, or to restore internal node logs, use:
+maps may have gaps greater than the production limit. Replay explicitly uses
+`legacy_map_stamp`; the normal launch uses the dual-watchdog `nav2_live` mode
+with a 0.50-second map receipt limit. To test a stricter replay timeout, or to
+restore internal node logs, use:
 
 ```bash
 ros2 launch wheelchair_shared_control intent_replay.launch.py \

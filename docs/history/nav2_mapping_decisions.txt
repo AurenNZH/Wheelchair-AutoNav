@@ -110,3 +110,16 @@ Decision: Keep OccupancyGrid publication time as the provisional freshness
 input for this cost-policy shadow stage and keep physical enforcement out.
 Philosophy: Cost semantics can be measured independently, but a visually
 credible stale map must not later be mistaken for fresh LiDAR evidence.
+
+2026-08-18 19:51 BST
+Decision: Replace live reliance on Foxy's zero-stamped Nav2 OccupancyGrid with
+two watchdogs: monotonic costmap receipt age and a lightweight heartbeat that
+retains the successfully filtered AIRY acquisition stamp.
+Philosophy: Preserve fail-closed source evidence without copying PointCloud2
+into the supervisor or pretending Nav2 retains one-scan-to-one-map provenance.
+
+2026-08-18 19:51 BST
+Decision: Keep legacy recorded-map replay on its explicit restamped-header
+mode while making dual-watchdog Nav2 freshness the production default.
+Philosophy: Avoid invalidating proven decision replay while keeping replay
+timestamps clearly separate from physical latency evidence.

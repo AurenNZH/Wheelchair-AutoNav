@@ -69,7 +69,9 @@ class ArtifactPointFilterNode(Node):
         sensor_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            # Match the AIRY publisher and avoid the measured best-effort
+            # delivery gaps while retaining only the newest live cloud.
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
         )
         marker_qos = QoSProfile(
@@ -82,6 +84,15 @@ class ArtifactPointFilterNode(Node):
             PointCloud2,
             str(self.get_parameter("artifact_filtered_cloud_topic").value),
             sensor_qos,
+        )
+        self._source_header_pub = self.create_publisher(
+            Header,
+            str(
+                self.get_parameter(
+                    "artifact_filtered_source_header_topic"
+                ).value
+            ),
+            10,
         )
         self._rejected_pub = self.create_publisher(
             PointCloud2,
@@ -141,6 +152,10 @@ class ArtifactPointFilterNode(Node):
         self.declare_parameter(
             "artifact_filtered_cloud_topic",
             "/rslidar_points_artifact_filtered",
+        )
+        self.declare_parameter(
+            "artifact_filtered_source_header_topic",
+            "/artifact_filter/source_header",
         )
         self.declare_parameter("target_frame", "base_link")
         self.declare_parameter(
@@ -317,6 +332,10 @@ class ArtifactPointFilterNode(Node):
 
         stage_started = time.perf_counter()
         self._filtered_pub.publish(filtered)
+        # A small, reliable heartbeat exposes the original AIRY acquisition
+        # stamp without making the supervisor deserialize another PointCloud2.
+        # Publish only after the corresponding filtered cloud succeeds.
+        self._source_header_pub.publish(filtered.header)
         stage_ms["publish_filtered_ms"] = (
             time.perf_counter() - stage_started
         ) * 1000.0

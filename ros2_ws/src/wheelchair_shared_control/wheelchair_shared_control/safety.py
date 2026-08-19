@@ -46,7 +46,7 @@ class SafetyConfig:
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05
     forward_cone_half_angle_deg: float = 25.0
-    max_map_age_s: float = 0.30
+    max_map_age_s: float = 0.50
     slow_cost_threshold: int = 1
     stop_cost_threshold: int = 99
 

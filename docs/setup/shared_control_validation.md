@@ -56,6 +56,12 @@ Pass only if all of the following hold:
 - At 10 Hz over ten minutes, processing p95 is below 100 ms, processing maximum
   and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
   grows.
+- `/artifact_filter/source_header` advances after every successfully filtered
+  cloud, and supervisor diagnostics report `freshness_mode=nav2_live` and
+  `map_age_basis=receipt_time`.
+- Stopping the filter produces `stale_source`; stopping Nav2 while the filter
+  remains live produces `stale_map`. Each transition must occur within the
+  configured 0.50-second limit.
 
 Save a short ROS bag for each measured target position and an empty-chair
 reflection capture.

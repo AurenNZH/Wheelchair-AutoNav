@@ -7,8 +7,13 @@ four-minute failure point.
 
 The experiment publishes `/nav2_front_costmap`, not `/front_costmap`. Its
 weighted costs may now feed the safety supervisor during an explicitly
-non-actuating shadow run. No freshness bridge, Collision Monitor, planner,
-controller, or physical enforcement is involved.
+non-actuating shadow run. No Collision Monitor, planner, controller, exact
+scan-to-map timestamp association, or physical enforcement is involved.
+
+The artifact filter also publishes `/artifact_filter/source_header` after each
+successful filtered cloud. Shared control uses that original AIRY stamp with
+Nav2 map receipt time as two independent continuity watchdogs. This does not
+claim that a particular Nav2 map contains a particular scan.
 
 ## One-time installation and build
 

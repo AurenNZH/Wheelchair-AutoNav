@@ -59,12 +59,14 @@ observed height remain outside the validated scope.
 ## Fail-Closed Layers
 
 Motion is zero when the required costmap, intent, timestamp, sequence, peer,
-session, or heartbeat is invalid or stale. Nav2 publication time is still a
-provisional freshness source, so physical enforcement remains blocked pending
-LiDAR-derived freshness. Side and rear obstacles outside the sampled path are
-outside the current forward-only supervisor contract. STOP latches on the Pi
-until the operator releases the motion key. Gazebo uses the same intent and
-envelope contracts but can publish velocity only to `/sim/safe_cmd_vel`.
+session, or heartbeat is invalid or stale. Live Nav2 supervision independently
+watches monotonic costmap receipt and the original timestamp of each
+successfully filtered AIRY cloud; it does not claim exact scan-to-map latency.
+Physical enforcement remains blocked until those watchdogs pass the documented
+fault tests. Side and rear obstacles outside the sampled path are outside the
+current forward-only supervisor contract. STOP latches on the Pi until the
+operator releases the motion key. Gazebo uses the same intent and envelope
+contracts but can publish velocity only to `/sim/safe_cmd_vel`.
 
 Future autonomous route selection must enter through a separate arbitration
 interface; it must not impersonate operator intent.

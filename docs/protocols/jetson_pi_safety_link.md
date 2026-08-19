@@ -23,6 +23,9 @@ Envelope example:
 {"v":1,"type":"envelope","session":"UUID","intent_seq":12,"decision":2,"permitted_forward":0.2,"permitted_steering":-0.1,"reason":"clear","map_age_ms":42.0}
 ```
 
+In live Nav2 mode, `map_age_ms` is monotonic costmap receipt age. Filtered
+LiDAR acquisition age remains a separate Jetson diagnostic and safety gate.
+
 Decisions are `0=STOP`, `1=SLOW`, and `2=CLEAR`. Reverse is unsupported.
 ROS steering is left-positive; the Pi keyboard/CAN convention is
 right-positive, so the Pi adapter negates steering in both directions.
@@ -34,4 +37,3 @@ until the operator releases the motion key.
 
 The protocol is unauthenticated. Use fixed addresses on an isolated trusted
 router LAN and never expose the ports to an untrusted network.
-

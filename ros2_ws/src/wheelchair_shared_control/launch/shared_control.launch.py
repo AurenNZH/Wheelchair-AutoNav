@@ -19,7 +19,18 @@ def generate_launch_description():
                 "front_costmap_topic",
                 default_value="/nav2_front_costmap",
             ),
-            DeclareLaunchArgument("max_map_age_s", default_value="0.30"),
+            DeclareLaunchArgument(
+                "source_header_topic",
+                default_value="/artifact_filter/source_header",
+            ),
+            DeclareLaunchArgument(
+                "freshness_mode", default_value="nav2_live"
+            ),
+            DeclareLaunchArgument("max_map_age_s", default_value="0.50"),
+            DeclareLaunchArgument("max_source_age_s", default_value="0.50"),
+            DeclareLaunchArgument(
+                "max_future_source_offset_s", default_value="0.10"
+            ),
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.35"),
@@ -45,8 +56,20 @@ def generate_launch_description():
                         "front_costmap_topic": LaunchConfiguration(
                             "front_costmap_topic"
                         ),
+                        "source_header_topic": LaunchConfiguration(
+                            "source_header_topic"
+                        ),
+                        "freshness_mode": LaunchConfiguration(
+                            "freshness_mode"
+                        ),
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
+                        ),
+                        "max_source_age_s": LaunchConfiguration(
+                            "max_source_age_s"
+                        ),
+                        "max_future_source_offset_s": LaunchConfiguration(
+                            "max_future_source_offset_s"
                         ),
                         "slow_forward_limit": LaunchConfiguration(
                             "slow_forward_limit"

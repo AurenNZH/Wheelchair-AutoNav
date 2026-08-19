@@ -94,6 +94,7 @@ def generate_launch_description():
                         # legacy topic explicitly; production defaults to the
                         # weighted Nav2 costmap.
                         "front_costmap_topic": "/front_costmap",
+                        "freshness_mode": "legacy_map_stamp",
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),
