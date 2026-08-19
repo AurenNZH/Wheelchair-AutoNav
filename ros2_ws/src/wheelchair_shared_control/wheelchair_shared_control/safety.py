@@ -41,7 +41,7 @@ class SafetyConfig:
     min_turn_radius_m: float = 1.20
     min_steering: float = -0.466307658
     max_steering: float = 0.466307658
-    slow_forward_limit: float = 0.40
+    slow_forward_limit: float = 0.65
     path_sample_step_m: float = 0.05
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05

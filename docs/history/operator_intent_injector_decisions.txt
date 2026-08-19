@@ -241,3 +241,11 @@ envelope matches a stored reverse-family request, and scales correction X from
 that same magnitude. Forward/reverse family changes discard earlier arming,
 while stale source/map/intent, UDP loss, peer/session/sequence mismatch,
 malformed data, STOP, and timeout continue to centre output and fail closed.
+
+2026-08-19T20:39:04+01:00 — Physical command-cap adjustment
+The next physical validation uses the full operator-request range for CLEAR
+(100 raw counts) and a distinct 65-count SLOW ceiling. The Jetson SLOW limit
+is correspondingly 0.65 so the two enforcement endpoints agree. This replaces
+the proposed 70/40 values before their validation run; it does not change the
+keyboard teleop defaults, obstacle thresholds, reverse monitoring scope, or
+any fail-closed condition.

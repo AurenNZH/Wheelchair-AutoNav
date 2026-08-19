@@ -32,7 +32,7 @@ options are explicit rather than stored as enabled defaults:
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.40
+  slow_forward_limit:=0.65
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow
@@ -44,7 +44,7 @@ forward-positive longitudinal axes plus a semantic class. The supervisor
 permits the symmetric 25-degree forward- and reverse-correction cones. It
 checks every forward path from straight through the requested correction so
 the Pi can safely reduce that correction while applying CLEAR/SLOW caps.
-Reverse returns `reverse_unmonitored_slow` with a 0.40 magnitude limit without
+Reverse returns `reverse_unmonitored_slow` with a 0.65 magnitude limit without
 consulting the front map. Hard turns remain classified and return STOP.
 
 The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in

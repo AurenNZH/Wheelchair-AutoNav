@@ -342,8 +342,8 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            command_cap=0.70,
-            slow_command_cap=0.40,
+            command_cap=1.00,
+            slow_command_cap=0.65,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -354,7 +354,7 @@ class SafetyLinkTests(unittest.TestCase):
             (
                 encode_envelope(
                     EnvelopePacket(
-                        intent["session"], intent["seq"], 1, 0.40,
+                        intent["session"], intent["seq"], 1, 0.65,
                         ratio, "reverse_unmonitored_slow", 10.0
                     )
                 ),
@@ -363,7 +363,7 @@ class SafetyLinkTests(unittest.TestCase):
         )
         clock.advance(0.01)
 
-        self.assertEqual(link.apply(20, -100, True), (8, -40))
+        self.assertEqual(link.apply(20, -100, True), (13, -65))
         self.assertEqual(
             link.get_status()["reason"], "reverse_unmonitored_slow"
         )
@@ -375,8 +375,8 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            command_cap=0.70,
-            slow_command_cap=0.40,
+            command_cap=1.00,
+            slow_command_cap=0.65,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -408,8 +408,8 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=5,
-            command_cap=0.70,
-            slow_command_cap=0.40,
+            command_cap=1.00,
+            slow_command_cap=0.65,
             heartbeat_hz=1.0,
             udp_socket=udp,
             monotonic_clock=clock,
@@ -435,9 +435,9 @@ class SafetyLinkTests(unittest.TestCase):
         link.apply(0, -100, True)
         for index in range(5):
             output = accept_latest(
-                1, 0.40, "reverse_unmonitored_slow", 0, -100
+                1, 0.65, "reverse_unmonitored_slow", 0, -100
             )
-            self.assertEqual(output, (0, -40) if index == 4 else (0, 0))
+            self.assertEqual(output, (0, -65) if index == 4 else (0, 0))
             if index < 4:
                 link._last_send_monotonic = 0.0
                 link.apply(0, -100, True)
@@ -447,7 +447,7 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(link.get_status()["clear_count"], 0)
         for index in range(5):
             output = accept_latest(2, 1.0, "nav2_cost_clear", 0, 100)
-            self.assertEqual(output, (0, 70) if index == 4 else (0, 0))
+            self.assertEqual(output, (0, 100) if index == 4 else (0, 0))
             if index < 4:
                 link._last_send_monotonic = 0.0
                 link.apply(0, 100, True)

@@ -123,14 +123,14 @@ def _arguments(argv=None):
     parser.add_argument(
         "--clear-cap",
         type=_positive_integer,
-        default=70,
-        help="local CLEAR ceiling in raw JSM counts (default: 70)",
+        default=100,
+        help="local CLEAR ceiling in raw JSM counts (default: 100)",
     )
     parser.add_argument(
         "--slow-cap",
         type=_positive_integer,
-        default=40,
-        help="local SLOW ceiling in raw JSM counts (default: 40)",
+        default=65,
+        help="local SLOW ceiling in raw JSM counts (default: 65)",
     )
     parser.add_argument(
         "--deadzone",

@@ -113,11 +113,14 @@ class SafetyPolicyTests(unittest.TestCase):
                 )
                 self.assertEqual(decision.decision, SLOW)
                 self.assertEqual(decision.reason, "reverse_unmonitored_slow")
-                self.assertAlmostEqual(decision.permitted_forward, 0.4)
+                self.assertAlmostEqual(decision.permitted_forward, 0.65)
                 self.assertAlmostEqual(decision.permitted_steering, steering)
                 self.assertFalse(decision.path_cost_valid)
 
     def test_cost_bands_produce_stop_slow_and_clear(self):
+        fast_intent = OperatorIntentData(
+            "session", 8, 0.0, 1.0, FORWARD, True
+        )
         stop = evaluate_safety(
             self.intent,
             self._costmap({(6, 40): 99}),
@@ -125,7 +128,7 @@ class SafetyPolicyTests(unittest.TestCase):
             self.enabled,
         )
         slow = evaluate_safety(
-            self.intent,
+            fast_intent,
             self._costmap({(10, 40): 50}),
             0.1,
             self.enabled,
@@ -143,7 +146,7 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(slow.decision, SLOW)
         self.assertEqual(slow.reason, "nav2_cost_slow")
         self.assertEqual(slow.maximum_path_cost, 50)
-        self.assertLess(slow.permitted_forward, self.intent.longitudinal)
+        self.assertAlmostEqual(slow.permitted_forward, 0.65)
         self.assertEqual(clear.decision, CLEAR)
 
     def test_cost_98_slows_while_99_stops_at_same_location(self):

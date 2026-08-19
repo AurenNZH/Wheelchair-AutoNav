@@ -84,13 +84,13 @@ class StraightPhysicalJsmControlTests(unittest.TestCase):
 
     def test_reverse_cone_is_supervised_without_local_latch(self):
         link = FakeSafetyLink(
-            safe_output=(8, -40),
+            safe_output=(13, -65),
             reason="reverse_unmonitored_slow",
             decision=1,
         )
         control = StraightPhysicalJsmControl(link, mode="enforce")
 
-        self.assertEqual(control.transform(sample(20, -100)), (8, -40))
+        self.assertEqual(control.transform(sample(20, -100)), (13, -65))
         self.assertEqual(link.calls[-1], (20, -100, True))
         self.assertEqual(
             control.last_result.reason, "reverse_unmonitored_slow"
