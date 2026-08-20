@@ -66,12 +66,10 @@ def classify_normalized_axes(
     *,
     neutral_deadzone: float = 0.05,
     forward_cone_half_angle_deg: float = 25.0,
-    forward_right_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     lateral = float(lateral)
     longitudinal = float(longitudinal)
     cone = float(forward_cone_half_angle_deg)
-    right_cone = float(forward_right_cone_half_angle_deg)
     deadzone = float(neutral_deadzone)
     if not math.isfinite(lateral) or not math.isfinite(longitudinal):
         raise ValueError("intent axes must be finite")
@@ -81,15 +79,12 @@ def classify_normalized_axes(
         raise ValueError("neutral_deadzone must be in [0, 1)")
     if not math.isfinite(cone) or not 0.0 < cone < 90.0:
         raise ValueError("forward cone half-angle must be in (0, 90)")
-    if not math.isfinite(right_cone) or not 0.0 < right_cone < 90.0:
-        raise ValueError("forward-right cone half-angle must be in (0, 90)")
 
     if abs(lateral) <= deadzone and abs(longitudinal) <= deadzone:
         return ClassifiedIntent(RELEASED, lateral, longitudinal, False, None)
 
     heading_deg = math.degrees(math.atan2(lateral, longitudinal))
-    forward_limit = cone if heading_deg >= 0.0 else right_cone
-    if longitudinal > 0.0 and abs(heading_deg) <= forward_limit:
+    if longitudinal > 0.0 and abs(heading_deg) <= cone:
         if abs(lateral) <= deadzone:
             intent_class = FORWARD
         elif lateral > 0.0:

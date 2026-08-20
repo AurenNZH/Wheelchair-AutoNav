@@ -14,7 +14,6 @@ from .operator_intent import (
     FORWARD_CLASSES,
     RELEASED,
     REVERSE_CLASSES,
-    RIGHT_TURN,
     ClassifiedIntent,
     classify_raw_axes,
     intent_label,
@@ -22,7 +21,7 @@ from .operator_intent import (
 
 
 logger = logging.getLogger(__name__)
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 2
 MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
@@ -63,8 +62,6 @@ class Envelope:
     permitted_steering: float
     reason: str
     map_age_ms: float
-    permitted_lateral: float = 0.0
-    permitted_longitudinal: float = 0.0
 
 
 class SafetyLink:
@@ -83,11 +80,8 @@ class SafetyLink:
         required_clear_envelopes: int = 5,
         command_cap: float = 0.20,
         slow_command_cap: float | None = None,
-        reverse_command_cap: float = 0.65,
         neutral_deadzone: int = 5,
         forward_cone_half_angle_deg: float = 25.0,
-        forward_right_cone_half_angle_deg: float = 30.0,
-        enable_hard_right_turn: bool = False,
         udp_socket=None,
         monotonic_clock=time.monotonic,
     ):
@@ -105,15 +99,10 @@ class SafetyLink:
             if slow_command_cap is None
             else float(slow_command_cap)
         )
-        self.reverse_command_cap = float(reverse_command_cap)
         self.neutral_deadzone = int(neutral_deadzone)
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
         )
-        self.forward_right_cone_half_angle_deg = float(
-            forward_right_cone_half_angle_deg
-        )
-        self.enable_hard_right_turn = bool(enable_hard_right_turn)
         self.session_id = str(uuid.uuid4())
         self._socket = udp_socket
         self._owns_socket = udp_socket is None
@@ -157,16 +146,11 @@ class SafetyLink:
             raise ValueError("command_cap must be in (0, 1]")
         if not 0.0 < self.slow_command_cap <= self.command_cap:
             raise ValueError("slow_command_cap must be in (0, command_cap]")
-        if not 0.0 < self.reverse_command_cap <= 1.0:
-            raise ValueError("reverse_command_cap must be in (0, 1]")
         classify_raw_axes(
             0,
             0,
             neutral_deadzone=self.neutral_deadzone,
             forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
-            forward_right_cone_half_angle_deg=(
-                self.forward_right_cone_half_angle_deg
-            ),
         )
 
     def apply(self, x_pos: int, y_pos: int, deadman: bool) -> tuple[int, int]:
@@ -181,9 +165,6 @@ class SafetyLink:
             int(y_pos) if deadman else 0,
             neutral_deadzone=self.neutral_deadzone,
             forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
-            forward_right_cone_half_angle_deg=(
-                self.forward_right_cone_half_angle_deg
-            ),
         )
         command_class = self._authorization_family(command.intent_class)
         if command_class != self._last_command_class:
@@ -203,13 +184,7 @@ class SafetyLink:
             self._clear_count = 0
             self._reason = "operator_released"
             return 0, 0
-        supported = command.intent_class in FORWARD_CLASSES + REVERSE_CLASSES
-        supported = supported or (
-            self.enable_hard_right_turn
-            and command.intent_class == RIGHT_TURN
-            and command.longitudinal >= 0.0
-        )
-        if not supported:
+        if command.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
             self._clear_count = 0
             self._reason = "%s_not_enabled" % intent_label(
                 command.intent_class
@@ -248,13 +223,6 @@ class SafetyLink:
             self._reason = "reverse_requires_slow_envelope"
             return 0, 0
 
-        if command.intent_class == RIGHT_TURN:
-            return self._apply_right_turn_envelope(
-                command,
-                matching_intent,
-                envelope,
-            )
-
         if envelope.intent_sequence != self._last_counted_intent_sequence:
             self._clear_count += 1
             self._last_counted_intent_sequence = envelope.intent_sequence
@@ -268,12 +236,11 @@ class SafetyLink:
             self._reason = "invalid_safety_envelope_limit"
             return 0, 0
 
-        if command.is_reverse:
-            decision_cap = self.reverse_command_cap
-        elif envelope.decision == SLOW:
-            decision_cap = self.slow_command_cap
-        else:
-            decision_cap = self.command_cap
+        decision_cap = (
+            self.slow_command_cap
+            if envelope.decision == SLOW or command.is_reverse
+            else self.command_cap
+        )
         permitted_forward = min(
             envelope.permitted_forward,
             decision_cap,
@@ -301,8 +268,6 @@ class SafetyLink:
             return "forward_cone"
         if intent_class in REVERSE_CLASSES:
             return "reverse_cone"
-        if intent_class == RIGHT_TURN:
-            return "right_turn"
         return "unsupported"
 
     @staticmethod
@@ -323,8 +288,8 @@ class SafetyLink:
             current_ratio,
         )
 
+    @staticmethod
     def _intent_is_compatible(
-        self,
         sent_command: ClassifiedIntent | None,
         current_command: ClassifiedIntent,
     ) -> bool:
@@ -338,72 +303,7 @@ class SafetyLink:
         ) or (
             sent_command.is_reverse
             and current_command.is_reverse
-        ) or (
-            sent_command.intent_class == RIGHT_TURN
-            and current_command.intent_class == RIGHT_TURN
-            and sent_command.longitudinal >= 0.0
-            and current_command.longitudinal >= 0.0
         )
-
-    def _apply_right_turn_envelope(
-        self,
-        command: ClassifiedIntent,
-        matching_intent: ClassifiedIntent,
-        envelope: Envelope,
-    ) -> tuple[int, int]:
-        scale = self._authorized_vector_scale(envelope, matching_intent)
-        if scale is None:
-            self._stop_latched = True
-            self._clear_count = 0
-            self._reason = "invalid_turn_envelope_vector"
-            return 0, 0
-        if envelope.intent_sequence != self._last_counted_intent_sequence:
-            self._clear_count += 1
-            self._last_counted_intent_sequence = envelope.intent_sequence
-        if self._clear_count < self.required_clear_envelopes:
-            self._reason = "waiting_for_clear_envelopes"
-            return 0, 0
-        local_cap = (
-            self.slow_command_cap
-            if envelope.decision == SLOW
-            else self.command_cap
-        )
-        requested_max = max(abs(command.lateral), abs(command.longitudinal))
-        local_scale = (
-            1.0 if requested_max <= local_cap else local_cap / requested_max
-        )
-        applied_scale = min(scale, local_scale)
-        output_lateral = command.lateral * applied_scale
-        output_longitudinal = command.longitudinal * applied_scale
-        self._reason = envelope.reason
-        return (
-            int(round(-output_lateral * 100.0)),
-            int(round(output_longitudinal * 100.0)),
-        )
-
-    @staticmethod
-    def _authorized_vector_scale(
-        envelope: Envelope,
-        sent_command: ClassifiedIntent,
-    ) -> float | None:
-        ratios = []
-        for permitted, requested in (
-            (envelope.permitted_lateral, sent_command.lateral),
-            (envelope.permitted_longitudinal, sent_command.longitudinal),
-        ):
-            if abs(requested) <= 1e-6:
-                if abs(permitted) > 1e-6:
-                    return None
-                continue
-            ratio = permitted / requested
-            if ratio < -1e-6 or ratio > 1.0 + 1e-6:
-                return None
-            ratios.append(max(0.0, min(1.0, ratio)))
-        if not ratios:
-            return None
-        if max(ratios) - min(ratios) > 1e-5:
-            return None
-        return min(ratios)
 
     @staticmethod
     def _envelope_limit_is_valid(
@@ -526,8 +426,6 @@ def decode_envelope(data: bytes) -> Envelope:
     decision = payload.get("decision")
     forward = payload.get("permitted_forward")
     steering = payload.get("permitted_steering")
-    lateral = payload.get("permitted_lateral")
-    longitudinal = payload.get("permitted_longitudinal")
     map_age_ms = payload.get("map_age_ms")
     if not isinstance(session, str) or not session or len(session) > 64:
         raise ProtocolError("invalid session")
@@ -540,8 +438,6 @@ def decode_envelope(data: bytes) -> Envelope:
     for name, value in (
         ("permitted_forward", forward),
         ("permitted_steering", steering),
-        ("permitted_lateral", lateral),
-        ("permitted_longitudinal", longitudinal),
         ("map_age_ms", map_age_ms),
     ):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -550,24 +446,12 @@ def decode_envelope(data: bytes) -> Envelope:
             raise ProtocolError("non-finite %s" % name)
     forward = float(forward)
     steering = float(steering)
-    lateral = float(lateral)
-    longitudinal = float(longitudinal)
     map_age_ms = float(map_age_ms)
-    if (
-        not 0.0 <= forward <= 1.0
-        or not -1.0 <= steering <= 1.0
-        or not -1.0 <= lateral <= 1.0
-        or not -1.0 <= longitudinal <= 1.0
-    ):
+    if not 0.0 <= forward <= 1.0 or not -1.0 <= steering <= 1.0:
         raise ProtocolError("envelope limit outside normalized range")
     if map_age_ms < 0.0:
         raise ProtocolError("invalid map age")
-    if decision == STOP and (
-        forward != 0.0
-        or steering != 0.0
-        or lateral != 0.0
-        or longitudinal != 0.0
-    ):
+    if decision == STOP and (forward != 0.0 or steering != 0.0):
         raise ProtocolError("STOP envelope permits motion")
     return Envelope(
         session,
@@ -577,8 +461,6 @@ def decode_envelope(data: bytes) -> Envelope:
         steering,
         reason,
         map_age_ms,
-        lateral,
-        longitudinal,
     )
 
 

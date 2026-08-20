@@ -56,9 +56,6 @@ class OperatorIntentClassificationTests(unittest.TestCase):
         self.assertTrue(classify_raw_axes(-46, 100).is_forward)
         self.assertEqual(classify_raw_axes(-47, 100).intent_class, LEFT_TURN)
 
-        self.assertEqual(classify_raw_axes(57, 100).intent_class, FORWARD_RIGHT)
-        self.assertEqual(classify_raw_axes(58, 100).intent_class, RIGHT_TURN)
-
     def test_forward_steering_ratio_uses_vector_direction(self):
         correction = classify_raw_axes(-14, 99)
         self.assertAlmostEqual(correction.steering_ratio, 14.0 / 99.0)

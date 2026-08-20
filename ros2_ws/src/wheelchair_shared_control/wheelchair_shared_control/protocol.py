@@ -9,7 +9,7 @@ import math
 from wheelchair_shared_control.operator_intent import INTENT_CLASSES, RELEASED
 
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 2
 MAX_PACKET_BYTES = 1024
 
 
@@ -36,8 +36,6 @@ class EnvelopePacket:
     permitted_steering: float
     reason: str
     map_age_ms: float
-    permitted_lateral: float = 0.0
-    permitted_longitudinal: float = 0.0
 
 
 def encode_intent(packet: IntentPacket) -> bytes:
@@ -81,8 +79,6 @@ def encode_envelope(packet: EnvelopePacket) -> bytes:
             "decision": packet.decision,
             "permitted_forward": packet.permitted_forward,
             "permitted_steering": packet.permitted_steering,
-            "permitted_lateral": packet.permitted_lateral,
-            "permitted_longitudinal": packet.permitted_longitudinal,
             "reason": packet.reason,
             "map_age_ms": packet.map_age_ms,
         }
@@ -99,8 +95,6 @@ def decode_envelope(data: bytes) -> EnvelopePacket:
         permitted_steering=_number(payload, "permitted_steering"),
         reason=_string(payload, "reason", max_length=96),
         map_age_ms=_number(payload, "map_age_ms"),
-        permitted_lateral=_number(payload, "permitted_lateral"),
-        permitted_longitudinal=_number(payload, "permitted_longitudinal"),
     )
     _validate_envelope(packet)
     return packet
@@ -157,23 +151,12 @@ def _validate_envelope(packet: EnvelopePacket) -> None:
         raise ProtocolError("permitted_forward outside [0, 1]")
     if not -1.0 <= packet.permitted_steering <= 1.0:
         raise ProtocolError("permitted_steering outside [-1, 1]")
-    if not -1.0 <= packet.permitted_lateral <= 1.0:
-        raise ProtocolError("permitted_lateral outside [-1, 1]")
-    if not -1.0 <= packet.permitted_longitudinal <= 1.0:
-        raise ProtocolError("permitted_longitudinal outside [-1, 1]")
-    if not math.isfinite(packet.permitted_lateral) or not math.isfinite(
-        packet.permitted_longitudinal
-    ):
-        raise ProtocolError("non-finite permitted axes")
     if not math.isfinite(packet.map_age_ms) or packet.map_age_ms < 0.0:
         raise ProtocolError("invalid map age")
     if len(packet.reason) > 96:
         raise ProtocolError("reason is too long")
     if packet.decision == 0 and (
-        packet.permitted_forward != 0.0
-        or packet.permitted_steering != 0.0
-        or packet.permitted_lateral != 0.0
-        or packet.permitted_longitudinal != 0.0
+        packet.permitted_forward != 0.0 or packet.permitted_steering != 0.0
     ):
         raise ProtocolError("STOP envelope must permit zero motion")
 

@@ -17,7 +17,6 @@ Interfaces:
 - `/artifact_filter/source_header` (`std_msgs/Header`)
 - `/safety_envelope` (`wheelchair_msgs/SafetyEnvelope`)
 - `/shared_control/diagnostics` (`diagnostic_msgs/DiagnosticArray`)
-- `/shared_control/checked_corridor` (`visualization_msgs/MarkerArray`)
 - UDP intent port `45450`, envelope port `45451` when explicitly enabled
 
 Run the fail-closed software:
@@ -33,40 +32,20 @@ options are explicit rather than stored as enabled defaults:
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.30 reverse_limit:=0.65
+  slow_forward_limit:=0.65
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow
 the [physical-JSM procedure](../../../../docs/setup/physical_joystick_shared_control.md).
 
 The normal command above reports `live_control_disabled`, even with valid maps
-and intent. UDP protocol v3 carries normalized left-positive lateral and
+and intent. UDP protocol v2 carries normalized left-positive lateral and
 forward-positive longitudinal axes plus a semantic class. The supervisor
 permits the symmetric 25-degree forward- and reverse-correction cones. It
 checks every forward path from straight through the requested correction so
 the Pi can safely reduce that correction while applying CLEAR/SLOW caps.
 Reverse returns `reverse_unmonitored_slow` with a 0.65 magnitude limit without
-consulting the front map. The forward-right correction cone is 30 degrees;
-the forward-left and reverse cones remain 25 degrees.
-
-Hard right and clockwise pivot support is a separate disabled-by-default
-phase. It uses a centred `/nav2_right_turn_costmap`, a conservative footprint
-disk plus the most-rightward forward corridor, and signed v3 envelope axes.
-It requires all three explicit launch choices:
-
-```bash
-ros2 launch wheelchair_navigation nav2_mapping.launch.py \
-  use_right_turn_costmap:=true use_inflation:=true
-ros2 launch wheelchair_shared_control shared_control.launch.py \
-  enable_motion:=true geometry_calibrated:=true \
-  enable_hard_right_turn:=true \
-  partial_turn_coverage_acknowledged:=true
-```
-
-The existing right-mounted AIRY does not provide complete coverage of every
-area swept by a turn. This gate is only for an attended, open-area test with
-the independent cutoff; reverse-right remains disabled. No second LiDAR or
-autonomous navigation is assumed by this implementation.
+consulting the front map. Hard turns remain classified and return STOP.
 
 The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in
 Nav2. STOP and SLOW distances are trajectory lookahead distances. The cost

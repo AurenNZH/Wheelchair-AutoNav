@@ -3,11 +3,9 @@
     operator_intent_topic: /operator_intent
     safety_envelope_topic: /safety_envelope
     front_costmap_topic: /nav2_front_costmap
-    right_turn_costmap_topic: /nav2_right_turn_costmap
     source_header_topic: /artifact_filter/source_header
     freshness_mode: nav2_live
     diagnostics_topic: /shared_control/diagnostics
-    checked_corridor_topic: /shared_control/checked_corridor
     decision_rate_hz: 20.0
     max_intent_age_s: 0.20
 
@@ -20,15 +18,13 @@
     slow_distance_m: 1.20
     min_turn_radius_m: 1.20
     # ROS lateral correction is left-positive. tan(25 degrees) = 0.4663.
-    min_steering: -0.577350269
+    min_steering: -0.466307658
     max_steering: 0.466307658
-    slow_forward_limit: 0.30
-    reverse_limit: 0.65
+    slow_forward_limit: 0.65
     path_sample_step_m: 0.05
     steering_sample_step: 0.05
     neutral_deadzone: 0.05
     forward_cone_half_angle_deg: 25.0
-    forward_right_cone_half_angle_deg: 30.0
     # Nav2 does not preserve sensor acquisition time in OccupancyGrid. Live
     # mode therefore gates map receipt and the filtered-source stamp separately.
     max_map_age_s: 0.50
@@ -38,10 +34,6 @@
     # inscribed collision cost as 99, and lethal obstacles as 100.
     slow_cost_threshold: 1
     stop_cost_threshold: 99
-    # Phase 2 remains off unless the attended partial-coverage gate is explicit.
-    enable_hard_right_turn: false
-    partial_turn_coverage_acknowledged: false
-    max_turn_map_age_s: 0.50
 
     enable_udp: false
     bind_address: 0.0.0.0

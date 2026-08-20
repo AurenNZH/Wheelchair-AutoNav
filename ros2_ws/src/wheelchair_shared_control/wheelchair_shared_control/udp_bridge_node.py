@@ -116,10 +116,6 @@ class UdpBridgeNode(Node):
                     permitted_steering=float(msg.permitted_steering),
                     reason=msg.reason,
                     map_age_ms=float(msg.map_age_ms),
-                    permitted_lateral=float(msg.permitted_lateral),
-                    permitted_longitudinal=float(
-                        msg.permitted_longitudinal
-                    ),
                 )
             )
             self._socket.sendto(

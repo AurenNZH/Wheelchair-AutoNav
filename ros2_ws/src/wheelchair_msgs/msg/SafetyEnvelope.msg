@@ -8,9 +8,5 @@ uint64 intent_sequence
 uint8 decision
 float32 permitted_forward
 float32 permitted_steering
-# Protocol-v3 signed axes used for turn and pivot authorization. Legacy
-# forward/reverse consumers may continue using the two fields above.
-float32 permitted_lateral
-float32 permitted_longitudinal
 string reason
 float32 map_age_ms

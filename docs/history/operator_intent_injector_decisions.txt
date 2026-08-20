@@ -249,21 +249,3 @@ is correspondingly 0.65 so the two enforcement endpoints agree. This replaces
 the proposed 70/40 values before their validation run; it does not change the
 keyboard teleop defaults, obstacle thresholds, reverse monitoring scope, or
 any fail-closed condition.
-
-2026-08-19T22:05:00+01:00 — Asymmetric correction and gated right-turn scope
-Natural shallow corrections need more room on the chair's right side, so the
-forward-right classification cone is now 30 degrees while forward-left and
-reverse remain 25 degrees. Physical forward CLEAR is capped at 90 raw counts,
-forward SLOW at 30, and unmonitored reverse at 65. The provisional 1.20 m
-curvature model remains unchanged. RViz now shows the exact costmap cells
-checked for each decision, its requested boundary, and the decision label.
-
-Hard right and clockwise pivot control is implemented as a separate opt-in
-path, not as a widening of the existing forward corridor. A centred Nav2 map
-from the existing right-mounted AIRY feeds a conservative footprint disk plus
-the most-rightward forward corridor. Mapping, Jetson policy, and Pi actuation
-each remain disabled by default; both the feature flag and explicit
-partial-coverage acknowledgement are required. Reverse-right is excluded.
-UDP protocol v3 adds signed permitted lateral/longitudinal axes so a pivot is
-representable without abusing forward speed. No second LiDAR or autonomous
-navigation dependency is introduced.

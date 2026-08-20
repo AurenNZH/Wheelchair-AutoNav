@@ -21,21 +21,13 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(decode_intent(encode_intent(packet)), packet)
 
     def test_envelope_round_trip(self):
-        packet = EnvelopePacket(
-            "session-a", 7, 1, 0.25, -0.2, "slow", 142.0, -0.3, 0.1
-        )
+        packet = EnvelopePacket("session-a", 7, 1, 0.25, -0.2, "slow", 142.0)
         self.assertEqual(decode_envelope(encode_envelope(packet)), packet)
 
     def test_stop_envelope_cannot_allow_motion(self):
         with self.assertRaises(ProtocolError):
             encode_envelope(
                 EnvelopePacket("session-a", 7, 0, 0.1, 0.0, "bad", 10.0)
-            )
-        with self.assertRaises(ProtocolError):
-            encode_envelope(
-                EnvelopePacket(
-                    "session-a", 7, 0, 0.0, 0.0, "bad", 10.0, -0.1, 0.0
-                )
             )
 
     def test_wrong_version_and_out_of_range_intent_are_rejected(self):

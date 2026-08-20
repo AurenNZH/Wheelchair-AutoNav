@@ -8,7 +8,6 @@ from typing import Optional
 from .jsm_observer import JsmSample
 from .operator_intent import (
     RELEASED,
-    RIGHT_TURN,
     classify_raw_axes,
     intent_label,
 )
@@ -46,8 +45,6 @@ class PhysicalJsmSharedControl:
         mode: str = "shadow",
         neutral_deadzone: int = 5,
         forward_cone_half_angle_deg: float = 25.0,
-        forward_right_cone_half_angle_deg: float = 30.0,
-        enable_hard_right_turn: bool = False,
     ) -> None:
         if mode not in ("shadow", "enforce"):
             raise ValueError("mode must be 'shadow' or 'enforce'")
@@ -66,18 +63,11 @@ class PhysicalJsmSharedControl:
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
         )
-        self.forward_right_cone_half_angle_deg = float(
-            forward_right_cone_half_angle_deg
-        )
-        self.enable_hard_right_turn = bool(enable_hard_right_turn)
         classify_raw_axes(
             0,
             0,
             neutral_deadzone=self.neutral_deadzone,
             forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
-            forward_right_cone_half_angle_deg=(
-                self.forward_right_cone_half_angle_deg
-            ),
         )
         self._local_stop_latched = False
         self.last_result = None
@@ -92,9 +82,6 @@ class PhysicalJsmSharedControl:
             input_y,
             neutral_deadzone=self.neutral_deadzone,
             forward_cone_half_angle_deg=self.forward_cone_half_angle_deg,
-            forward_right_cone_half_angle_deg=(
-                self.forward_right_cone_half_angle_deg
-            ),
         )
         local_reason = None
 
@@ -105,15 +92,7 @@ class PhysicalJsmSharedControl:
                 # Neutral is an unconditional local stop even if a malformed
                 # or stale safety-link implementation returned motion.
                 would_x, would_y = 0, 0
-            elif not (
-                intent.is_forward
-                or intent.is_reverse
-                or (
-                    self.enable_hard_right_turn
-                    and intent.intent_class == RIGHT_TURN
-                    and intent.longitudinal >= 0.0
-                )
-            ):
+            elif not (intent.is_forward or intent.is_reverse):
                 self._local_stop_latched = True
                 self.safety_link.apply(input_x, input_y, True)
                 would_x, would_y = 0, 0
