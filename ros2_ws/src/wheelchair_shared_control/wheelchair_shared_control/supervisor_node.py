@@ -9,15 +9,22 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from nav_msgs.msg import OccupancyGrid
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import Header
 from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
+from visualization_msgs.msg import MarkerArray
+
+from wheelchair_shared_control.corridor_visualization import (
+    build_checked_corridor_markers,
+)
 
 from wheelchair_shared_control.safety import (
     SafetyConfig,
     SafetyDecision,
     OperatorIntentData,
     evaluate_safety,
+    evaluate_right_turn_safety,
     validate_cost_policy,
     weighted_costmap_from_grid,
 )
@@ -192,10 +199,16 @@ class SafetySupervisorNode(Node):
             "front_costmap_topic", "/nav2_front_costmap"
         )
         self.declare_parameter(
+            "right_turn_costmap_topic", "/nav2_right_turn_costmap"
+        )
+        self.declare_parameter(
             "source_header_topic", "/artifact_filter/source_header"
         )
         self.declare_parameter("freshness_mode", NAV2_LIVE)
         self.declare_parameter("diagnostics_topic", "/shared_control/diagnostics")
+        self.declare_parameter(
+            "checked_corridor_topic", "/shared_control/checked_corridor"
+        )
         self.declare_parameter("decision_rate_hz", 20.0)
         self.declare_parameter("max_intent_age_s", 0.20)
         self.declare_parameter("enable_motion", False)
@@ -203,24 +216,33 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
-        self.declare_parameter("min_steering", -0.466307658)
+        self.declare_parameter("min_steering", -0.577350269)
         self.declare_parameter("max_steering", 0.466307658)
-        self.declare_parameter("slow_forward_limit", 0.65)
+        self.declare_parameter("slow_forward_limit", 0.30)
+        self.declare_parameter("reverse_limit", 0.65)
         self.declare_parameter("path_sample_step_m", 0.05)
         self.declare_parameter("steering_sample_step", 0.05)
         self.declare_parameter("neutral_deadzone", 0.05)
         self.declare_parameter("forward_cone_half_angle_deg", 25.0)
+        self.declare_parameter("forward_right_cone_half_angle_deg", 30.0)
         self.declare_parameter("max_map_age_s", 0.50)
         self.declare_parameter("max_source_age_s", 0.50)
         self.declare_parameter("max_future_source_offset_s", 0.10)
         self.declare_parameter("slow_cost_threshold", 1)
         self.declare_parameter("stop_cost_threshold", 99)
+        self.declare_parameter("enable_hard_right_turn", False)
+        self.declare_parameter(
+            "partial_turn_coverage_acknowledged", False
+        )
+        self.declare_parameter("max_turn_map_age_s", 0.50)
 
         self._config = self._load_config()
         self._intent = None
         self._front_costmap = None
         self._front_stamp_ns = 0
         self._front_received_monotonic_ns = 0
+        self._right_turn_costmap = None
+        self._right_turn_received_monotonic_ns = 0
         self._source_stamp_ns = None
         self._freshness_mode = str(
             self.get_parameter("freshness_mode").value
@@ -234,6 +256,16 @@ class SafetySupervisorNode(Node):
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray, self.get_parameter("diagnostics_topic").value, 10
         )
+        marker_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._corridor_pub = self.create_publisher(
+            MarkerArray,
+            self.get_parameter("checked_corridor_topic").value,
+            marker_qos,
+        )
         self.create_subscription(
             OperatorIntent,
             self.get_parameter("operator_intent_topic").value,
@@ -244,6 +276,12 @@ class SafetySupervisorNode(Node):
             OccupancyGrid,
             self.get_parameter("front_costmap_topic").value,
             self._on_front_map,
+            1,
+        )
+        self.create_subscription(
+            OccupancyGrid,
+            self.get_parameter("right_turn_costmap_topic").value,
+            self._on_right_turn_map,
             1,
         )
         self.create_subscription(
@@ -286,6 +324,7 @@ class SafetySupervisorNode(Node):
             slow_forward_limit=float(
                 self.get_parameter("slow_forward_limit").value
             ),
+            reverse_limit=float(self.get_parameter("reverse_limit").value),
             path_sample_step_m=float(
                 self.get_parameter("path_sample_step_m").value
             ),
@@ -298,12 +337,28 @@ class SafetySupervisorNode(Node):
             forward_cone_half_angle_deg=float(
                 self.get_parameter("forward_cone_half_angle_deg").value
             ),
+            forward_right_cone_half_angle_deg=float(
+                self.get_parameter(
+                    "forward_right_cone_half_angle_deg"
+                ).value
+            ),
             max_map_age_s=float(self.get_parameter("max_map_age_s").value),
             slow_cost_threshold=int(
                 self.get_parameter("slow_cost_threshold").value
             ),
             stop_cost_threshold=int(
                 self.get_parameter("stop_cost_threshold").value
+            ),
+            enable_hard_right_turn=bool(
+                self.get_parameter("enable_hard_right_turn").value
+            ),
+            partial_turn_coverage_acknowledged=bool(
+                self.get_parameter(
+                    "partial_turn_coverage_acknowledged"
+                ).value
+            ),
+            max_turn_map_age_s=float(
+                self.get_parameter("max_turn_map_age_s").value
             ),
         )
         validate_cost_policy(config)
@@ -343,6 +398,18 @@ class SafetySupervisorNode(Node):
             self._front_costmap = None
             self._front_stamp_ns = 0
             self._front_received_monotonic_ns = 0
+
+    def _on_right_turn_map(self, msg: OccupancyGrid) -> None:
+        try:
+            self._right_turn_costmap = self._grid_costmap(msg)
+            self._right_turn_received_monotonic_ns = time.monotonic_ns()
+        except ValueError as exc:
+            self.get_logger().error(
+                "Rejected invalid right-turn costmap: %s" % exc,
+                throttle_duration_sec=5.0,
+            )
+            self._right_turn_costmap = None
+            self._right_turn_received_monotonic_ns = 0
 
     @staticmethod
     def _grid_costmap(msg: OccupancyGrid):
@@ -427,6 +494,8 @@ class SafetySupervisorNode(Node):
         envelope.decision = decision.decision
         envelope.permitted_forward = decision.permitted_forward
         envelope.permitted_steering = decision.permitted_steering
+        envelope.permitted_lateral = decision.permitted_lateral
+        envelope.permitted_longitudinal = decision.permitted_longitudinal
         envelope.reason = decision.reason
         envelope.map_age_ms = max(0.0, map_age_s * 1000.0)
         self._envelope_pub.publish(envelope)
@@ -441,6 +510,7 @@ class SafetySupervisorNode(Node):
                 else max(0.0, source_age_s * 1000.0)
             ),
         )
+        self._publish_checked_corridor(decision, envelope.header)
 
     def _evaluate_intent(self, map_age_s: float) -> SafetyDecision:
         lateral = float(self._intent.lateral)
@@ -465,6 +535,9 @@ class SafetySupervisorNode(Node):
                     forward_cone_half_angle_deg=(
                         self._config.forward_cone_half_angle_deg
                     ),
+                    forward_right_cone_half_angle_deg=(
+                        self._config.forward_right_cone_half_angle_deg
+                    ),
                 ).intent_class
             except ValueError:
                 intent_class = -1
@@ -476,6 +549,29 @@ class SafetySupervisorNode(Node):
             intent_class=intent_class,
             deadman=deadman,
         )
+        if intent_class == int(OperatorIntent.RIGHT_TURN):
+            if (
+                not self._config.enable_hard_right_turn
+                or not self._config.partial_turn_coverage_acknowledged
+            ):
+                return evaluate_right_turn_safety(
+                    intent,
+                    self._front_costmap,
+                    0.0,
+                    self._config,
+                )
+            if self._right_turn_costmap is None:
+                return self._stop("missing_turn_map")
+            turn_map_age_s = (
+                time.monotonic_ns()
+                - self._right_turn_received_monotonic_ns
+            ) / 1e9
+            return evaluate_right_turn_safety(
+                intent,
+                self._right_turn_costmap,
+                turn_map_age_s,
+                self._config,
+            )
         return evaluate_safety(
             intent,
             self._front_costmap,
@@ -488,6 +584,57 @@ class SafetySupervisorNode(Node):
         from wheelchair_shared_control.safety import SafetyDecision, STOP
 
         return SafetyDecision(STOP, 0.0, 0.0, reason)
+
+    def _publish_checked_corridor(
+        self,
+        decision: SafetyDecision,
+        header: Header,
+    ) -> None:
+        requested_steering = None
+        label = "waiting"
+        marker_costmap = self._front_costmap
+        if self._intent is not None:
+            lateral = float(self._intent.lateral)
+            longitudinal = float(self._intent.longitudinal)
+            if lateral == 0.0 and longitudinal == 0.0:
+                longitudinal = float(self._intent.forward)
+                lateral = float(self._intent.steering) * longitudinal
+            try:
+                classified = classify_normalized_axes(
+                    lateral,
+                    longitudinal,
+                    neutral_deadzone=self._config.neutral_deadzone,
+                    forward_cone_half_angle_deg=(
+                        self._config.forward_cone_half_angle_deg
+                    ),
+                    forward_right_cone_half_angle_deg=(
+                        self._config.forward_right_cone_half_angle_deg
+                    ),
+                )
+                angle = (
+                    "none"
+                    if classified.heading_deg is None
+                    else "%.1fdeg" % classified.heading_deg
+                )
+                label = "%s %s" % (classified.label, angle)
+                if classified.is_forward:
+                    requested_steering = classified.steering_ratio
+                elif classified.is_reverse:
+                    label += " unmonitored"
+                elif classified.intent_class == int(OperatorIntent.RIGHT_TURN):
+                    marker_costmap = self._right_turn_costmap
+                    label += " partial-coverage"
+            except ValueError:
+                label = "invalid_intent"
+        markers = build_checked_corridor_markers(
+            header=header,
+            decision=decision,
+            costmap=marker_costmap,
+            requested_steering=requested_steering,
+            config=self._config,
+            label=label,
+        )
+        self._corridor_pub.publish(markers)
 
     def _publish_diagnostics(
         self,

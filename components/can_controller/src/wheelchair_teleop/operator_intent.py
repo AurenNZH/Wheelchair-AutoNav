@@ -68,6 +68,7 @@ def classify_raw_axes(
     *,
     neutral_deadzone: int = 5,
     forward_cone_half_angle_deg: float = 25.0,
+    forward_right_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     """Classify signed R-Net axes; ROS lateral is left-positive."""
 
@@ -88,6 +89,9 @@ def classify_raw_axes(
         float(y_raw) / 100.0,
         neutral_deadzone=float(neutral_deadzone) / 100.0,
         forward_cone_half_angle_deg=forward_cone_half_angle_deg,
+        forward_right_cone_half_angle_deg=(
+            forward_right_cone_half_angle_deg
+        ),
     )
 
 
@@ -97,12 +101,14 @@ def classify_normalized_axes(
     *,
     neutral_deadzone: float = 0.05,
     forward_cone_half_angle_deg: float = 25.0,
+    forward_right_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     """Classify normalized left/forward axes into a stable semantic intent."""
 
     lateral = float(lateral)
     longitudinal = float(longitudinal)
     cone = float(forward_cone_half_angle_deg)
+    right_cone = float(forward_right_cone_half_angle_deg)
     deadzone = float(neutral_deadzone)
     if not math.isfinite(lateral) or not math.isfinite(longitudinal):
         raise ValueError("intent axes must be finite")
@@ -112,12 +118,15 @@ def classify_normalized_axes(
         raise ValueError("neutral_deadzone must be in [0, 1)")
     if not math.isfinite(cone) or not 0.0 < cone < 90.0:
         raise ValueError("forward cone half-angle must be in (0, 90)")
+    if not math.isfinite(right_cone) or not 0.0 < right_cone < 90.0:
+        raise ValueError("forward-right cone half-angle must be in (0, 90)")
 
     if abs(lateral) <= deadzone and abs(longitudinal) <= deadzone:
         return ClassifiedIntent(RELEASED, lateral, longitudinal, False, None)
 
     heading_deg = math.degrees(math.atan2(lateral, longitudinal))
-    if longitudinal > 0.0 and abs(heading_deg) <= cone:
+    forward_limit = cone if heading_deg >= 0.0 else right_cone
+    if longitudinal > 0.0 and abs(heading_deg) <= forward_limit:
         if abs(lateral) <= deadzone:
             intent_class = FORWARD
         elif lateral > 0.0:

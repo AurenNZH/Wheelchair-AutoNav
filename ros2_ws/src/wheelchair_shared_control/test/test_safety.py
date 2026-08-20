@@ -9,7 +9,9 @@ from wheelchair_shared_control.safety import (
     STOP,
     OperatorIntentData,
     SafetyConfig,
+    evaluate_right_turn_safety,
     evaluate_safety,
+    trajectory_points,
     validate_cost_policy,
     weighted_costmap_from_grid,
 )
@@ -146,7 +148,7 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(slow.decision, SLOW)
         self.assertEqual(slow.reason, "nav2_cost_slow")
         self.assertEqual(slow.maximum_path_cost, 50)
-        self.assertAlmostEqual(slow.permitted_forward, 0.65)
+        self.assertAlmostEqual(slow.permitted_forward, 0.30)
         self.assertEqual(clear.decision, CLEAR)
 
     def test_cost_98_slows_while_99_stops_at_same_location(self):
@@ -189,6 +191,47 @@ class SafetyPolicyTests(unittest.TestCase):
 
         self.assertEqual(turn.decision, SLOW)
         self.assertEqual(straight.decision, CLEAR)
+
+    def test_forward_right_is_supported_through_thirty_degrees_only(self):
+        supported = evaluate_safety(
+            OperatorIntentData(
+                "session", 30, -0.55, 1.0, FORWARD_RIGHT, True
+            ),
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+        outside = evaluate_safety(
+            OperatorIntentData(
+                "session", 31, -0.58, 1.0, RIGHT_TURN, True
+            ),
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+
+        self.assertEqual(supported.decision, CLEAR)
+        self.assertEqual(supported.reason, "nav2_cost_clear")
+        self.assertEqual(outside.decision, STOP)
+        self.assertEqual(outside.reason, "right_turn_not_enabled")
+
+    def test_new_forward_right_sector_checks_its_curved_cells(self):
+        steering = -0.55
+        point = trajectory_points(steering, self.enabled)[20]
+        col = math.floor(point[0] / 0.1)
+        row = math.floor((point[1] + 4.0) / 0.1)
+        decision = evaluate_safety(
+            OperatorIntentData(
+                "session", 32, steering, 1.0, FORWARD_RIGHT, True
+            ),
+            self._costmap({(col, row): 50}),
+            0.1,
+            self.enabled,
+        )
+
+        self.assertEqual(decision.decision, SLOW)
+        self.assertEqual(decision.reason, "nav2_cost_slow")
+        self.assertIn((col, row), decision.checked_cells)
 
     def test_correction_includes_straight_path_union(self):
         correction = OperatorIntentData(
@@ -272,11 +315,111 @@ class SafetyPolicyTests(unittest.TestCase):
             SafetyConfig(path_sample_step_m=math.nan),
             SafetyConfig(slow_forward_limit=0.0),
             SafetyConfig(slow_forward_limit=1.01),
+            SafetyConfig(reverse_limit=0.0),
+            SafetyConfig(reverse_limit=1.01),
         )
         for config in invalid:
             with self.subTest(config=config):
                 with self.assertRaises(ValueError):
                     validate_cost_policy(config)
+
+
+class RightTurnSafetyPolicyTests(unittest.TestCase):
+    @staticmethod
+    def _costmap(cells):
+        values = np.zeros(80 * 80, dtype=np.int16)
+        for (col, row), cost in cells.items():
+            values[row * 80 + col] = cost
+        return weighted_costmap_from_grid(
+            values,
+            frame_id="base_link",
+            width=80,
+            height=80,
+            resolution_m=0.1,
+            origin_x_m=-4.0,
+            origin_y_m=-4.0,
+            origin_orientation_xyzw=(0.0, 0.0, 0.0, 1.0),
+        )
+
+    def setUp(self):
+        self.intent = OperatorIntentData(
+            "session", 40, -1.0, 0.0, RIGHT_TURN, True
+        )
+        self.empty = self._costmap({})
+        self.enabled = SafetyConfig(
+            enable_motion=True,
+            geometry_calibrated=True,
+            enable_hard_right_turn=True,
+            partial_turn_coverage_acknowledged=True,
+            slow_cost_threshold=1,
+            stop_cost_threshold=99,
+            slow_forward_limit=0.30,
+        )
+
+    def test_right_turn_requires_both_explicit_gates(self):
+        disabled = evaluate_right_turn_safety(
+            self.intent,
+            self.empty,
+            0.1,
+            SafetyConfig(enable_motion=True, geometry_calibrated=True),
+        )
+        unacknowledged = evaluate_right_turn_safety(
+            self.intent,
+            self.empty,
+            0.1,
+            SafetyConfig(
+                enable_motion=True,
+                geometry_calibrated=True,
+                enable_hard_right_turn=True,
+            ),
+        )
+
+        self.assertEqual(disabled.reason, "right_turn_not_enabled")
+        self.assertEqual(
+            unacknowledged.reason,
+            "partial_turn_coverage_not_acknowledged",
+        )
+
+    def test_clear_pivot_preserves_signed_axes(self):
+        decision = evaluate_right_turn_safety(
+            self.intent, self.empty, 0.1, self.enabled
+        )
+
+        self.assertEqual(decision.decision, CLEAR)
+        self.assertEqual(decision.reason, "nav2_right_turn_clear")
+        self.assertAlmostEqual(decision.permitted_lateral, -1.0)
+        self.assertAlmostEqual(decision.permitted_longitudinal, 0.0)
+        self.assertTrue(decision.checked_cells)
+
+    def test_pivot_disk_cost_produces_slow_and_stop(self):
+        slow = evaluate_right_turn_safety(
+            self.intent, self._costmap({(40, 40): 50}), 0.1, self.enabled
+        )
+        stop = evaluate_right_turn_safety(
+            self.intent, self._costmap({(40, 40): 99}), 0.1, self.enabled
+        )
+
+        self.assertEqual(slow.decision, SLOW)
+        self.assertAlmostEqual(slow.permitted_lateral, -0.30)
+        self.assertAlmostEqual(slow.permitted_longitudinal, 0.0)
+        self.assertEqual(stop.decision, STOP)
+        self.assertEqual(stop.reason, "nav2_right_turn_stop")
+
+    def test_stale_or_reverse_right_request_is_stopped(self):
+        stale = evaluate_right_turn_safety(
+            self.intent, self.empty, 0.51, self.enabled
+        )
+        reverse_right = evaluate_right_turn_safety(
+            OperatorIntentData(
+                "session", 41, -1.0, -0.1, RIGHT_TURN, True
+            ),
+            self.empty,
+            0.1,
+            self.enabled,
+        )
+
+        self.assertEqual(stale.reason, "stale_turn_map")
+        self.assertEqual(reverse_right.reason, "reverse_right_not_enabled")
 
 
 class WeightedCostmapValidationTests(unittest.TestCase):

@@ -95,6 +95,15 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /artifact_filter/threshold_cells
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Shared-control checked corridor
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /shared_control/checked_corridor
     - Alpha: 0.75
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
@@ -106,6 +115,17 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /nav2_front_costmap
+    - Alpha: 0.55
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Enabled: false
+      Name: Nav2 Right-turn Costmap (partial coverage)
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_right_turn_costmap
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

@@ -342,8 +342,9 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            command_cap=1.00,
-            slow_command_cap=0.65,
+            command_cap=0.90,
+            slow_command_cap=0.30,
+            reverse_command_cap=0.65,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -375,8 +376,9 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            command_cap=1.00,
-            slow_command_cap=0.65,
+            command_cap=0.90,
+            slow_command_cap=0.30,
+            reverse_command_cap=0.65,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -408,8 +410,9 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=5,
-            command_cap=1.00,
-            slow_command_cap=0.65,
+            command_cap=0.90,
+            slow_command_cap=0.30,
+            reverse_command_cap=0.65,
             heartbeat_hz=1.0,
             udp_socket=udp,
             monotonic_clock=clock,
@@ -447,7 +450,7 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(link.get_status()["clear_count"], 0)
         for index in range(5):
             output = accept_latest(2, 1.0, "nav2_cost_clear", 0, 100)
-            self.assertEqual(output, (0, 100) if index == 4 else (0, 0))
+            self.assertEqual(output, (0, 90) if index == 4 else (0, 0))
             if index < 4:
                 link._last_send_monotonic = 0.0
                 link.apply(0, 100, True)

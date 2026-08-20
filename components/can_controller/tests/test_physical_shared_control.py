@@ -112,3 +112,32 @@ class StraightPhysicalJsmControlTests(unittest.TestCase):
         self.assertEqual(control.transform(sample(100, 0)), (0, 0))
         self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
         self.assertEqual(link.calls[-1], (100, 0, True))
+
+    def test_enabled_forward_right_turn_is_supervised_without_latch(self):
+        link = FakeSafetyLink(
+            safe_output=(90, 0),
+            reason="nav2_right_turn_clear",
+            decision=2,
+        )
+        control = StraightPhysicalJsmControl(
+            link,
+            mode="enforce",
+            enable_hard_right_turn=True,
+        )
+
+        self.assertEqual(control.transform(sample(100, 0)), (90, 0))
+        self.assertEqual(link.calls[-1], (100, 0, True))
+        self.assertEqual(control.last_result.intent_label, "right_turn")
+        self.assertFalse(control.last_result.local_stop_latched)
+
+    def test_enabled_right_turn_still_rejects_negative_longitudinal(self):
+        link = FakeSafetyLink(safe_output=(90, -2))
+        control = StraightPhysicalJsmControl(
+            link,
+            mode="enforce",
+            enable_hard_right_turn=True,
+        )
+
+        self.assertEqual(control.transform(sample(100, -2)), (0, 0))
+        self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
+        self.assertTrue(control.last_result.local_stop_latched)

@@ -69,19 +69,21 @@ for topology discovery, expected output, and acceptance checks.
 `supervise_physical_joystick.py` is a separate, explicit path for sending the
 measured slot-2 JSM request to the Jetson and applying its safety envelope.
 It defaults to `shadow`, where physical commands remain unchanged. Protocol
-v2 classifies the complete signed joystick vector. In `enforce`, forward and
-corrections inside the measured 25-degree cone are supervised; CLEAR is
-locally capped at 100 raw forward counts and SLOW at 65. Reverse requests in
+v3 classifies the complete signed joystick vector. In `enforce`, forward-left
+uses the measured 25-degree cone and forward-right uses 30 degrees; CLEAR is
+locally capped at 90 raw forward counts and SLOW at 30. Reverse requests in
 the matching 25-degree cone are intentionally unmonitored by the front map and
 fixed to SLOW 65. Lateral output scales with the permitted longitudinal
 magnitude so the joystick direction is preserved. Hard turns, every STOP, and
-every link failure are centred.
+every link failure are centred unless the separate partial-coverage hard-right
+gate is explicitly enabled on both machines.
 
 ```bash
 python scripts/supervise_physical_joystick.py \
   --mode shadow \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 10.0.0.48 --deadzone 4 --forward-cone-deg 25
+  --jetson-address 10.0.0.48 --deadzone 4 \
+  --forward-cone-deg 25 --forward-right-cone-deg 30
 ```
 
 Do not run this alongside `cangw`, keyboard teleop, the observer, or another
@@ -115,8 +117,9 @@ command ceiling is 20%. The separate physical-JSM program adds its explicit
 15% SLOW ceiling without changing keyboard behavior.
 
 Pi joystick X is right-positive, while ROS lateral intent is left-positive.
-The v2 safety link sends signed lateral/longitudinal axes and a semantic class.
-Pi and Jetson v2 files must be deployed together; a mixed v1/v2 enforce setup
+The v3 safety link sends signed lateral/longitudinal axes, a semantic class,
+and signed permitted axes for the gated hard-right path.
+Pi and Jetson v3 files must be deployed together; a mixed-version enforce setup
 fails closed. Existing ROS-only simulation publishers retain their original
 steering/forward compatibility projection.
 

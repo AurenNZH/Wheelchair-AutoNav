@@ -9,6 +9,18 @@ def _parameters():
     return document["costmap"]["costmap"]["ros__parameters"]
 
 
+def _right_turn_parameters():
+    path = (
+        Path(__file__).parents[1]
+        / "config"
+        / "nav2_right_turn_costmap.yaml"
+    )
+    document = yaml.safe_load(path.read_text())
+    return document["right_turn"]["costmap"]["costmap"][
+        "ros__parameters"
+    ]
+
+
 def test_stock_costmap_is_forward_base_link_grid():
     parameters = _parameters()
 
@@ -68,3 +80,28 @@ def test_launch_exposes_disabled_tunable_inflation_profile():
     assert '"inflation_layer.inflation_radius"' in source
     assert '"inflation_layer.cost_scaling_factor"' in source
     assert "convert_types=True" in source
+
+
+def test_right_turn_costmap_is_centered_in_base_link_and_inflated():
+    parameters = _right_turn_parameters()
+
+    assert parameters["global_frame"] == "base_link"
+    assert parameters["width"] == 8
+    assert parameters["height"] == 8
+    assert parameters["origin_x"] == -4.0
+    assert parameters["origin_y"] == -4.0
+    assert parameters["track_unknown_space"] is False
+    assert parameters["obstacle_layer"]["airy"]["topic"] == (
+        "/nav2_obstacle_points"
+    )
+    assert parameters["inflation_layer.enabled"] is True
+
+
+def test_right_turn_costmap_launch_is_disabled_by_default():
+    path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
+    source = path.read_text()
+
+    assert '"use_right_turn_costmap", default_value="false"' in source
+    assert 'namespace="right_turn"' in source
+    assert '"/nav2_right_turn_costmap"' in source
+    assert '"/right_turn/costmap/costmap"' in source

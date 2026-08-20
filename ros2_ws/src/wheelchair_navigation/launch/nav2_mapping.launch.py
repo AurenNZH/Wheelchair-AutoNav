@@ -18,6 +18,9 @@ def generate_launch_description():
     parameters = os.path.join(
         package_share, "config", "nav2_front_costmap.yaml"
     )
+    right_turn_parameters = os.path.join(
+        package_share, "config", "nav2_right_turn_costmap.yaml"
+    )
     artifact_parameters = os.path.join(
         package_share, "config", "local_mapping.yaml"
     )
@@ -31,6 +34,19 @@ def generate_launch_description():
             "inflation_layer.enabled": LaunchConfiguration(
                 "use_inflation"
             ),
+            "inflation_layer.inflation_radius": LaunchConfiguration(
+                "inflation_radius"
+            ),
+            "inflation_layer.cost_scaling_factor": LaunchConfiguration(
+                "cost_scaling_factor"
+            ),
+        },
+        convert_types=True,
+    )
+    configured_right_turn_parameters = RewrittenYaml(
+        source_file=right_turn_parameters,
+        param_rewrites={
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
             "inflation_layer.inflation_radius": LaunchConfiguration(
                 "inflation_radius"
             ),
@@ -58,6 +74,27 @@ def generate_launch_description():
             ("costmap_updates", "/nav2_front_costmap_updates"),
             ("published_footprint", "/nav2_front_costmap_footprint"),
         ],
+    )
+    right_turn_costmap = Node(
+        package="nav2_costmap_2d",
+        executable="nav2_costmap_2d",
+        namespace="right_turn",
+        output="screen",
+        parameters=[configured_right_turn_parameters],
+        remappings=[
+            (
+                "/nav2_obstacle_points",
+                LaunchConfiguration("nav2_points_topic"),
+            ),
+            ("costmap", "/nav2_right_turn_costmap"),
+            ("costmap_raw", "/nav2_right_turn_costmap_raw"),
+            ("costmap_updates", "/nav2_right_turn_costmap_updates"),
+            (
+                "published_footprint",
+                "/nav2_right_turn_costmap_footprint",
+            ),
+        ],
+        condition=IfCondition(LaunchConfiguration("use_right_turn_costmap")),
     )
     artifact_filter = Node(
         package="wheelchair_navigation",
@@ -90,6 +127,20 @@ def generate_launch_description():
             }
         ],
     )
+    right_turn_lifecycle_manager = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="nav2_right_turn_costmap_lifecycle_manager",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "autostart": True,
+                "node_names": ["/right_turn/costmap/costmap"],
+            }
+        ],
+        condition=IfCondition(LaunchConfiguration("use_right_turn_costmap")),
+    )
     rviz = Node(
         package="rviz2",
         executable="rviz2",
@@ -110,6 +161,9 @@ def generate_launch_description():
                 "validate_cloud_timestamps", default_value="true"
             ),
             DeclareLaunchArgument("use_inflation", default_value="false"),
+            DeclareLaunchArgument(
+                "use_right_turn_costmap", default_value="false"
+            ),
             DeclareLaunchArgument("inflation_radius", default_value="0.55"),
             DeclareLaunchArgument(
                 "cost_scaling_factor", default_value="3.0"
@@ -144,7 +198,9 @@ def generate_launch_description():
             ),
             artifact_filter,
             costmap,
+            right_turn_costmap,
             lifecycle_manager,
+            right_turn_lifecycle_manager,
             rviz,
         ]
     )

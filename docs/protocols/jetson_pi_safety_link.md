@@ -1,6 +1,6 @@
 # Jetson–Pi Safety Link
 
-Version 1 is a fail-safe UDP heartbeat between the Raspberry Pi keyboard/CAN
+Version 3 is a fail-safe UDP heartbeat between the Raspberry Pi keyboard/CAN
 process and the Jetson ROS 2 supervisor. It carries operator intent to the
 Jetson and a permitted envelope back to the Pi; it never carries autonomous
 trajectories.
@@ -14,21 +14,23 @@ trajectories.
 Intent example:
 
 ```json
-{"v":1,"type":"intent","session":"UUID","seq":12,"steering":-0.1,"forward":0.2,"deadman":true}
+{"v":3,"type":"intent","session":"UUID","seq":12,"lateral":-1.0,"longitudinal":0.0,"intent_class":7,"deadman":true}
 ```
 
 Envelope example:
 
 ```json
-{"v":1,"type":"envelope","session":"UUID","intent_seq":12,"decision":2,"permitted_forward":0.2,"permitted_steering":-0.1,"reason":"clear","map_age_ms":42.0}
+{"v":3,"type":"envelope","session":"UUID","intent_seq":12,"decision":2,"permitted_forward":0.0,"permitted_steering":0.0,"permitted_lateral":-0.9,"permitted_longitudinal":0.0,"reason":"nav2_right_turn_clear","map_age_ms":42.0}
 ```
 
 In live Nav2 mode, `map_age_ms` is monotonic costmap receipt age. Filtered
 LiDAR acquisition age remains a separate Jetson diagnostic and safety gate.
 
-Decisions are `0=STOP`, `1=SLOW`, and `2=CLEAR`. Reverse is unsupported.
-ROS steering is left-positive; the Pi keyboard/CAN convention is
-right-positive, so the Pi adapter negates steering in both directions.
+Decisions are `0=STOP`, `1=SLOW`, and `2=CLEAR`. The legacy forward magnitude
+and steering fields remain for forward/reverse-cone enforcement. Version 3
+adds a signed permitted-axis vector for a gated pivot or hard-right request.
+ROS lateral is left-positive; the Pi JSM convention is right-positive, so the
+Pi adapter negates lateral when it rewrites the physical X byte.
 
 Both ends validate packet size, version, type, finite bounds, peer address,
 session, and sequence. Missing, malformed, stale, out-of-order,

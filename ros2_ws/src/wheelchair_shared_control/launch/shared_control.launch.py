@@ -20,6 +20,10 @@ def generate_launch_description():
                 default_value="/nav2_front_costmap",
             ),
             DeclareLaunchArgument(
+                "right_turn_costmap_topic",
+                default_value="/nav2_right_turn_costmap",
+            ),
+            DeclareLaunchArgument(
                 "source_header_topic",
                 default_value="/artifact_filter/source_header",
             ),
@@ -27,16 +31,29 @@ def generate_launch_description():
                 "freshness_mode", default_value="nav2_live"
             ),
             DeclareLaunchArgument("max_map_age_s", default_value="0.50"),
+            DeclareLaunchArgument(
+                "max_turn_map_age_s", default_value="0.50"
+            ),
             DeclareLaunchArgument("max_source_age_s", default_value="0.50"),
             DeclareLaunchArgument(
                 "max_future_source_offset_s", default_value="0.10"
             ),
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
-            DeclareLaunchArgument("slow_forward_limit", default_value="0.65"),
-            DeclareLaunchArgument("min_steering", default_value="-0.466307658"),
+            DeclareLaunchArgument("slow_forward_limit", default_value="0.30"),
+            DeclareLaunchArgument("reverse_limit", default_value="0.65"),
+            DeclareLaunchArgument("min_steering", default_value="-0.577350269"),
             DeclareLaunchArgument("max_steering", default_value="0.466307658"),
+            DeclareLaunchArgument(
+                "forward_right_cone_half_angle_deg", default_value="30.0"
+            ),
             DeclareLaunchArgument("enable_udp", default_value="false"),
+            DeclareLaunchArgument(
+                "enable_hard_right_turn", default_value="false"
+            ),
+            DeclareLaunchArgument(
+                "partial_turn_coverage_acknowledged", default_value="false"
+            ),
             DeclareLaunchArgument("bind_address", default_value="0.0.0.0"),
             DeclareLaunchArgument("pi_address", default_value=""),
             DeclareLaunchArgument("allowed_pi_address", default_value=""),
@@ -56,6 +73,9 @@ def generate_launch_description():
                         "front_costmap_topic": LaunchConfiguration(
                             "front_costmap_topic"
                         ),
+                        "right_turn_costmap_topic": LaunchConfiguration(
+                            "right_turn_costmap_topic"
+                        ),
                         "source_header_topic": LaunchConfiguration(
                             "source_header_topic"
                         ),
@@ -64,6 +84,9 @@ def generate_launch_description():
                         ),
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
+                        ),
+                        "max_turn_map_age_s": LaunchConfiguration(
+                            "max_turn_map_age_s"
                         ),
                         "max_source_age_s": LaunchConfiguration(
                             "max_source_age_s"
@@ -74,13 +97,27 @@ def generate_launch_description():
                         "slow_forward_limit": LaunchConfiguration(
                             "slow_forward_limit"
                         ),
+                        "reverse_limit": LaunchConfiguration("reverse_limit"),
                         "min_steering": LaunchConfiguration("min_steering"),
                         "max_steering": LaunchConfiguration("max_steering"),
+                        "forward_right_cone_half_angle_deg": (
+                            LaunchConfiguration(
+                                "forward_right_cone_half_angle_deg"
+                            )
+                        ),
                         "slow_cost_threshold": LaunchConfiguration(
                             "slow_cost_threshold"
                         ),
                         "stop_cost_threshold": LaunchConfiguration(
                             "stop_cost_threshold"
+                        ),
+                        "enable_hard_right_turn": LaunchConfiguration(
+                            "enable_hard_right_turn"
+                        ),
+                        "partial_turn_coverage_acknowledged": (
+                            LaunchConfiguration(
+                                "partial_turn_coverage_acknowledged"
+                            )
                         ),
                     },
                 ],

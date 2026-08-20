@@ -33,6 +33,12 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["stop_cost_threshold"] == 99
     assert parameters["enable_motion"] is False
     assert parameters["geometry_calibrated"] is False
+    assert parameters["right_turn_costmap_topic"] == (
+        "/nav2_right_turn_costmap"
+    )
+    assert parameters["enable_hard_right_turn"] is False
+    assert parameters["partial_turn_coverage_acknowledged"] is False
+    assert parameters["max_turn_map_age_s"] == 0.5
 
 
 def test_launch_exposes_costmap_topic_and_thresholds():
@@ -47,6 +53,9 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"max_source_age_s", default_value="0.50"' in source
     assert '"slow_cost_threshold", default_value="1"' in source
     assert '"stop_cost_threshold", default_value="99"' in source
+    assert '"enable_hard_right_turn", default_value="false"' in source
+    assert '"partial_turn_coverage_acknowledged"' in source
+    assert '"max_turn_map_age_s", default_value="0.50"' in source
 
 
 def test_replay_keeps_legacy_front_topic_explicit():
