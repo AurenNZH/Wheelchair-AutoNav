@@ -268,3 +268,11 @@ Physical shadow and enforcement testing after repairing the loose wire found
 normalized limit is therefore 0.60 and the Pi local limit is 60. CLEAR remains
 90 and unmonitored reverse remains 65; protocol v2 and all obstacle thresholds
 are unchanged.
+
+2026-08-21T22:51:07+01:00 — Simplified corridor visualization
+The checked-cell tuple, per-cell deduplication, and RViz cube list were removed
+after Phase 1 validation. The obstacle policy still evaluates the identical
+trajectory samples and Nav2 costs. RViz retains the requested centre
+trajectory plus its color-coded STOP/SLOW/CLEAR label, preserving operator
+feedback without carrying visualization-only cell bookkeeping through each
+safety decision.

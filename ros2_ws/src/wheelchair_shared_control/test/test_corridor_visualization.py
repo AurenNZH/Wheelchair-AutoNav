@@ -16,7 +16,7 @@ from wheelchair_shared_control.safety import (
 )
 
 
-def test_markers_show_exact_checked_cells_and_requested_path():
+def test_markers_show_requested_path_and_decision_label():
     costmap = weighted_costmap_from_grid(
         np.zeros(40 * 80, dtype=np.int16),
         frame_id="base_link",
@@ -40,7 +40,6 @@ def test_markers_show_exact_checked_cells_and_requested_path():
     markers = build_checked_corridor_markers(
         header=Header(frame_id="base_link"),
         decision=decision,
-        costmap=costmap,
         requested_steering=-0.55,
         config=config,
         label="forward_right -28.8deg",
@@ -48,10 +47,9 @@ def test_markers_show_exact_checked_cells_and_requested_path():
 
     assert decision.decision == CLEAR
     assert markers[0].action == Marker.DELETEALL
-    cells = next(marker for marker in markers if marker.ns == "checked_cells")
     path = next(marker for marker in markers if marker.ns == "requested_path")
     label = next(marker for marker in markers if marker.ns == "corridor_label")
-    assert len(cells.points) == len(decision.checked_cells)
+    assert all(marker.type != Marker.CUBE_LIST for marker in markers)
     assert len(path.points) > 2
     assert "forward_right" in label.text
     assert "nav2_cost_clear" in label.text

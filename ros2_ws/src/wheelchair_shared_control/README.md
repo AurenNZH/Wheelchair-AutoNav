@@ -47,8 +47,8 @@ checks every forward path from straight through the requested correction so
 the Pi can safely reduce that correction while applying CLEAR/SLOW caps.
 Reverse returns `reverse_unmonitored_slow` with a 0.65 magnitude limit without
 consulting the front map. Hard turns remain classified and return STOP. The
-checked-corridor marker shows only the cells sampled from the existing front
-costmap; it does not add another map or change the safety decision.
+checked-corridor marker shows the requested trajectory and color-coded
+decision label; it does not add another map or change the safety decision.
 
 The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in
 Nav2. STOP and SLOW distances are trajectory lookahead distances. The cost

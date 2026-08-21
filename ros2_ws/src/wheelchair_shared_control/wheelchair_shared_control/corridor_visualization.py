@@ -13,7 +13,6 @@ from wheelchair_shared_control.safety import (
     SLOW,
     SafetyConfig,
     SafetyDecision,
-    WeightedCostmap,
     trajectory_points,
 )
 
@@ -30,48 +29,22 @@ def build_checked_corridor_markers(
     *,
     header: Header,
     decision: SafetyDecision,
-    costmap: WeightedCostmap | None,
     requested_steering: float | None,
     config: SafetyConfig,
     label: str,
 ) -> MarkerArray:
-    """Build exact sampled cells, requested path, and decision label."""
+    """Build the requested path and color-coded decision label."""
 
     delete = Marker()
     delete.header = header
     delete.action = Marker.DELETEALL
     markers = [delete]
 
-    if costmap is not None and decision.checked_cells:
-        cells = Marker()
-        cells.header = header
-        cells.ns = "checked_cells"
-        cells.id = 0
-        cells.type = Marker.CUBE_LIST
-        cells.action = Marker.ADD
-        cells.pose.orientation.w = 1.0
-        cells.scale.x = costmap.resolution_m
-        cells.scale.y = costmap.resolution_m
-        cells.scale.z = 0.025
-        cells.color = _color(decision.decision, 0.45)
-        for col, row in decision.checked_cells:
-            if 0 <= col < costmap.width and 0 <= row < costmap.height:
-                cells.points.append(
-                    Point(
-                        x=(col + 0.5) * costmap.resolution_m
-                        + costmap.origin_x_m,
-                        y=(row + 0.5) * costmap.resolution_m
-                        + costmap.origin_y_m,
-                        z=0.025,
-                    )
-                )
-        markers.append(cells)
-
     if requested_steering is not None and math.isfinite(requested_steering):
         boundary = Marker()
         boundary.header = header
         boundary.ns = "requested_path"
-        boundary.id = 1
+        boundary.id = 0
         boundary.type = Marker.LINE_STRIP
         boundary.action = Marker.ADD
         boundary.pose.orientation.w = 1.0
@@ -86,7 +59,7 @@ def build_checked_corridor_markers(
     text = Marker()
     text.header = header
     text.ns = "corridor_label"
-    text.id = 2
+    text.id = 1
     text.type = Marker.TEXT_VIEW_FACING
     text.action = Marker.ADD
     text.pose.position.x = 0.25

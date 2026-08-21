@@ -73,7 +73,6 @@ class PathCostSummary:
     nearest_stop_distance_m: float | None = None
     valid: bool = False
     failure_reason: str | None = None
-    checked_cells: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -87,7 +86,6 @@ class SafetyDecision:
     nearest_slow_cost_distance_m: float | None = None
     nearest_stop_cost_distance_m: float | None = None
     path_cost_valid: bool = False
-    checked_cells: tuple[tuple[int, int], ...] = ()
 
 
 def weighted_costmap_from_grid(
@@ -223,7 +221,6 @@ def evaluate_safety(
             summary.nearest_slow_distance_m,
             summary.nearest_stop_distance_m,
             True,
-            summary.checked_cells,
         )
     return SafetyDecision(
         CLEAR,
@@ -235,7 +232,6 @@ def evaluate_safety(
         summary.nearest_slow_distance_m,
         summary.nearest_stop_distance_m,
         True,
-        summary.checked_cells,
     )
 
 
@@ -256,27 +252,10 @@ def swept_path_costs(
     maximum_cost = None
     nearest_slow = None
     nearest_stop = None
-    checked_cells = []
-    checked_cell_set = set()
     for candidate in candidates:
         summary = _costs_for_steering(costmap, float(candidate), config)
-        for cell in summary.checked_cells:
-            if cell not in checked_cell_set:
-                checked_cell_set.add(cell)
-                checked_cells.append(cell)
         if not summary.valid:
-            return PathCostSummary(
-                maximum_cost=_maximum(maximum_cost, summary.maximum_cost),
-                nearest_slow_distance_m=_nearest(
-                    nearest_slow, summary.nearest_slow_distance_m
-                ),
-                nearest_stop_distance_m=_nearest(
-                    nearest_stop, summary.nearest_stop_distance_m
-                ),
-                valid=False,
-                failure_reason=summary.failure_reason,
-                checked_cells=tuple(checked_cells),
-            )
+            return summary
         maximum_cost = _maximum(maximum_cost, summary.maximum_cost)
         nearest_slow = _nearest(
             nearest_slow, summary.nearest_slow_distance_m
@@ -289,7 +268,6 @@ def swept_path_costs(
         nearest_slow_distance_m=nearest_slow,
         nearest_stop_distance_m=nearest_stop,
         valid=True,
-        checked_cells=tuple(checked_cells),
     )
 
 
@@ -306,8 +284,6 @@ def _costs_for_steering(
     maximum_cost = None
     nearest_slow = None
     nearest_stop = None
-    checked_cells = []
-    checked_cell_set = set()
     for distance, (x_m, y_m) in zip(distances, points):
         col = math.floor(
             (float(x_m) - costmap.origin_x_m) / costmap.resolution_m
@@ -315,10 +291,6 @@ def _costs_for_steering(
         row = math.floor(
             (float(y_m) - costmap.origin_y_m) / costmap.resolution_m
         )
-        cell = (col, row)
-        if cell not in checked_cell_set:
-            checked_cell_set.add(cell)
-            checked_cells.append(cell)
         if (
             col < 0
             or col >= costmap.width
@@ -331,7 +303,6 @@ def _costs_for_steering(
                 nearest_stop_distance_m=nearest_stop,
                 valid=False,
                 failure_reason="trajectory_outside_costmap",
-                checked_cells=tuple(checked_cells),
             )
         cost = int(costmap.costs[row, col])
         if cost < 0:
@@ -341,7 +312,6 @@ def _costs_for_steering(
                 nearest_stop_distance_m=nearest_stop,
                 valid=False,
                 failure_reason="unknown_nav2_cost",
-                checked_cells=tuple(checked_cells),
             )
         maximum_cost = (
             cost if maximum_cost is None else max(maximum_cost, cost)
@@ -356,7 +326,6 @@ def _costs_for_steering(
         nearest_slow_distance_m=nearest_slow,
         nearest_stop_distance_m=nearest_stop,
         valid=True,
-        checked_cells=tuple(checked_cells),
     )
 
 
@@ -455,7 +424,6 @@ def _stop_from_costs(
         summary.nearest_slow_distance_m,
         summary.nearest_stop_distance_m,
         summary.valid,
-        summary.checked_cells,
     )
 
 

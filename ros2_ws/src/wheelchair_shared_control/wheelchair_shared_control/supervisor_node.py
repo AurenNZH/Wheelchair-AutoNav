@@ -548,7 +548,6 @@ class SafetySupervisorNode(Node):
         markers = build_checked_corridor_markers(
             header=header,
             decision=decision,
-            costmap=self._front_costmap,
             requested_steering=requested_steering,
             config=self._config,
             label=label,
