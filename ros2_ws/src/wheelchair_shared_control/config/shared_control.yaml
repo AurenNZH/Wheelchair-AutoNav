@@ -21,7 +21,7 @@
     # ROS lateral correction is left-positive. tan(30 degrees) = 0.5774.
     min_steering: -0.577350269
     max_steering: 0.577350269
-    slow_forward_limit: 0.30
+    slow_forward_limit: 0.60
     reverse_limit: 0.65
     path_sample_step_m: 0.05
     steering_sample_step: 0.05

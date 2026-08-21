@@ -343,7 +343,7 @@ class SafetyLinkTests(unittest.TestCase):
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
             command_cap=0.90,
-            slow_command_cap=0.30,
+            slow_command_cap=0.60,
             reverse_command_cap=0.65,
             udp_socket=udp,
             monotonic_clock=clock,

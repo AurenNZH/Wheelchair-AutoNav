@@ -33,7 +33,7 @@ options are explicit rather than stored as enabled defaults:
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.30 reverse_limit:=0.65
+  slow_forward_limit:=0.60 reverse_limit:=0.65
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow

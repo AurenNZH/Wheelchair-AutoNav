@@ -129,8 +129,8 @@ def _arguments(argv=None):
     parser.add_argument(
         "--slow-cap",
         type=_positive_integer,
-        default=30,
-        help="local forward SLOW ceiling in raw JSM counts (default: 30)",
+        default=60,
+        help="local forward SLOW ceiling in raw JSM counts (default: 60)",
     )
     parser.add_argument(
         "--reverse-cap",

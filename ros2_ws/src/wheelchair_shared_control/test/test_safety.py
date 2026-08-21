@@ -166,7 +166,7 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(slow.decision, SLOW)
         self.assertEqual(slow.reason, "nav2_cost_slow")
         self.assertEqual(slow.maximum_path_cost, 50)
-        self.assertAlmostEqual(slow.permitted_forward, 0.30)
+        self.assertAlmostEqual(slow.permitted_forward, 0.60)
         self.assertEqual(clear.decision, CLEAR)
 
     def test_cost_98_slows_while_99_stops_at_same_location(self):

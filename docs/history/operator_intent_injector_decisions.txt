@@ -261,3 +261,10 @@ cone for forward and reverse. Physical forward CLEAR is capped at 90 raw
 counts, forward SLOW at 30, and unmonitored reverse at 65. RViz receives only
 diagnostic markers for the exact cells and requested path already evaluated by
 the front-map policy; the markers do not influence its decisions.
+
+2026-08-21T22:42:07+01:00 — Validated Phase 1 SLOW cap
+Physical shadow and enforcement testing after repairing the loose wire found
+60 raw counts to be the intended usable forward SLOW setting. The Jetson
+normalized limit is therefore 0.60 and the Pi local limit is 60. CLEAR remains
+90 and unmonitored reverse remains 65; protocol v2 and all obstacle thresholds
+are unchanged.

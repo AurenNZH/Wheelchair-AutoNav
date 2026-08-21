@@ -71,7 +71,7 @@ measured slot-2 JSM request to the Jetson and applying its safety envelope.
 It defaults to `shadow`, where physical commands remain unchanged. Protocol
 v2 classifies the complete signed joystick vector. In `enforce`, forward and
 reverse corrections inside the symmetric 30-degree cone are supervised;
-CLEAR is locally capped at 90 raw forward counts and forward SLOW at 30.
+CLEAR is locally capped at 90 raw forward counts and forward SLOW at 60.
 Reverse requests in the matching 30-degree cone are intentionally unmonitored
 by the front map and
 fixed to SLOW 65. Lateral output scales with the permitted longitudinal

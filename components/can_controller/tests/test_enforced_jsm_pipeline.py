@@ -117,7 +117,7 @@ class EnforcedJsmPipeline:
             allowed_jetson_address=JETSON_ADDRESS,
             required_clear_envelopes=1,
             command_cap=0.90,
-            slow_command_cap=0.30,
+            slow_command_cap=0.60,
             reverse_command_cap=0.65,
             heartbeat_hz=20.0,
             envelope_timeout_s=0.20,
@@ -188,7 +188,7 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
     def test_clear_slow_and_stop_rewrite_slot_two_frame_axes(self):
         cases = (
             (CLEAR, 0.80, "nav2_cost_clear", (0, 80)),
-            (SLOW, 0.30, "nav2_cost_slow", (0, 30)),
+            (SLOW, 0.60, "nav2_cost_slow", (0, 60)),
             (STOP, 0.0, "nav2_cost_stop", (0, 0)),
         )
         for decision, permitted, reason, expected in cases:
