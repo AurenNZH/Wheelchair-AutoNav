@@ -123,14 +123,20 @@ def _arguments(argv=None):
     parser.add_argument(
         "--clear-cap",
         type=_positive_integer,
-        default=100,
-        help="local CLEAR ceiling in raw JSM counts (default: 100)",
+        default=90,
+        help="local CLEAR ceiling in raw JSM counts (default: 90)",
     )
     parser.add_argument(
         "--slow-cap",
         type=_positive_integer,
+        default=30,
+        help="local forward SLOW ceiling in raw JSM counts (default: 30)",
+    )
+    parser.add_argument(
+        "--reverse-cap",
+        type=_positive_integer,
         default=65,
-        help="local SLOW ceiling in raw JSM counts (default: 65)",
+        help="local reverse ceiling in raw JSM counts (default: 65)",
     )
     parser.add_argument(
         "--deadzone",
@@ -141,8 +147,8 @@ def _arguments(argv=None):
     parser.add_argument(
         "--forward-cone-deg",
         type=_positive_float,
-        default=25.0,
-        help="supported motion correction half-angle (default: 25 degrees)",
+        default=30.0,
+        help="symmetric motion correction half-angle (default: 30 degrees)",
     )
     parser.add_argument("--display-rate-hz", type=_positive_float, default=5.0)
     parser.add_argument("--duration-s", type=_positive_float, default=None)
@@ -184,6 +190,8 @@ def main(argv=None) -> int:
             raise ValueError("clear-cap must be in [1, 100]")
         if args.slow_cap > args.clear_cap:
             raise ValueError("slow-cap must not exceed clear-cap")
+        if args.reverse_cap > 100:
+            raise ValueError("reverse-cap must be in [1, 100]")
         if args.forward_cone_deg >= 90.0:
             raise ValueError("forward-cone-deg must be less than 90")
     except ValueError as exc:
@@ -213,6 +221,7 @@ def main(argv=None) -> int:
             required_clear_envelopes=args.required_clear_envelopes,
             command_cap=args.clear_cap / 100.0,
             slow_command_cap=args.slow_cap / 100.0,
+            reverse_command_cap=args.reverse_cap / 100.0,
             neutral_deadzone=args.deadzone,
             forward_cone_half_angle_deg=args.forward_cone_deg,
         )

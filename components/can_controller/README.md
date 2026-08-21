@@ -70,9 +70,10 @@ for topology discovery, expected output, and acceptance checks.
 measured slot-2 JSM request to the Jetson and applying its safety envelope.
 It defaults to `shadow`, where physical commands remain unchanged. Protocol
 v2 classifies the complete signed joystick vector. In `enforce`, forward and
-corrections inside the measured 25-degree cone are supervised; CLEAR is
-locally capped at 100 raw forward counts and SLOW at 65. Reverse requests in
-the matching 25-degree cone are intentionally unmonitored by the front map and
+reverse corrections inside the symmetric 30-degree cone are supervised;
+CLEAR is locally capped at 90 raw forward counts and forward SLOW at 30.
+Reverse requests in the matching 30-degree cone are intentionally unmonitored
+by the front map and
 fixed to SLOW 65. Lateral output scales with the permitted longitudinal
 magnitude so the joystick direction is preserved. Hard turns, every STOP, and
 every link failure are centred.
@@ -81,7 +82,7 @@ every link failure are centred.
 python scripts/supervise_physical_joystick.py \
   --mode shadow \
   --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 10.0.0.48 --deadzone 4 --forward-cone-deg 25
+  --jetson-address 10.0.0.48 --deadzone 4 --forward-cone-deg 30
 ```
 
 Do not run this alongside `cangw`, keyboard teleop, the observer, or another

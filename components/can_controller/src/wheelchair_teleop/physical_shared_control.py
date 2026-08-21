@@ -44,7 +44,7 @@ class PhysicalJsmSharedControl:
         *,
         mode: str = "shadow",
         neutral_deadzone: int = 5,
-        forward_cone_half_angle_deg: float = 25.0,
+        forward_cone_half_angle_deg: float = 30.0,
     ) -> None:
         if mode not in ("shadow", "enforce"):
             raise ValueError("mode must be 'shadow' or 'enforce'")

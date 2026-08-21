@@ -9,9 +9,15 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from nav_msgs.msg import OccupancyGrid
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import Header
 from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
+from visualization_msgs.msg import MarkerArray
+
+from wheelchair_shared_control.corridor_visualization import (
+    build_checked_corridor_markers,
+)
 
 from wheelchair_shared_control.safety import (
     SafetyConfig,
@@ -196,6 +202,9 @@ class SafetySupervisorNode(Node):
         )
         self.declare_parameter("freshness_mode", NAV2_LIVE)
         self.declare_parameter("diagnostics_topic", "/shared_control/diagnostics")
+        self.declare_parameter(
+            "checked_corridor_topic", "/shared_control/checked_corridor"
+        )
         self.declare_parameter("decision_rate_hz", 20.0)
         self.declare_parameter("max_intent_age_s", 0.20)
         self.declare_parameter("enable_motion", False)
@@ -203,13 +212,14 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("stop_distance_m", 0.70)
         self.declare_parameter("slow_distance_m", 1.20)
         self.declare_parameter("min_turn_radius_m", 1.20)
-        self.declare_parameter("min_steering", -0.466307658)
-        self.declare_parameter("max_steering", 0.466307658)
-        self.declare_parameter("slow_forward_limit", 0.65)
+        self.declare_parameter("min_steering", -0.577350269)
+        self.declare_parameter("max_steering", 0.577350269)
+        self.declare_parameter("slow_forward_limit", 0.30)
+        self.declare_parameter("reverse_limit", 0.65)
         self.declare_parameter("path_sample_step_m", 0.05)
         self.declare_parameter("steering_sample_step", 0.05)
         self.declare_parameter("neutral_deadzone", 0.05)
-        self.declare_parameter("forward_cone_half_angle_deg", 25.0)
+        self.declare_parameter("forward_cone_half_angle_deg", 30.0)
         self.declare_parameter("max_map_age_s", 0.50)
         self.declare_parameter("max_source_age_s", 0.50)
         self.declare_parameter("max_future_source_offset_s", 0.10)
@@ -233,6 +243,16 @@ class SafetySupervisorNode(Node):
         )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray, self.get_parameter("diagnostics_topic").value, 10
+        )
+        marker_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._corridor_pub = self.create_publisher(
+            MarkerArray,
+            self.get_parameter("checked_corridor_topic").value,
+            marker_qos,
         )
         self.create_subscription(
             OperatorIntent,
@@ -286,6 +306,7 @@ class SafetySupervisorNode(Node):
             slow_forward_limit=float(
                 self.get_parameter("slow_forward_limit").value
             ),
+            reverse_limit=float(self.get_parameter("reverse_limit").value),
             path_sample_step_m=float(
                 self.get_parameter("path_sample_step_m").value
             ),
@@ -441,6 +462,7 @@ class SafetySupervisorNode(Node):
                 else max(0.0, source_age_s * 1000.0)
             ),
         )
+        self._publish_checked_corridor(decision, envelope.header)
 
     def _evaluate_intent(self, map_age_s: float) -> SafetyDecision:
         lateral = float(self._intent.lateral)
@@ -488,6 +510,50 @@ class SafetySupervisorNode(Node):
         from wheelchair_shared_control.safety import SafetyDecision, STOP
 
         return SafetyDecision(STOP, 0.0, 0.0, reason)
+
+    def _publish_checked_corridor(
+        self,
+        decision: SafetyDecision,
+        header: Header,
+    ) -> None:
+        requested_steering = None
+        label = "waiting"
+        if self._intent is not None:
+            lateral = float(self._intent.lateral)
+            longitudinal = float(self._intent.longitudinal)
+            if lateral == 0.0 and longitudinal == 0.0:
+                longitudinal = float(self._intent.forward)
+                lateral = float(self._intent.steering) * longitudinal
+            try:
+                classified = classify_normalized_axes(
+                    lateral,
+                    longitudinal,
+                    neutral_deadzone=self._config.neutral_deadzone,
+                    forward_cone_half_angle_deg=(
+                        self._config.forward_cone_half_angle_deg
+                    ),
+                )
+                angle = (
+                    "none"
+                    if classified.heading_deg is None
+                    else "%.1fdeg" % classified.heading_deg
+                )
+                label = "%s %s" % (classified.label, angle)
+                if classified.is_forward:
+                    requested_steering = classified.steering_ratio
+                elif classified.is_reverse:
+                    label += " unmonitored"
+            except ValueError:
+                label = "invalid_intent"
+        markers = build_checked_corridor_markers(
+            header=header,
+            decision=decision,
+            costmap=self._front_costmap,
+            requested_steering=requested_steering,
+            config=self._config,
+            label=label,
+        )
+        self._corridor_pub.publish(markers)
 
     def _publish_diagnostics(
         self,

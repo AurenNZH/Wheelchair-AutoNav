@@ -117,6 +117,26 @@ class SafetyPolicyTests(unittest.TestCase):
                 self.assertAlmostEqual(decision.permitted_steering, steering)
                 self.assertFalse(decision.path_cost_valid)
 
+    def test_symmetric_thirty_degree_corrections_reach_policy(self):
+        fixtures = (
+            (-0.57, 1.0, FORWARD_RIGHT, CLEAR),
+            (0.57, 1.0, FORWARD_LEFT, CLEAR),
+            (-0.57, -1.0, REVERSE_RIGHT, SLOW),
+            (0.57, -1.0, REVERSE_LEFT, SLOW),
+        )
+        for lateral, longitudinal, intent_class, expected in fixtures:
+            with self.subTest(intent_class=intent_class):
+                decision = evaluate_safety(
+                    OperatorIntentData(
+                        "session", 20, lateral, longitudinal,
+                        intent_class, True
+                    ),
+                    self.empty,
+                    0.1,
+                    self.enabled,
+                )
+                self.assertEqual(decision.decision, expected)
+
     def test_cost_bands_produce_stop_slow_and_clear(self):
         fast_intent = OperatorIntentData(
             "session", 8, 0.0, 1.0, FORWARD, True
@@ -146,7 +166,7 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(slow.decision, SLOW)
         self.assertEqual(slow.reason, "nav2_cost_slow")
         self.assertEqual(slow.maximum_path_cost, 50)
-        self.assertAlmostEqual(slow.permitted_forward, 0.65)
+        self.assertAlmostEqual(slow.permitted_forward, 0.30)
         self.assertEqual(clear.decision, CLEAR)
 
     def test_cost_98_slows_while_99_stops_at_same_location(self):
@@ -272,6 +292,8 @@ class SafetyPolicyTests(unittest.TestCase):
             SafetyConfig(path_sample_step_m=math.nan),
             SafetyConfig(slow_forward_limit=0.0),
             SafetyConfig(slow_forward_limit=1.01),
+            SafetyConfig(reverse_limit=0.0),
+            SafetyConfig(reverse_limit=1.01),
         )
         for config in invalid:
             with self.subTest(config=config):

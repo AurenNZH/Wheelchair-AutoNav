@@ -80,8 +80,9 @@ class SafetyLink:
         required_clear_envelopes: int = 5,
         command_cap: float = 0.20,
         slow_command_cap: float | None = None,
+        reverse_command_cap: float = 0.65,
         neutral_deadzone: int = 5,
-        forward_cone_half_angle_deg: float = 25.0,
+        forward_cone_half_angle_deg: float = 30.0,
         udp_socket=None,
         monotonic_clock=time.monotonic,
     ):
@@ -99,6 +100,7 @@ class SafetyLink:
             if slow_command_cap is None
             else float(slow_command_cap)
         )
+        self.reverse_command_cap = float(reverse_command_cap)
         self.neutral_deadzone = int(neutral_deadzone)
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
@@ -146,6 +148,8 @@ class SafetyLink:
             raise ValueError("command_cap must be in (0, 1]")
         if not 0.0 < self.slow_command_cap <= self.command_cap:
             raise ValueError("slow_command_cap must be in (0, command_cap]")
+        if not 0.0 < self.reverse_command_cap <= 1.0:
+            raise ValueError("reverse_command_cap must be in (0, 1]")
         classify_raw_axes(
             0,
             0,
@@ -236,11 +240,12 @@ class SafetyLink:
             self._reason = "invalid_safety_envelope_limit"
             return 0, 0
 
-        decision_cap = (
-            self.slow_command_cap
-            if envelope.decision == SLOW or command.is_reverse
-            else self.command_cap
-        )
+        if command.is_reverse:
+            decision_cap = self.reverse_command_cap
+        elif envelope.decision == SLOW:
+            decision_cap = self.slow_command_cap
+        else:
+            decision_cap = self.command_cap
         permitted_forward = min(
             envelope.permitted_forward,
             decision_cap,

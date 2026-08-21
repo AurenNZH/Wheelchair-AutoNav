@@ -31,6 +31,11 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["max_source_age_s"] == 0.5
     assert parameters["slow_cost_threshold"] == 1
     assert parameters["stop_cost_threshold"] == 99
+    assert parameters["slow_forward_limit"] == 0.30
+    assert parameters["reverse_limit"] == 0.65
+    assert parameters["min_steering"] == -0.577350269
+    assert parameters["max_steering"] == 0.577350269
+    assert parameters["forward_cone_half_angle_deg"] == 30.0
     assert parameters["enable_motion"] is False
     assert parameters["geometry_calibrated"] is False
 
@@ -47,6 +52,7 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"max_source_age_s", default_value="0.50"' in source
     assert '"slow_cost_threshold", default_value="1"' in source
     assert '"stop_cost_threshold", default_value="99"' in source
+    assert '"forward_cone_half_angle_deg", default_value="30.0"' in source
 
 
 def test_replay_keeps_legacy_front_topic_explicit():

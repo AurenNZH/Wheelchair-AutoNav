@@ -39,13 +39,14 @@ class SafetyConfig:
     stop_distance_m: float = 0.70
     slow_distance_m: float = 1.20
     min_turn_radius_m: float = 1.20
-    min_steering: float = -0.466307658
-    max_steering: float = 0.466307658
-    slow_forward_limit: float = 0.65
+    min_steering: float = -0.577350269
+    max_steering: float = 0.577350269
+    slow_forward_limit: float = 0.30
+    reverse_limit: float = 0.65
     path_sample_step_m: float = 0.05
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05
-    forward_cone_half_angle_deg: float = 25.0
+    forward_cone_half_angle_deg: float = 30.0
     max_map_age_s: float = 0.50
     slow_cost_threshold: int = 1
     stop_cost_threshold: int = 99
@@ -72,6 +73,7 @@ class PathCostSummary:
     nearest_stop_distance_m: float | None = None
     valid: bool = False
     failure_reason: str | None = None
+    checked_cells: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,7 @@ class SafetyDecision:
     nearest_slow_cost_distance_m: float | None = None
     nearest_stop_cost_distance_m: float | None = None
     path_cost_valid: bool = False
+    checked_cells: tuple[tuple[int, int], ...] = ()
 
 
 def weighted_costmap_from_grid(
@@ -191,7 +194,7 @@ def evaluate_safety(
     if intent.intent_class in REVERSE_CLASSES:
         return SafetyDecision(
             SLOW,
-            min(abs(float(intent.longitudinal)), config.slow_forward_limit),
+            min(abs(float(intent.longitudinal)), config.reverse_limit),
             steering,
             "reverse_unmonitored_slow",
         )
@@ -220,6 +223,7 @@ def evaluate_safety(
             summary.nearest_slow_distance_m,
             summary.nearest_stop_distance_m,
             True,
+            summary.checked_cells,
         )
     return SafetyDecision(
         CLEAR,
@@ -231,6 +235,7 @@ def evaluate_safety(
         summary.nearest_slow_distance_m,
         summary.nearest_stop_distance_m,
         True,
+        summary.checked_cells,
     )
 
 
@@ -251,10 +256,27 @@ def swept_path_costs(
     maximum_cost = None
     nearest_slow = None
     nearest_stop = None
+    checked_cells = []
+    checked_cell_set = set()
     for candidate in candidates:
         summary = _costs_for_steering(costmap, float(candidate), config)
+        for cell in summary.checked_cells:
+            if cell not in checked_cell_set:
+                checked_cell_set.add(cell)
+                checked_cells.append(cell)
         if not summary.valid:
-            return summary
+            return PathCostSummary(
+                maximum_cost=_maximum(maximum_cost, summary.maximum_cost),
+                nearest_slow_distance_m=_nearest(
+                    nearest_slow, summary.nearest_slow_distance_m
+                ),
+                nearest_stop_distance_m=_nearest(
+                    nearest_stop, summary.nearest_stop_distance_m
+                ),
+                valid=False,
+                failure_reason=summary.failure_reason,
+                checked_cells=tuple(checked_cells),
+            )
         maximum_cost = _maximum(maximum_cost, summary.maximum_cost)
         nearest_slow = _nearest(
             nearest_slow, summary.nearest_slow_distance_m
@@ -267,6 +289,7 @@ def swept_path_costs(
         nearest_slow_distance_m=nearest_slow,
         nearest_stop_distance_m=nearest_stop,
         valid=True,
+        checked_cells=tuple(checked_cells),
     )
 
 
@@ -275,28 +298,27 @@ def _costs_for_steering(
     steering: float,
     config: SafetyConfig,
 ) -> PathCostSummary:
+    points = trajectory_points(steering, config)
     step = float(config.path_sample_step_m)
     samples = max(1, int(math.ceil(config.slow_distance_m / step)))
     distances = np.linspace(0.0, config.slow_distance_m, samples + 1)
-    curvature = steering / config.min_turn_radius_m
-    if abs(curvature) < 1e-6:
-        xs = distances
-        ys = np.zeros_like(distances)
-    else:
-        yaws = curvature * distances
-        xs = np.sin(yaws) / curvature
-        ys = (1.0 - np.cos(yaws)) / curvature
 
     maximum_cost = None
     nearest_slow = None
     nearest_stop = None
-    for distance, x_m, y_m in zip(distances, xs, ys):
+    checked_cells = []
+    checked_cell_set = set()
+    for distance, (x_m, y_m) in zip(distances, points):
         col = math.floor(
             (float(x_m) - costmap.origin_x_m) / costmap.resolution_m
         )
         row = math.floor(
             (float(y_m) - costmap.origin_y_m) / costmap.resolution_m
         )
+        cell = (col, row)
+        if cell not in checked_cell_set:
+            checked_cell_set.add(cell)
+            checked_cells.append(cell)
         if (
             col < 0
             or col >= costmap.width
@@ -309,6 +331,7 @@ def _costs_for_steering(
                 nearest_stop_distance_m=nearest_stop,
                 valid=False,
                 failure_reason="trajectory_outside_costmap",
+                checked_cells=tuple(checked_cells),
             )
         cost = int(costmap.costs[row, col])
         if cost < 0:
@@ -318,6 +341,7 @@ def _costs_for_steering(
                 nearest_stop_distance_m=nearest_stop,
                 valid=False,
                 failure_reason="unknown_nav2_cost",
+                checked_cells=tuple(checked_cells),
             )
         maximum_cost = (
             cost if maximum_cost is None else max(maximum_cost, cost)
@@ -332,6 +356,29 @@ def _costs_for_steering(
         nearest_slow_distance_m=nearest_slow,
         nearest_stop_distance_m=nearest_stop,
         valid=True,
+        checked_cells=tuple(checked_cells),
+    )
+
+
+def trajectory_points(
+    steering: float,
+    config: SafetyConfig,
+) -> tuple[tuple[float, float], ...]:
+    """Return the exact robot-centre samples used for one path check."""
+
+    step = float(config.path_sample_step_m)
+    samples = max(1, int(math.ceil(config.slow_distance_m / step)))
+    distances = np.linspace(0.0, config.slow_distance_m, samples + 1)
+    curvature = float(steering) / config.min_turn_radius_m
+    if abs(curvature) < 1e-6:
+        xs = distances
+        ys = np.zeros_like(distances)
+    else:
+        yaws = curvature * distances
+        xs = np.sin(yaws) / curvature
+        ys = (1.0 - np.cos(yaws)) / curvature
+    return tuple(
+        (float(x_m), float(y_m)) for x_m, y_m in zip(xs, ys)
     )
 
 
@@ -354,6 +401,11 @@ def validate_cost_policy(config: SafetyConfig) -> None:
         and 0.0 < config.slow_forward_limit <= 1.0
     ):
         raise ValueError("slow forward limit must be in (0, 1]")
+    if not (
+        math.isfinite(config.reverse_limit)
+        and 0.0 < config.reverse_limit <= 1.0
+    ):
+        raise ValueError("reverse limit must be in (0, 1]")
     if not (
         1
         <= config.slow_cost_threshold
@@ -403,6 +455,7 @@ def _stop_from_costs(
         summary.nearest_slow_distance_m,
         summary.nearest_stop_distance_m,
         summary.valid,
+        summary.checked_cells,
     )
 
 
@@ -417,6 +470,7 @@ __all__ = [
     "WeightedCostmap",
     "evaluate_safety",
     "swept_path_costs",
+    "trajectory_points",
     "validate_cost_policy",
     "weighted_costmap_from_grid",
 ]

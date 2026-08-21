@@ -67,7 +67,7 @@ def classify_raw_axes(
     y_raw: int,
     *,
     neutral_deadzone: int = 5,
-    forward_cone_half_angle_deg: float = 25.0,
+    forward_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     """Classify signed R-Net axes; ROS lateral is left-positive."""
 
@@ -96,7 +96,7 @@ def classify_normalized_axes(
     longitudinal: float,
     *,
     neutral_deadzone: float = 0.05,
-    forward_cone_half_angle_deg: float = 25.0,
+    forward_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     """Classify normalized left/forward axes into a stable semantic intent."""
 

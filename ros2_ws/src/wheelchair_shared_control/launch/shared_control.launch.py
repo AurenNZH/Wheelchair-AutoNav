@@ -33,9 +33,13 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
-            DeclareLaunchArgument("slow_forward_limit", default_value="0.65"),
-            DeclareLaunchArgument("min_steering", default_value="-0.466307658"),
-            DeclareLaunchArgument("max_steering", default_value="0.466307658"),
+            DeclareLaunchArgument("slow_forward_limit", default_value="0.30"),
+            DeclareLaunchArgument("reverse_limit", default_value="0.65"),
+            DeclareLaunchArgument("min_steering", default_value="-0.577350269"),
+            DeclareLaunchArgument("max_steering", default_value="0.577350269"),
+            DeclareLaunchArgument(
+                "forward_cone_half_angle_deg", default_value="30.0"
+            ),
             DeclareLaunchArgument("enable_udp", default_value="false"),
             DeclareLaunchArgument("bind_address", default_value="0.0.0.0"),
             DeclareLaunchArgument("pi_address", default_value=""),
@@ -74,8 +78,12 @@ def generate_launch_description():
                         "slow_forward_limit": LaunchConfiguration(
                             "slow_forward_limit"
                         ),
+                        "reverse_limit": LaunchConfiguration("reverse_limit"),
                         "min_steering": LaunchConfiguration("min_steering"),
                         "max_steering": LaunchConfiguration("max_steering"),
+                        "forward_cone_half_angle_deg": LaunchConfiguration(
+                            "forward_cone_half_angle_deg"
+                        ),
                         "slow_cost_threshold": LaunchConfiguration(
                             "slow_cost_threshold"
                         ),

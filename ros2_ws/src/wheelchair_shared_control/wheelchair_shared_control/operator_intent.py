@@ -65,7 +65,7 @@ def classify_normalized_axes(
     longitudinal: float,
     *,
     neutral_deadzone: float = 0.05,
-    forward_cone_half_angle_deg: float = 25.0,
+    forward_cone_half_angle_deg: float = 30.0,
 ) -> ClassifiedIntent:
     lateral = float(lateral)
     longitudinal = float(longitudinal)

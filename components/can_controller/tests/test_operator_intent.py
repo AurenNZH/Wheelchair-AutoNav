@@ -52,9 +52,14 @@ class OperatorIntentClassificationTests(unittest.TestCase):
         self.assertAlmostEqual(lateral.lateral, -0.06)
 
     def test_forward_cone_boundary_is_inclusive(self):
-        # tan(25 degrees) * 100 is about 46.6 raw counts.
-        self.assertTrue(classify_raw_axes(-46, 100).is_forward)
-        self.assertEqual(classify_raw_axes(-47, 100).intent_class, LEFT_TURN)
+        # tan(30 degrees) * 100 is about 57.7 raw counts.
+        for x_raw in (-57, 57):
+            self.assertTrue(classify_raw_axes(x_raw, 100).is_forward)
+            self.assertTrue(classify_raw_axes(x_raw, -100).is_reverse)
+        self.assertEqual(classify_raw_axes(-58, 100).intent_class, LEFT_TURN)
+        self.assertEqual(classify_raw_axes(58, 100).intent_class, RIGHT_TURN)
+        self.assertEqual(classify_raw_axes(-58, -100).intent_class, LEFT_TURN)
+        self.assertEqual(classify_raw_axes(58, -100).intent_class, RIGHT_TURN)
 
     def test_forward_steering_ratio_uses_vector_direction(self):
         correction = classify_raw_axes(-14, 99)

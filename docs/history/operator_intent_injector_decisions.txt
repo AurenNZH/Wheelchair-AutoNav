@@ -249,3 +249,15 @@ is correspondingly 0.65 so the two enforcement endpoints agree. This replaces
 the proposed 70/40 values before their validation run; it does not change the
 keyboard teleop defaults, obstacle thresholds, reverse monitoring scope, or
 any fail-closed condition.
+
+2026-08-21T20:31:05+01:00 — Phase 1 reimplementation after hardware repair
+The unstable right-turn bringup was fully reverted before this work. Phase 1
+retains the single filtered `/nav2_front_costmap`, UDP protocol v2, and the
+existing forward/reverse enforcement path. No centred turn map, hard-turn
+authorization, signed envelope extension, or partial-coverage gate returns.
+
+Castor-wheel heading correction is accommodated with one symmetric 30-degree
+cone for forward and reverse. Physical forward CLEAR is capped at 90 raw
+counts, forward SLOW at 30, and unmonitored reverse at 65. RViz receives only
+diagnostic markers for the exact cells and requested path already evaluated by
+the front-map policy; the markers do not influence its decisions.

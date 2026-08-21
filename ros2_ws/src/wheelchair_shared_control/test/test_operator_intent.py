@@ -42,11 +42,24 @@ class OperatorIntentClassificationTests(unittest.TestCase):
             RELEASED,
         )
         self.assertTrue(
-            classify_normalized_axes(0.46, 1.0).is_forward
+            classify_normalized_axes(0.57, 1.0).is_forward
         )
         self.assertEqual(
-            classify_normalized_axes(0.47, 1.0).intent_class,
+            classify_normalized_axes(0.58, 1.0).intent_class,
             LEFT_TURN,
+        )
+        self.assertTrue(
+            classify_normalized_axes(-0.57, 1.0).is_forward
+        )
+        self.assertEqual(
+            classify_normalized_axes(-0.58, 1.0).intent_class,
+            RIGHT_TURN,
+        )
+        self.assertTrue(
+            classify_normalized_axes(0.57, -1.0).is_reverse
+        )
+        self.assertTrue(
+            classify_normalized_axes(-0.57, -1.0).is_reverse
         )
 
     def test_reverse_corrections_report_signed_steering_ratio(self):

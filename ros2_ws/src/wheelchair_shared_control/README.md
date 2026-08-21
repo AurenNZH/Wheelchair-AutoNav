@@ -17,6 +17,7 @@ Interfaces:
 - `/artifact_filter/source_header` (`std_msgs/Header`)
 - `/safety_envelope` (`wheelchair_msgs/SafetyEnvelope`)
 - `/shared_control/diagnostics` (`diagnostic_msgs/DiagnosticArray`)
+- `/shared_control/checked_corridor` (`visualization_msgs/MarkerArray`)
 - UDP intent port `45450`, envelope port `45451` when explicitly enabled
 
 Run the fail-closed software:
@@ -32,7 +33,7 @@ options are explicit rather than stored as enabled defaults:
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   pi_address:=192.168.1.20 allowed_pi_address:=192.168.1.20 \
-  slow_forward_limit:=0.65
+  slow_forward_limit:=0.30 reverse_limit:=0.65
 ```
 
 Replace the example Pi address with its fixed isolated-LAN address and follow
@@ -41,11 +42,13 @@ the [physical-JSM procedure](../../../../docs/setup/physical_joystick_shared_con
 The normal command above reports `live_control_disabled`, even with valid maps
 and intent. UDP protocol v2 carries normalized left-positive lateral and
 forward-positive longitudinal axes plus a semantic class. The supervisor
-permits the symmetric 25-degree forward- and reverse-correction cones. It
+permits symmetric 30-degree forward- and reverse-correction cones. It
 checks every forward path from straight through the requested correction so
 the Pi can safely reduce that correction while applying CLEAR/SLOW caps.
 Reverse returns `reverse_unmonitored_slow` with a 0.65 magnitude limit without
-consulting the front map. Hard turns remain classified and return STOP.
+consulting the front map. Hard turns remain classified and return STOP. The
+checked-corridor marker shows only the cells sampled from the existing front
+costmap; it does not add another map or change the safety decision.
 
 The measured 0.80 m by 0.70 m chair footprint is configured authoritatively in
 Nav2. STOP and SLOW distances are trajectory lookahead distances. The cost
