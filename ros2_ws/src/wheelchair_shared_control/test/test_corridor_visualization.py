@@ -5,6 +5,7 @@ from visualization_msgs.msg import Marker
 
 from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
+    corridor_intent_view,
 )
 from wheelchair_shared_control.operator_intent import FORWARD_RIGHT
 from wheelchair_shared_control.models import (
@@ -52,3 +53,48 @@ def test_markers_show_requested_path_and_decision_label():
     assert len(path.points) > 2
     assert "forward_right" in label.text
     assert "nav2_cost_clear" in label.text
+
+
+def test_intent_view_preserves_current_legacy_and_reverse_labels():
+    config = SafetyConfig()
+    forward = corridor_intent_view(
+        lateral=-0.55,
+        longitudinal=1.0,
+        legacy_forward=0.0,
+        legacy_steering=0.0,
+        config=config,
+    )
+    legacy = corridor_intent_view(
+        lateral=0.0,
+        longitudinal=0.0,
+        legacy_forward=0.5,
+        legacy_steering=0.2,
+        config=config,
+    )
+    reverse = corridor_intent_view(
+        lateral=0.0,
+        longitudinal=-0.5,
+        legacy_forward=0.0,
+        legacy_steering=0.0,
+        config=config,
+    )
+
+    assert forward.requested_steering == -0.55
+    assert forward.label.startswith("forward_right ")
+    assert legacy.requested_steering == 0.2
+    assert legacy.label.startswith("forward_left ")
+    assert reverse.requested_steering is None
+    assert reverse.label.endswith(" unmonitored")
+
+
+def test_invalid_intent_view_remains_non_visualized():
+    view = corridor_intent_view(
+        lateral=np.nan,
+        longitudinal=1.0,
+        legacy_forward=0.0,
+        legacy_steering=0.0,
+        config=SafetyConfig(),
+    )
+
+    assert view.requested_steering is None
+    assert view.label == "invalid_intent"

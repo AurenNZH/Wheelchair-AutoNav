@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 
 from geometry_msgs.msg import Point
@@ -14,7 +15,54 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     SafetyDecision,
 )
+from wheelchair_shared_control.operator_intent import classify_normalized_axes
 from wheelchair_shared_control.trajectory import trajectory_points
+
+
+@dataclass(frozen=True)
+class CorridorIntentView:
+    """Requested steering and human-readable label for corridor markers."""
+
+    requested_steering: float | None
+    label: str
+
+
+def corridor_intent_view(
+    *,
+    lateral: float,
+    longitudinal: float,
+    legacy_forward: float,
+    legacy_steering: float,
+    config: SafetyConfig,
+) -> CorridorIntentView:
+    """Interpret current and legacy intent fields for visualization only."""
+
+    if lateral == 0.0 and longitudinal == 0.0:
+        longitudinal = legacy_forward
+        lateral = legacy_steering * longitudinal
+    try:
+        classified = classify_normalized_axes(
+            lateral,
+            longitudinal,
+            neutral_deadzone=config.neutral_deadzone,
+            forward_cone_half_angle_deg=(
+                config.forward_cone_half_angle_deg
+            ),
+        )
+    except ValueError:
+        return CorridorIntentView(None, "invalid_intent")
+
+    angle = (
+        "none"
+        if classified.heading_deg is None
+        else "%.1fdeg" % classified.heading_deg
+    )
+    label = "%s %s" % (classified.label, angle)
+    if classified.is_forward:
+        return CorridorIntentView(classified.steering_ratio, label)
+    if classified.is_reverse:
+        label += " unmonitored"
+    return CorridorIntentView(None, label)
 
 
 def _color(decision: int, alpha: float) -> ColorRGBA:
@@ -73,4 +121,8 @@ def build_checked_corridor_markers(
     return MarkerArray(markers=markers)
 
 
-__all__ = ["build_checked_corridor_markers"]
+__all__ = [
+    "CorridorIntentView",
+    "build_checked_corridor_markers",
+    "corridor_intent_view",
+]

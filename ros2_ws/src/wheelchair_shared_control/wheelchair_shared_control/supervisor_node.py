@@ -16,6 +16,7 @@ from visualization_msgs.msg import MarkerArray
 
 from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
+    corridor_intent_view,
 )
 from wheelchair_shared_control.diagnostics import (
     SafetyDiagnosticSnapshot,
@@ -346,32 +347,15 @@ class SafetySupervisorNode(Node):
         requested_steering = None
         label = "waiting"
         if self._intent is not None:
-            lateral = float(self._intent.lateral)
-            longitudinal = float(self._intent.longitudinal)
-            if lateral == 0.0 and longitudinal == 0.0:
-                longitudinal = float(self._intent.forward)
-                lateral = float(self._intent.steering) * longitudinal
-            try:
-                classified = classify_normalized_axes(
-                    lateral,
-                    longitudinal,
-                    neutral_deadzone=self._config.neutral_deadzone,
-                    forward_cone_half_angle_deg=(
-                        self._config.forward_cone_half_angle_deg
-                    ),
-                )
-                angle = (
-                    "none"
-                    if classified.heading_deg is None
-                    else "%.1fdeg" % classified.heading_deg
-                )
-                label = "%s %s" % (classified.label, angle)
-                if classified.is_forward:
-                    requested_steering = classified.steering_ratio
-                elif classified.is_reverse:
-                    label += " unmonitored"
-            except ValueError:
-                label = "invalid_intent"
+            view = corridor_intent_view(
+                lateral=float(self._intent.lateral),
+                longitudinal=float(self._intent.longitudinal),
+                legacy_forward=float(self._intent.forward),
+                legacy_steering=float(self._intent.steering),
+                config=self._config,
+            )
+            requested_steering = view.requested_steering
+            label = view.label
         markers = build_checked_corridor_markers(
             header=header,
             decision=decision,
