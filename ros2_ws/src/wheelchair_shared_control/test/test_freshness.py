@@ -100,6 +100,10 @@ class FreshnessTests(unittest.TestCase):
 
         self.assertEqual(status.failure_reason, "stale_source")
         self.assertEqual(stale_map.failure_reason, "stale_map")
+        self.assertEqual(status.input_failure_reason, "stale_source")
+        self.assertIsNone(status.map_age_failure_reason)
+        self.assertIsNone(stale_map.input_failure_reason)
+        self.assertEqual(stale_map.map_age_failure_reason, "stale_map")
 
     def test_legacy_mode_retains_map_header_semantics(self):
         policy = replace(self.policy, mode=LEGACY_MAP_STAMP)

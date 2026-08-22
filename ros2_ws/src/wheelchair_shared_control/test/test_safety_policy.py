@@ -10,7 +10,10 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     weighted_costmap_from_grid,
 )
-from wheelchair_shared_control.safety_policy import evaluate_safety
+from wheelchair_shared_control.safety_policy import (
+    evaluate_safety,
+    motion_configuration_decision,
+)
 from wheelchair_shared_control.operator_intent import (
     FORWARD,
     FORWARD_LEFT,
@@ -65,6 +68,17 @@ class SafetyPolicyTests(unittest.TestCase):
         config = SafetyConfig(enable_motion=True, geometry_calibrated=False)
         decision = evaluate_safety(self.intent, self.empty, config)
         self.assertEqual(decision.reason, "uncalibrated_geometry")
+
+    def test_motion_configuration_gate_preserves_reason_precedence(self):
+        disabled = motion_configuration_decision(SafetyConfig())
+        uncalibrated = motion_configuration_decision(
+            SafetyConfig(enable_motion=True)
+        )
+        enabled = motion_configuration_decision(self.enabled)
+
+        self.assertEqual(disabled.reason, "live_control_disabled")
+        self.assertEqual(uncalibrated.reason, "uncalibrated_geometry")
+        self.assertIsNone(enabled)
 
     def test_clear_forward_intent_is_preserved(self):
         decision = evaluate_safety(
@@ -251,6 +265,7 @@ class SafetyPolicyTests(unittest.TestCase):
             self.enabled,
         )
         self.assertEqual(mismatch.reason, "intent_class_mismatch")
+
 
 if __name__ == "__main__":
     unittest.main()

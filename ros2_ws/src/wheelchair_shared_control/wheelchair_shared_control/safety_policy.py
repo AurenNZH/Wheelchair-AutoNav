@@ -34,10 +34,9 @@ def evaluate_safety(
 ) -> SafetyDecision:
     """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
 
-    if not config.enable_motion:
-        return stop_decision("live_control_disabled")
-    if not config.geometry_calibrated:
-        return stop_decision("uncalibrated_geometry")
+    config_decision = motion_configuration_decision(config)
+    if config_decision is not None:
+        return config_decision
     if not math.isfinite(intent.lateral) or not math.isfinite(
         intent.longitudinal
     ):
@@ -119,6 +118,18 @@ def evaluate_safety(
     )
 
 
+def motion_configuration_decision(
+    config: SafetyConfig,
+) -> SafetyDecision | None:
+    """Return the existing fail-closed motion gate, if one is active."""
+
+    if not config.enable_motion:
+        return stop_decision("live_control_disabled")
+    if not config.geometry_calibrated:
+        return stop_decision("uncalibrated_geometry")
+    return None
+
+
 def stop_decision(
     reason: str,
     nearest: float | None = None,
@@ -151,5 +162,6 @@ def _stop_from_costs(
 
 __all__ = [
     "evaluate_safety",
+    "motion_configuration_decision",
     "stop_decision",
 ]

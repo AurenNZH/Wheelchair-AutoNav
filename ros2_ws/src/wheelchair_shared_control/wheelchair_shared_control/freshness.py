@@ -44,6 +44,22 @@ class FreshnessStatus:
     failure_reason: str | None = None
     map_age_basis: str = "receipt_time"
 
+    @property
+    def input_failure_reason(self) -> str | None:
+        """Return failures that historically precede motion config gates."""
+
+        if self.failure_reason in ("invalid_map_age", "stale_map"):
+            return None
+        return self.failure_reason
+
+    @property
+    def map_age_failure_reason(self) -> str | None:
+        """Return map-age failures historically checked after config gates."""
+
+        if self.failure_reason in ("invalid_map_age", "stale_map"):
+            return self.failure_reason
+        return None
+
 
 def validate_freshness_policy(policy: FreshnessPolicy) -> None:
     """Validate the freshness settings checked at node startup today."""

@@ -39,6 +39,7 @@ from wheelchair_shared_control.models import (
 )
 from wheelchair_shared_control.safety_policy import (
     evaluate_safety,
+    motion_configuration_decision,
     stop_decision,
 )
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
@@ -58,7 +59,9 @@ class SafetySupervisorNode(Node):
             "source_header_topic", "/artifact_filter/source_header"
         )
         self.declare_parameter("freshness_mode", NAV2_LIVE)
-        self.declare_parameter("diagnostics_topic", "/shared_control/diagnostics")
+        self.declare_parameter(
+            "diagnostics_topic", "/shared_control/diagnostics"
+        )
         self.declare_parameter(
             "checked_corridor_topic", "/shared_control/checked_corridor"
         )
@@ -94,7 +97,9 @@ class SafetySupervisorNode(Node):
         self._last_reason = None
 
         self._envelope_pub = self.create_publisher(
-            SafetyEnvelope, self.get_parameter("safety_envelope_topic").value, 10
+            SafetyEnvelope,
+            self.get_parameter("safety_envelope_topic").value,
+            10,
         )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray, self.get_parameter("diagnostics_topic").value, 10
@@ -270,10 +275,17 @@ class SafetySupervisorNode(Node):
             ),
             self._freshness_policy,
         )
-        if freshness.failure_reason is not None:
-            decision = stop_decision(freshness.failure_reason)
+        if freshness.input_failure_reason is not None:
+            decision = stop_decision(freshness.input_failure_reason)
         else:
-            decision = self._evaluate_intent()
+            decision = motion_configuration_decision(self._config)
+            if decision is None:
+                if freshness.map_age_failure_reason is not None:
+                    decision = stop_decision(
+                        freshness.map_age_failure_reason
+                    )
+                else:
+                    decision = self._evaluate_intent()
 
         envelope = SafetyEnvelope()
         envelope.header.stamp = now.to_msg()
