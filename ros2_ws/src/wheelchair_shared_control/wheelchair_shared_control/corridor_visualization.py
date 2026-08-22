@@ -8,13 +8,13 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA, Header
 from visualization_msgs.msg import Marker, MarkerArray
 
-from wheelchair_shared_control.safety import (
+from wheelchair_shared_control.models import (
     CLEAR,
     SLOW,
     SafetyConfig,
     SafetyDecision,
-    trajectory_points,
 )
+from wheelchair_shared_control.safety import trajectory_points
 
 
 def _color(decision: int, alpha: float) -> ColorRGBA:

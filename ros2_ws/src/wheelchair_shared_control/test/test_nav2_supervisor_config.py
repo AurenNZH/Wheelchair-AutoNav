@@ -4,7 +4,7 @@ from nav_msgs.msg import OccupancyGrid
 import yaml
 
 from wheelchair_shared_control.freshness import NAV2_LIVE
-from wheelchair_shared_control.safety import SafetyConfig, SafetyDecision
+from wheelchair_shared_control.models import SafetyConfig, SafetyDecision
 from wheelchair_shared_control.supervisor_node import (
     SafetySupervisorNode,
     safety_diagnostic_values,

@@ -24,14 +24,14 @@ from wheelchair_shared_control.freshness import (
     evaluate_freshness,
     validate_freshness_policy,
 )
-from wheelchair_shared_control.safety import (
+from wheelchair_shared_control.models import (
     SafetyConfig,
     SafetyDecision,
     OperatorIntentData,
-    evaluate_safety,
-    validate_cost_policy,
+    validate_safety_config,
     weighted_costmap_from_grid,
 )
+from wheelchair_shared_control.safety import evaluate_safety
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
 
 
@@ -249,7 +249,7 @@ class SafetySupervisorNode(Node):
                 self.get_parameter("stop_cost_threshold").value
             ),
         )
-        validate_cost_policy(config)
+        validate_safety_config(config)
         return config
 
     def _load_freshness_policy(self) -> FreshnessPolicy:

@@ -7,13 +7,13 @@ from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
 )
 from wheelchair_shared_control.operator_intent import FORWARD_RIGHT
-from wheelchair_shared_control.safety import (
+from wheelchair_shared_control.models import (
     CLEAR,
     OperatorIntentData,
     SafetyConfig,
-    evaluate_safety,
     weighted_costmap_from_grid,
 )
+from wheelchair_shared_control.safety import evaluate_safety
 
 
 def test_markers_show_requested_path_and_decision_label():
