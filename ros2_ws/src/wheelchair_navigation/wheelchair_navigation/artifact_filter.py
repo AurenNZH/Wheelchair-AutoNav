@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from wheelchair_navigation.local_navigation import (
+from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     SelfFilterBox,
     front_point_cell_ids,

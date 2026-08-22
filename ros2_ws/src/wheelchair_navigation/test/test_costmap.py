@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from wheelchair_navigation.local_navigation import (
+from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     LocalCostmapConfig,
     SelfFilterBox,
@@ -16,11 +16,9 @@ from wheelchair_navigation.local_navigation import (
     parse_self_filter_boxes,
     world_to_cell,
 )
-from wheelchair_navigation.local_navigation_node import cloud_timestamp_error
-from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 
 
-class LocalNavigationTests(unittest.TestCase):
+class CostmapTests(unittest.TestCase):
     def test_runtime_profile_keeps_raw_topics_and_adds_shadow_only_outputs(self):
         config_path = (
             Path(__file__).resolve().parents[1]
@@ -229,23 +227,6 @@ class LocalNavigationTests(unittest.TestCase):
                 FrontCostmapConfig(fov_deg=181.0),
             )
 
-    def test_mapping_metrics_report_window_rate_and_latency(self):
-        metrics = MappingMetrics(3)
-        metrics.record(10.0, 1.0)
-        metrics.record(20.0, 1.1)
-        metrics.record(30.0, 1.2)
-
-        values = metrics.values(lag_spike_ms=25.0)
-
-        self.assertEqual(values["latency_window_count"], "3")
-        self.assertEqual(values["processing_p50_ms"], "20.000")
-        self.assertEqual(values["processing_p95_ms"], "29.000")
-        self.assertEqual(values["processing_max_ms"], "30.000")
-        self.assertEqual(values["mapping_p95_ms"], "29.000")
-        self.assertEqual(values["cloud_age_p95_ms"], "0.000")
-        self.assertEqual(values["lag_spike_count"], "1")
-        self.assertEqual(values["effective_rate_hz"], "10.000")
-
     def test_measured_self_filter_box_removes_only_points_inside_it(self):
         config = LocalCostmapConfig(size_m=4.0)
         box = SelfFilterBox(0.2, 0.8, -0.4, 0.4, 0.05, 0.8)
@@ -322,35 +303,6 @@ class LocalNavigationTests(unittest.TestCase):
 
         # A generous unit-test guard; hardware acceptance uses the stricter 100 ms target.
         self.assertLess(elapsed_s, 1.0)
-
-    def test_cloud_timestamp_accepts_recent_data(self):
-        self.assertIsNone(
-            cloud_timestamp_error(
-                now_ns=2_000_000_000,
-                stamp_ns=1_500_000_000,
-                max_age_s=1.0,
-                max_future_offset_s=0.1,
-            )
-        )
-
-    def test_cloud_timestamp_rejects_stale_future_and_invalid_data(self):
-        common = {
-            "now_ns": 2_000_000_000,
-            "max_age_s": 1.0,
-            "max_future_offset_s": 0.1,
-        }
-        self.assertEqual(
-            cloud_timestamp_error(stamp_ns=0, **common),
-            "invalid_lidar_timestamp",
-        )
-        self.assertEqual(
-            cloud_timestamp_error(stamp_ns=500_000_000, **common),
-            "stale_lidar",
-        )
-        self.assertEqual(
-            cloud_timestamp_error(stamp_ns=2_200_000_000, **common),
-            "future_lidar",
-        )
 
 
 if __name__ == "__main__":

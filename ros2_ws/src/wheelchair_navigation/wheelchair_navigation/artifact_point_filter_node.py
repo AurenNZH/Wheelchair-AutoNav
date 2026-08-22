@@ -28,17 +28,16 @@ from wheelchair_navigation.artifact_filter import (
     parse_artifact_grid_halo_spans,
     validate_artifact_filter_frame,
 )
-from wheelchair_navigation.local_navigation import (
+from wheelchair_navigation.artifact_markers import (
+    build_artifact_grid_markers,
+    build_artifact_threshold_cell_markers,
+)
+from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     LocalCostmapConfig,
     obstacle_point_mask,
     parse_self_filter_boxes,
     validate_mapping_configs,
-)
-from wheelchair_navigation.local_navigation_node import (
-    build_artifact_grid_markers,
-    build_artifact_threshold_cell_markers,
-    cloud_timestamp_error,
 )
 from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 from wheelchair_navigation.point_cloud import (
@@ -47,6 +46,7 @@ from wheelchair_navigation.point_cloud import (
     transform_points,
     xyz_to_point_cloud,
 )
+from wheelchair_navigation.timing import cloud_timestamp_error
 
 
 class ArtifactPointFilterNode(Node):
