@@ -47,7 +47,6 @@ class SafetyConfig:
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05
     forward_cone_half_angle_deg: float = 30.0
-    max_map_age_s: float = 0.50
     slow_cost_threshold: int = 1
     stop_cost_threshold: int = 99
 
@@ -141,7 +140,6 @@ def weighted_costmap_from_grid(
 def evaluate_safety(
     intent: OperatorIntentData,
     front_costmap: WeightedCostmap,
-    map_age_s: float,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
     """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
@@ -150,10 +148,6 @@ def evaluate_safety(
         return _stop("live_control_disabled")
     if not config.geometry_calibrated:
         return _stop("uncalibrated_geometry")
-    if not math.isfinite(map_age_s) or map_age_s < 0.0:
-        return _stop("invalid_map_age")
-    if map_age_s > config.max_map_age_s:
-        return _stop("stale_map")
     if not math.isfinite(intent.lateral) or not math.isfinite(
         intent.longitudinal
     ):

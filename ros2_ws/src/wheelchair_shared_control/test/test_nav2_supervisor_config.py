@@ -3,12 +3,10 @@ from pathlib import Path
 from nav_msgs.msg import OccupancyGrid
 import yaml
 
+from wheelchair_shared_control.freshness import NAV2_LIVE
 from wheelchair_shared_control.safety import SafetyConfig, SafetyDecision
 from wheelchair_shared_control.supervisor_node import (
-    LEGACY_MAP_STAMP,
-    NAV2_LIVE,
     SafetySupervisorNode,
-    evaluate_freshness,
     safety_diagnostic_values,
 )
 
@@ -61,73 +59,6 @@ def test_replay_keeps_legacy_front_topic_explicit():
 
     assert '"front_costmap_topic": "/front_costmap"' in source
     assert '"freshness_mode": "legacy_map_stamp"' in source
-
-
-def _live_freshness(**changes):
-    arguments = {
-        "mode": NAV2_LIVE,
-        "now_ros_ns": 10_000_000_000,
-        "now_monotonic_ns": 20_000_000_000,
-        "map_stamp_ns": 0,
-        "map_received_monotonic_ns": 19_900_000_000,
-        "source_stamp_ns": 9_800_000_000,
-        "max_source_age_s": 0.5,
-        "max_future_source_offset_s": 0.1,
-    }
-    arguments.update(changes)
-    return evaluate_freshness(**arguments)
-
-
-def test_nav2_live_accepts_zero_map_stamp_with_both_watchdogs_fresh():
-    status = _live_freshness()
-
-    assert status.failure_reason is None
-    assert status.map_age_basis == "receipt_time"
-    assert status.map_age_s == 0.1
-    assert status.source_age_s == 0.2
-
-
-def test_nav2_live_fails_closed_for_missing_or_invalid_source():
-    missing = _live_freshness(source_stamp_ns=None)
-    invalid = _live_freshness(source_stamp_ns=0)
-    future = _live_freshness(source_stamp_ns=10_200_000_000)
-    stale = _live_freshness(source_stamp_ns=9_400_000_000)
-
-    assert missing.failure_reason == "missing_source_heartbeat"
-    assert invalid.failure_reason == "invalid_source_timestamp"
-    assert future.failure_reason == "future_source_timestamp"
-    assert stale.failure_reason == "stale_source"
-
-
-def test_nav2_live_allows_small_source_clock_offset():
-    status = _live_freshness(source_stamp_ns=10_050_000_000)
-
-    assert status.failure_reason is None
-    assert status.source_age_s == 0.0
-
-
-def test_nav2_live_rejects_missing_or_reversed_map_receipt_time():
-    missing = _live_freshness(map_received_monotonic_ns=0)
-    reversed_time = _live_freshness(
-        map_received_monotonic_ns=20_100_000_000
-    )
-
-    assert missing.failure_reason == "missing_map_receipt"
-    assert reversed_time.failure_reason == "invalid_map_receipt_time"
-
-
-def test_legacy_mode_retains_map_header_stamp_semantics():
-    invalid = _live_freshness(mode=LEGACY_MAP_STAMP)
-    valid = _live_freshness(
-        mode=LEGACY_MAP_STAMP,
-        map_stamp_ns=9_800_000_000,
-        source_stamp_ns=None,
-    )
-
-    assert invalid.failure_reason == "invalid_map_timestamp"
-    assert valid.failure_reason is None
-    assert valid.map_age_basis == "map_header_stamp"
-    assert valid.map_age_s == 0.2
 
 
 def test_supervisor_retains_weighted_grid_values():

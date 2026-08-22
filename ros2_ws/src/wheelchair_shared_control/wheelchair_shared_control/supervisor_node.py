@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
@@ -18,7 +17,13 @@ from visualization_msgs.msg import MarkerArray
 from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
 )
-
+from wheelchair_shared_control.freshness import (
+    FreshnessInputs,
+    FreshnessPolicy,
+    NAV2_LIVE,
+    evaluate_freshness,
+    validate_freshness_policy,
+)
 from wheelchair_shared_control.safety import (
     SafetyConfig,
     SafetyDecision,
@@ -28,86 +33,6 @@ from wheelchair_shared_control.safety import (
     weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
-
-
-NAV2_LIVE = "nav2_live"
-LEGACY_MAP_STAMP = "legacy_map_stamp"
-FRESHNESS_MODES = (NAV2_LIVE, LEGACY_MAP_STAMP)
-
-
-@dataclass(frozen=True)
-class FreshnessStatus:
-    """Ages and any fail-closed reason for one supervisor cycle."""
-
-    map_age_s: float = 0.0
-    source_age_s: float | None = None
-    failure_reason: str | None = None
-    map_age_basis: str = "receipt_time"
-
-
-def evaluate_freshness(
-    *,
-    mode: str,
-    now_ros_ns: int,
-    now_monotonic_ns: int,
-    map_stamp_ns: int,
-    map_received_monotonic_ns: int,
-    source_stamp_ns: int | None,
-    max_source_age_s: float,
-    max_future_source_offset_s: float,
-) -> FreshnessStatus:
-    """Evaluate either live Nav2 continuity or legacy map provenance."""
-
-    if mode not in FRESHNESS_MODES:
-        raise ValueError("unsupported freshness_mode: %s" % mode)
-    if mode == LEGACY_MAP_STAMP:
-        if map_stamp_ns <= 0:
-            return FreshnessStatus(
-                failure_reason="invalid_map_timestamp",
-                map_age_basis="map_header_stamp",
-            )
-        return FreshnessStatus(
-            map_age_s=(now_ros_ns - map_stamp_ns) / 1e9,
-            map_age_basis="map_header_stamp",
-        )
-
-    if map_received_monotonic_ns <= 0:
-        return FreshnessStatus(failure_reason="missing_map_receipt")
-    map_age_s = (
-        now_monotonic_ns - map_received_monotonic_ns
-    ) / 1e9
-    if map_age_s < 0.0:
-        return FreshnessStatus(
-            failure_reason="invalid_map_receipt_time"
-        )
-    if source_stamp_ns is None:
-        return FreshnessStatus(
-            map_age_s=map_age_s,
-            failure_reason="missing_source_heartbeat",
-        )
-    if source_stamp_ns <= 0:
-        return FreshnessStatus(
-            map_age_s=map_age_s,
-            failure_reason="invalid_source_timestamp",
-        )
-    source_age_s = (now_ros_ns - source_stamp_ns) / 1e9
-    if source_age_s < -max_future_source_offset_s:
-        return FreshnessStatus(
-            map_age_s=map_age_s,
-            source_age_s=source_age_s,
-            failure_reason="future_source_timestamp",
-        )
-    source_age_s = max(0.0, source_age_s)
-    if source_age_s > max_source_age_s:
-        return FreshnessStatus(
-            map_age_s=map_age_s,
-            source_age_s=source_age_s,
-            failure_reason="stale_source",
-        )
-    return FreshnessStatus(
-        map_age_s=map_age_s,
-        source_age_s=source_age_s,
-    )
 
 
 def safety_diagnostic_values(
@@ -232,10 +157,8 @@ class SafetySupervisorNode(Node):
         self._front_stamp_ns = 0
         self._front_received_monotonic_ns = 0
         self._source_stamp_ns = None
-        self._freshness_mode = str(
-            self.get_parameter("freshness_mode").value
-        )
-        self._validate_freshness_parameters()
+        self._freshness_policy = self._load_freshness_policy()
+        self._freshness_mode = self._freshness_policy.mode
         self._last_reason = None
 
         self._envelope_pub = self.create_publisher(
@@ -319,7 +242,6 @@ class SafetySupervisorNode(Node):
             forward_cone_half_angle_deg=float(
                 self.get_parameter("forward_cone_half_angle_deg").value
             ),
-            max_map_age_s=float(self.get_parameter("max_map_age_s").value),
             slow_cost_threshold=int(
                 self.get_parameter("slow_cost_threshold").value
             ),
@@ -330,20 +252,24 @@ class SafetySupervisorNode(Node):
         validate_cost_policy(config)
         return config
 
-    def _validate_freshness_parameters(self) -> None:
-        if self._freshness_mode not in FRESHNESS_MODES:
-            raise ValueError(
-                "freshness_mode must be one of %s"
-                % ", ".join(FRESHNESS_MODES)
-            )
-        if float(self.get_parameter("max_source_age_s").value) <= 0.0:
-            raise ValueError("max_source_age_s must be positive")
-        if float(
-            self.get_parameter("max_future_source_offset_s").value
-        ) < 0.0:
-            raise ValueError(
-                "max_future_source_offset_s must be non-negative"
-            )
+    def _load_freshness_policy(self) -> FreshnessPolicy:
+        policy = FreshnessPolicy(
+            mode=str(self.get_parameter("freshness_mode").value),
+            max_intent_age_s=float(
+                self.get_parameter("max_intent_age_s").value
+            ),
+            max_map_age_s=float(
+                self.get_parameter("max_map_age_s").value
+            ),
+            max_source_age_s=float(
+                self.get_parameter("max_source_age_s").value
+            ),
+            max_future_source_offset_s=float(
+                self.get_parameter("max_future_source_offset_s").value
+            ),
+        )
+        validate_freshness_policy(policy)
+        return policy
 
     def _on_intent(self, msg: OperatorIntent) -> None:
         self._intent = msg
@@ -390,55 +316,32 @@ class SafetySupervisorNode(Node):
         now_ns = now.nanoseconds
         session_id = "no-session"
         intent_sequence = 0
-        map_age_s = 0.0
-        source_age_s = None
-        map_age_basis = (
-            "receipt_time"
-            if self._freshness_mode == NAV2_LIVE
-            else "map_header_stamp"
-        )
-
-        if self._intent is None:
-            decision = self._stop("missing_intent")
-        else:
+        intent_stamp_ns = None
+        if self._intent is not None:
             session_id = self._intent.session_id or "invalid-session"
             intent_sequence = int(self._intent.sequence)
-            intent_stamp_ns = Time.from_msg(self._intent.header.stamp).nanoseconds
-            intent_age_s = (now_ns - intent_stamp_ns) / 1e9
-            if intent_stamp_ns <= 0 or intent_age_s < 0.0:
-                decision = self._stop("invalid_intent_timestamp")
-            elif intent_age_s > float(
-                self.get_parameter("max_intent_age_s").value
-            ):
-                decision = self._stop("stale_intent")
-            elif self._front_costmap is None:
-                decision = self._stop("missing_map")
-            else:
-                freshness = evaluate_freshness(
-                    mode=self._freshness_mode,
-                    now_ros_ns=now_ns,
-                    now_monotonic_ns=time.monotonic_ns(),
-                    map_stamp_ns=self._front_stamp_ns,
-                    map_received_monotonic_ns=(
-                        self._front_received_monotonic_ns
-                    ),
-                    source_stamp_ns=self._source_stamp_ns,
-                    max_source_age_s=float(
-                        self.get_parameter("max_source_age_s").value
-                    ),
-                    max_future_source_offset_s=float(
-                        self.get_parameter(
-                            "max_future_source_offset_s"
-                        ).value
-                    ),
-                )
-                map_age_s = freshness.map_age_s
-                source_age_s = freshness.source_age_s
-                map_age_basis = freshness.map_age_basis
-                if freshness.failure_reason is not None:
-                    decision = self._stop(freshness.failure_reason)
-                else:
-                    decision = self._evaluate_intent(map_age_s)
+            intent_stamp_ns = Time.from_msg(
+                self._intent.header.stamp
+            ).nanoseconds
+
+        freshness = evaluate_freshness(
+            FreshnessInputs(
+                now_ros_ns=now_ns,
+                now_monotonic_ns=time.monotonic_ns(),
+                intent_stamp_ns=intent_stamp_ns,
+                map_available=self._front_costmap is not None,
+                map_stamp_ns=self._front_stamp_ns,
+                map_received_monotonic_ns=(
+                    self._front_received_monotonic_ns
+                ),
+                source_stamp_ns=self._source_stamp_ns,
+            ),
+            self._freshness_policy,
+        )
+        if freshness.failure_reason is not None:
+            decision = self._stop(freshness.failure_reason)
+        else:
+            decision = self._evaluate_intent()
 
         envelope = SafetyEnvelope()
         envelope.header.stamp = now.to_msg()
@@ -449,22 +352,22 @@ class SafetySupervisorNode(Node):
         envelope.permitted_forward = decision.permitted_forward
         envelope.permitted_steering = decision.permitted_steering
         envelope.reason = decision.reason
-        envelope.map_age_ms = max(0.0, map_age_s * 1000.0)
+        envelope.map_age_ms = max(0.0, freshness.map_age_s * 1000.0)
         self._envelope_pub.publish(envelope)
         self._publish_diagnostics(
             decision,
             envelope.map_age_ms,
             (time.perf_counter() - started) * 1000.0,
-            map_age_basis,
+            freshness.map_age_basis,
             (
                 None
-                if source_age_s is None
-                else max(0.0, source_age_s * 1000.0)
+                if freshness.source_age_s is None
+                else max(0.0, freshness.source_age_s * 1000.0)
             ),
         )
         self._publish_checked_corridor(decision, envelope.header)
 
-    def _evaluate_intent(self, map_age_s: float) -> SafetyDecision:
+    def _evaluate_intent(self) -> SafetyDecision:
         lateral = float(self._intent.lateral)
         longitudinal = float(self._intent.longitudinal)
         intent_class = int(self._intent.intent_class)
@@ -501,7 +404,6 @@ class SafetySupervisorNode(Node):
         return evaluate_safety(
             intent,
             self._front_costmap,
-            map_age_s,
             self._config,
         )
 

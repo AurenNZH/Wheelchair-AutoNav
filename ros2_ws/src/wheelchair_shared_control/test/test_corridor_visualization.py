@@ -33,7 +33,6 @@ def test_markers_show_requested_path_and_decision_label():
             "session", 1, -0.55, 1.0, FORWARD_RIGHT, True
         ),
         costmap,
-        0.1,
         config,
     )
 

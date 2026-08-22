@@ -58,40 +58,25 @@ class SafetyPolicyTests(unittest.TestCase):
 
     def test_defaults_are_fail_closed(self):
         decision = evaluate_safety(
-            self.intent, self.empty, 0.1, SafetyConfig()
+            self.intent, self.empty, SafetyConfig()
         )
         self.assertEqual(decision.decision, STOP)
         self.assertEqual(decision.reason, "live_control_disabled")
 
     def test_uncalibrated_geometry_remains_stopped(self):
         config = SafetyConfig(enable_motion=True, geometry_calibrated=False)
-        decision = evaluate_safety(self.intent, self.empty, 0.1, config)
+        decision = evaluate_safety(self.intent, self.empty, config)
         self.assertEqual(decision.reason, "uncalibrated_geometry")
 
     def test_clear_forward_intent_is_preserved(self):
         decision = evaluate_safety(
-            self.intent, self.empty, 0.1, self.enabled
+            self.intent, self.empty, self.enabled
         )
         self.assertEqual(decision.decision, CLEAR)
         self.assertEqual(decision.reason, "nav2_cost_clear")
         self.assertAlmostEqual(decision.permitted_forward, 0.5)
         self.assertEqual(decision.maximum_path_cost, 0)
         self.assertTrue(decision.path_cost_valid)
-
-    def test_stale_map_is_stopped(self):
-        stale = evaluate_safety(
-            self.intent, self.empty, 0.51, self.enabled
-        )
-        stale_reverse = evaluate_safety(
-            OperatorIntentData(
-                "session", 2, 0.0, -1.0, REVERSE, True
-            ),
-            self.empty,
-            0.51,
-            self.enabled,
-        )
-        self.assertEqual(stale.reason, "stale_map")
-        self.assertEqual(stale_reverse.reason, "stale_map")
 
     def test_reverse_cone_is_unmonitored_and_capped_slow(self):
         fixtures = (
@@ -108,7 +93,6 @@ class SafetyPolicyTests(unittest.TestCase):
                         intent_class, True
                     ),
                     blocked_front,
-                    0.1,
                     self.enabled,
                 )
                 self.assertEqual(decision.decision, SLOW)
@@ -132,7 +116,6 @@ class SafetyPolicyTests(unittest.TestCase):
                         intent_class, True
                     ),
                     self.empty,
-                    0.1,
                     self.enabled,
                 )
                 self.assertEqual(decision.decision, expected)
@@ -144,19 +127,16 @@ class SafetyPolicyTests(unittest.TestCase):
         stop = evaluate_safety(
             self.intent,
             self._costmap({(6, 40): 99}),
-            0.1,
             self.enabled,
         )
         slow = evaluate_safety(
             fast_intent,
             self._costmap({(10, 40): 50}),
-            0.1,
             self.enabled,
         )
         clear = evaluate_safety(
             self.intent,
             self._costmap({(15, 40): 100}),
-            0.1,
             self.enabled,
         )
 
@@ -173,13 +153,11 @@ class SafetyPolicyTests(unittest.TestCase):
         slow = evaluate_safety(
             self.intent,
             self._costmap({(6, 40): 98}),
-            0.1,
             self.enabled,
         )
         stop = evaluate_safety(
             self.intent,
             self._costmap({(6, 40): 99}),
-            0.1,
             self.enabled,
         )
 
@@ -191,7 +169,6 @@ class SafetyPolicyTests(unittest.TestCase):
         decision = evaluate_safety(
             self.intent,
             self._costmap({(10, 40): 100}),
-            0.1,
             self.enabled,
         )
 
@@ -204,8 +181,8 @@ class SafetyPolicyTests(unittest.TestCase):
         )
         costs = self._costmap({(9, 38): 50})
 
-        turn = evaluate_safety(correction, costs, 0.1, self.enabled)
-        straight = evaluate_safety(self.intent, costs, 0.1, self.enabled)
+        turn = evaluate_safety(correction, costs, self.enabled)
+        straight = evaluate_safety(self.intent, costs, self.enabled)
 
         self.assertEqual(turn.decision, SLOW)
         self.assertEqual(straight.decision, CLEAR)
@@ -217,7 +194,6 @@ class SafetyPolicyTests(unittest.TestCase):
         decision = evaluate_safety(
             correction,
             self._costmap({(10, 40): 50}),
-            0.1,
             self.enabled,
         )
 
@@ -227,7 +203,6 @@ class SafetyPolicyTests(unittest.TestCase):
         decision = evaluate_safety(
             self.intent,
             self._costmap({(6, 20): 100}),
-            0.1,
             self.enabled,
         )
 
@@ -238,12 +213,11 @@ class SafetyPolicyTests(unittest.TestCase):
         unknown = evaluate_safety(
             self.intent,
             self._costmap({(5, 40): -1}),
-            0.1,
             self.enabled,
         )
         short_map = self._costmap({}, width=5)
         outside = evaluate_safety(
-            self.intent, short_map, 0.1, self.enabled
+            self.intent, short_map, self.enabled
         )
 
         self.assertEqual(unknown.reason, "unknown_nav2_cost")
@@ -257,7 +231,6 @@ class SafetyPolicyTests(unittest.TestCase):
                 "session", 5, 0.96, 0.12, LEFT_TURN, True
             ),
             self.empty,
-            0.1,
             self.enabled,
         )
         right = evaluate_safety(
@@ -265,7 +238,6 @@ class SafetyPolicyTests(unittest.TestCase):
                 "session", 6, -1.0, 0.0, RIGHT_TURN, True
             ),
             self.empty,
-            0.1,
             self.enabled,
         )
 
@@ -278,7 +250,6 @@ class SafetyPolicyTests(unittest.TestCase):
                 "session", 7, 0.96, 0.12, FORWARD_LEFT, True
             ),
             self.empty,
-            0.1,
             self.enabled,
         )
         self.assertEqual(mismatch.reason, "intent_class_mismatch")
