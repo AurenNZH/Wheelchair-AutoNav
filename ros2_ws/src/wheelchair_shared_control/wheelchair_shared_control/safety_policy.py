@@ -1,4 +1,4 @@
-"""Pure shared-control geometry and fail-safe policy."""
+"""Pure STOP, SLOW, and CLEAR shared-control policy."""
 
 from __future__ import annotations
 
@@ -20,13 +20,10 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     SafetyDecision,
     WeightedCostmap,
-    validate_safety_config,
-    weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.trajectory import (
     PathCostSummary,
     swept_path_costs,
-    trajectory_points,
 )
 
 
@@ -38,15 +35,15 @@ def evaluate_safety(
     """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
 
     if not config.enable_motion:
-        return _stop("live_control_disabled")
+        return stop_decision("live_control_disabled")
     if not config.geometry_calibrated:
-        return _stop("uncalibrated_geometry")
+        return stop_decision("uncalibrated_geometry")
     if not math.isfinite(intent.lateral) or not math.isfinite(
         intent.longitudinal
     ):
-        return _stop("invalid_intent")
+        return stop_decision("invalid_intent")
     if abs(intent.lateral) > 1.0 or abs(intent.longitudinal) > 1.0:
-        return _stop("invalid_intent")
+        return stop_decision("invalid_intent")
     try:
         classified = classify_normalized_axes(
             intent.lateral,
@@ -55,26 +52,26 @@ def evaluate_safety(
             forward_cone_half_angle_deg=config.forward_cone_half_angle_deg,
         )
     except ValueError:
-        return _stop("invalid_intent")
+        return stop_decision("invalid_intent")
     if (
         int(intent.intent_class) != classified.intent_class
         or bool(intent.deadman) != classified.deadman
     ):
-        return _stop("intent_class_mismatch")
+        return stop_decision("intent_class_mismatch")
     if not intent.deadman or intent.intent_class == RELEASED:
-        return _stop("deadman_released")
+        return stop_decision("deadman_released")
     if intent.intent_class == LEFT_TURN:
-        return _stop("left_turn_not_enabled")
+        return stop_decision("left_turn_not_enabled")
     if intent.intent_class == RIGHT_TURN:
-        return _stop("right_turn_not_enabled")
+        return stop_decision("right_turn_not_enabled")
     if intent.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
-        return _stop("unsupported_intent")
+        return stop_decision("unsupported_intent")
 
     steering = classified.steering_ratio
     if steering > config.max_steering:
-        return _stop("left_correction_limit_exceeded")
+        return stop_decision("left_correction_limit_exceeded")
     if steering < config.min_steering:
-        return _stop("right_correction_limit_exceeded")
+        return stop_decision("right_correction_limit_exceeded")
 
     if intent.intent_class in REVERSE_CLASSES:
         return SafetyDecision(
@@ -122,7 +119,12 @@ def evaluate_safety(
     )
 
 
-def _stop(reason: str, nearest: float | None = None) -> SafetyDecision:
+def stop_decision(
+    reason: str,
+    nearest: float | None = None,
+) -> SafetyDecision:
+    """Return a fail-closed decision with zero permitted motion."""
+
     return SafetyDecision(STOP, 0.0, 0.0, reason, nearest)
 
 
@@ -148,17 +150,6 @@ def _stop_from_costs(
 
 
 __all__ = [
-    "CLEAR",
-    "PathCostSummary",
-    "SLOW",
-    "STOP",
-    "OperatorIntentData",
-    "SafetyConfig",
-    "SafetyDecision",
-    "WeightedCostmap",
     "evaluate_safety",
-    "swept_path_costs",
-    "trajectory_points",
-    "validate_safety_config",
-    "weighted_costmap_from_grid",
+    "stop_decision",
 ]

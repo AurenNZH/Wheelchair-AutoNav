@@ -10,7 +10,7 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     weighted_costmap_from_grid,
 )
-from wheelchair_shared_control.safety import evaluate_safety
+from wheelchair_shared_control.safety_policy import evaluate_safety
 from wheelchair_shared_control.operator_intent import (
     FORWARD,
     FORWARD_LEFT,

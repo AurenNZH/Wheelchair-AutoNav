@@ -13,7 +13,7 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     weighted_costmap_from_grid,
 )
-from wheelchair_shared_control.safety import evaluate_safety
+from wheelchair_shared_control.safety_policy import evaluate_safety
 
 
 def test_markers_show_requested_path_and_decision_label():

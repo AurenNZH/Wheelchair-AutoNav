@@ -31,7 +31,10 @@ from wheelchair_shared_control.models import (
     validate_safety_config,
     weighted_costmap_from_grid,
 )
-from wheelchair_shared_control.safety import evaluate_safety
+from wheelchair_shared_control.safety_policy import (
+    evaluate_safety,
+    stop_decision,
+)
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
 
 
@@ -339,7 +342,7 @@ class SafetySupervisorNode(Node):
             self._freshness_policy,
         )
         if freshness.failure_reason is not None:
-            decision = self._stop(freshness.failure_reason)
+            decision = stop_decision(freshness.failure_reason)
         else:
             decision = self._evaluate_intent()
 
@@ -406,12 +409,6 @@ class SafetySupervisorNode(Node):
             self._front_costmap,
             self._config,
         )
-
-    @staticmethod
-    def _stop(reason: str):
-        from wheelchair_shared_control.safety import SafetyDecision, STOP
-
-        return SafetyDecision(STOP, 0.0, 0.0, reason)
 
     def _publish_checked_corridor(
         self,
