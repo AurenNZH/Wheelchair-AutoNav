@@ -35,7 +35,14 @@ class SharedControlBoundaryTests(unittest.TestCase):
         self.assertEqual(dataclasses, [])
 
     def test_executable_nodes_do_not_import_one_another(self):
-        for module_name in ("supervisor_node.py", "udp_bridge_node.py"):
+        executable_modules = (
+            "supervisor_node.py",
+            "udp_bridge_node.py",
+            "replay/envelope_monitor.py",
+            "replay/intent_injector.py",
+            "replay/map_restamper.py",
+        )
+        for module_name in executable_modules:
             with self.subTest(module=module_name):
                 tree = self.parse(module_name)
                 imported = {

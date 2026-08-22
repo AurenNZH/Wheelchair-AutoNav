@@ -4,7 +4,7 @@ import unittest
 from nav_msgs.msg import OccupancyGrid
 from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
 
-from wheelchair_shared_control.envelope_monitor import (
+from wheelchair_shared_control.replay.envelope_monitor import (
     READY,
     STALE,
     WAITING,
@@ -16,14 +16,14 @@ from wheelchair_shared_control.envelope_monitor import (
     intent_signature,
     map_pipeline_state,
 )
-from wheelchair_shared_control.intent_injector import (
+from wheelchair_shared_control.replay.intent_injector import (
     FORWARD,
     RELEASED,
     command_for_preset,
     motion_lease_expired,
     validate_injector_config,
 )
-from wheelchair_shared_control.replay_map_restamper import (
+from wheelchair_shared_control.replay.map_restamper import (
     restamped_grid,
     validate_topic_separation,
 )
