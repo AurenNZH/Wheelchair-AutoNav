@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from diagnostic_msgs.msg import DiagnosticArray
 from nav_msgs.msg import OccupancyGrid
 import rclpy
 from rclpy.node import Node
@@ -16,6 +16,11 @@ from visualization_msgs.msg import MarkerArray
 
 from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
+)
+from wheelchair_shared_control.diagnostics import (
+    SafetyDiagnosticSnapshot,
+    build_safety_diagnostic_status,
+    format_decision_transition,
 )
 from wheelchair_shared_control.freshness import (
     FreshnessInputs,
@@ -36,83 +41,6 @@ from wheelchair_shared_control.safety_policy import (
     stop_decision,
 )
 from wheelchair_shared_control.operator_intent import classify_normalized_axes
-
-
-def safety_diagnostic_values(
-    decision: SafetyDecision,
-    config: SafetyConfig,
-    map_age_ms: float,
-    processing_ms: float,
-    *,
-    freshness_mode: str = NAV2_LIVE,
-    map_age_basis: str = "receipt_time",
-    source_age_ms: float | None = None,
-) -> list[KeyValue]:
-    """Build stable, machine-readable evidence for one decision."""
-
-    return [
-        KeyValue(key="map_age_ms", value="%.3f" % map_age_ms),
-        KeyValue(key="freshness_mode", value=freshness_mode),
-        KeyValue(key="map_age_basis", value=map_age_basis),
-        KeyValue(
-            key="source_age_ms",
-            value=(
-                "none" if source_age_ms is None else "%.3f" % source_age_ms
-            ),
-        ),
-        KeyValue(key="processing_ms", value="%.3f" % processing_ms),
-        KeyValue(key="enable_motion", value=str(config.enable_motion)),
-        KeyValue(
-            key="geometry_calibrated",
-            value=str(config.geometry_calibrated),
-        ),
-        KeyValue(key="min_steering", value="%.3f" % config.min_steering),
-        KeyValue(key="max_steering", value="%.3f" % config.max_steering),
-        KeyValue(
-            key="nearest_path_distance_m",
-            value=(
-                "none"
-                if decision.nearest_path_distance_m is None
-                else "%.3f" % decision.nearest_path_distance_m
-            ),
-        ),
-        KeyValue(
-            key="maximum_path_cost",
-            value=(
-                "none"
-                if decision.maximum_path_cost is None
-                else str(decision.maximum_path_cost)
-            ),
-        ),
-        KeyValue(
-            key="nearest_slow_cost_distance_m",
-            value=(
-                "none"
-                if decision.nearest_slow_cost_distance_m is None
-                else "%.3f" % decision.nearest_slow_cost_distance_m
-            ),
-        ),
-        KeyValue(
-            key="nearest_stop_cost_distance_m",
-            value=(
-                "none"
-                if decision.nearest_stop_cost_distance_m is None
-                else "%.3f" % decision.nearest_stop_cost_distance_m
-            ),
-        ),
-        KeyValue(
-            key="slow_cost_threshold",
-            value=str(config.slow_cost_threshold),
-        ),
-        KeyValue(
-            key="stop_cost_threshold",
-            value=str(config.stop_cost_threshold),
-        ),
-        KeyValue(
-            key="path_cost_valid",
-            value=str(decision.path_cost_valid),
-        ),
-    ]
 
 
 class SafetySupervisorNode(Node):
@@ -455,47 +383,27 @@ class SafetySupervisorNode(Node):
 
     def _publish_diagnostics(
         self,
-        decision,
+        decision: SafetyDecision,
         map_age_ms: float,
         processing_ms: float,
         map_age_basis: str,
         source_age_ms: float | None,
     ) -> None:
-        status = DiagnosticStatus()
-        status.name = "wheelchair_shared_control/safety_supervisor"
-        status.hardware_id = "jetson"
-        status.level = (
-            DiagnosticStatus.OK
-            if decision.decision == SafetyEnvelope.CLEAR
-            else DiagnosticStatus.WARN
-        )
-        status.message = decision.reason
-        status.values = safety_diagnostic_values(
-            decision,
-            self._config,
-            map_age_ms,
-            processing_ms,
+        snapshot = SafetyDiagnosticSnapshot(
+            decision=decision,
+            config=self._config,
+            map_age_ms=map_age_ms,
+            processing_ms=processing_ms,
             freshness_mode=self._freshness_mode,
             map_age_basis=map_age_basis,
             source_age_ms=source_age_ms,
         )
         diagnostics = DiagnosticArray()
         diagnostics.header.stamp = self.get_clock().now().to_msg()
-        diagnostics.status = [status]
+        diagnostics.status = [build_safety_diagnostic_status(snapshot)]
         self._diagnostics_pub.publish(diagnostics)
         if decision.reason != self._last_reason:
-            self.get_logger().info(
-                "Safety decision changed: %s (nearest=%s max_cost=%s)"
-                % (
-                    decision.reason,
-                    "none"
-                    if decision.nearest_path_distance_m is None
-                    else "%.3f m" % decision.nearest_path_distance_m,
-                    "none"
-                    if decision.maximum_path_cost is None
-                    else str(decision.maximum_path_cost),
-                )
-            )
+            self.get_logger().info(format_decision_transition(decision))
             self._last_reason = decision.reason
 
 

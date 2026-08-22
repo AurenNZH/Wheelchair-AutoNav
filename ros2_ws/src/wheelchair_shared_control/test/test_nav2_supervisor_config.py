@@ -4,11 +4,7 @@ from nav_msgs.msg import OccupancyGrid
 import yaml
 
 from wheelchair_shared_control.freshness import NAV2_LIVE
-from wheelchair_shared_control.models import SafetyConfig, SafetyDecision
-from wheelchair_shared_control.supervisor_node import (
-    SafetySupervisorNode,
-    safety_diagnostic_values,
-)
+from wheelchair_shared_control.supervisor_node import SafetySupervisorNode
 
 
 def _parameters():
@@ -74,36 +70,3 @@ def test_supervisor_retains_weighted_grid_values():
     costmap = SafetySupervisorNode._grid_costmap(msg)
 
     assert costmap.costs.tolist() == [[0, 50], [99, 100]]
-
-
-def test_cost_decision_diagnostics_expose_calibration_evidence():
-    config = SafetyConfig(
-        slow_cost_threshold=5,
-        stop_cost_threshold=90,
-    )
-    decision = SafetyDecision(
-        decision=1,
-        permitted_forward=0.2,
-        permitted_steering=0.0,
-        reason="nav2_cost_slow",
-        nearest_path_distance_m=0.8,
-        maximum_path_cost=75,
-        nearest_slow_cost_distance_m=0.8,
-        nearest_stop_cost_distance_m=None,
-        path_cost_valid=True,
-    )
-
-    values = {
-        item.key: item.value
-        for item in safety_diagnostic_values(decision, config, 12.5, 1.25)
-    }
-
-    assert values["maximum_path_cost"] == "75"
-    assert values["nearest_slow_cost_distance_m"] == "0.800"
-    assert values["nearest_stop_cost_distance_m"] == "none"
-    assert values["slow_cost_threshold"] == "5"
-    assert values["stop_cost_threshold"] == "90"
-    assert values["path_cost_valid"] == "True"
-    assert values["freshness_mode"] == NAV2_LIVE
-    assert values["map_age_basis"] == "receipt_time"
-    assert values["source_age_ms"] == "none"
