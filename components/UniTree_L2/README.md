@@ -1,9 +1,9 @@
 # Unitree L2 bring-up
 
 This component brings up one Unitree L2 on the wheelchair's right footrest.
-It is intentionally isolated from the repository's main `ros2_ws`: the first
-milestone is to prove stable raw point-cloud and IMU publication before adding
-robot transforms, filtering, Nav2, or shared control.
+It is intentionally isolated from the repository's main `ros2_ws`: the current
+milestone proves stable raw point-cloud and IMU publication and defines the
+measured sensor mounts before adding filtering, Nav2, or shared control.
 
 The official Unitree SDK2 is pinned as a Git submodule under
 `ros2_ws/src/unilidar_sdk2`. The wrapper package supplies the
@@ -20,6 +20,19 @@ without modifying the vendor source.
 | Point-cloud frame | `lidar_right_link` |
 | IMU | `/lidar_right/imu` (`sensor_msgs/msg/Imu`) |
 | IMU frame | `lidar_right_imu_link` |
+
+Both measured L2 mounting frames are published under `base_link`, although only
+the right lidar driver is started:
+
+| Transform | XYZ (m) | ROS yaw, pitch, roll |
+| --- | --- | --- |
+| `base_link -> lidar_right_link` | `0.330 -0.265 0.320` | `+22.5 0 0` degrees |
+| `base_link -> lidar_left_link` | `0.330 +0.265 0.320` | `-22.5 0 0` degrees |
+
+The measured angle is a rotation about ROS Z, which ROS/REP-103 calls yaw. The
+vendor's separate IMU-derived TF broadcasts are remapped to
+`/lidar_right/vendor_tf`; this prevents them from competing with the fixed
+wheelchair mount for ownership of `lidar_right_link`.
 
 The driver uses Ethernet mode, standard 3D field of view, IMU enabled, system
 timestamps, 18 scans per cloud, and a 0-100 m range. The upstream driver
@@ -125,8 +138,8 @@ floor and walls are stable and that moving a test object moves the corresponding
 points.
 
 The lidar coordinate convention is +X opposite the cable outlet, +Y 90 degrees
-counterclockwise from +X, and +Z upward. A measured
-`base_link -> lidar_right_link` transform is deliberately deferred.
+counterclockwise from +X, and +Z upward. Set `publish_mount_tfs:=false` only for
+isolated vendor-TF diagnosis; it defaults to true for wheelchair operation.
 
 ## Troubleshooting boundary
 

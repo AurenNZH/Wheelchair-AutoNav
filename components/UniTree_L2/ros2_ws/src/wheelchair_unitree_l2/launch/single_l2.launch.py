@@ -32,6 +32,11 @@ def generate_launch_description():
         _argument("cloud_scan_num", "18", "Number of scans accumulated per cloud"),
         _argument("range_min", "0.0", "Minimum accepted range in metres"),
         _argument("range_max", "100.0", "Maximum accepted range in metres"),
+        _argument(
+            "publish_mount_tfs",
+            "true",
+            "Publish the measured base_link-to-L2 mount transforms",
+        ),
         _argument("use_rviz", "true", "Start RViz with the single-L2 view"),
     ]
 
@@ -69,6 +74,47 @@ def generate_launch_description():
                 ),
             }
         ],
+        # The vendor driver broadcasts an IMU-derived TF chain ending at
+        # cloud_frame. Keep that diagnostic chain available on an isolated
+        # topic so it cannot give lidar_right_link a second parent in the
+        # wheelchair's measured, chassis-fixed TF tree.
+        remappings=[("/tf", "/lidar_right/vendor_tf")],
+    )
+
+    # static_transform_publisher uses x y z yaw pitch roll. The measured
+    # clockwise/anticlockwise mounting correction is a rotation about ROS +Z,
+    # which REP-103 names yaw rather than pitch.
+    right_mount_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="lidar_right_mount_tf",
+        arguments=[
+            "0.330",
+            "-0.265",
+            "0.320",
+            "0.392699082",
+            "0.0",
+            "0.0",
+            "base_link",
+            "lidar_right_link",
+        ],
+        condition=IfCondition(LaunchConfiguration("publish_mount_tfs")),
+    )
+    left_mount_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="lidar_left_mount_tf",
+        arguments=[
+            "0.330",
+            "0.265",
+            "0.320",
+            "-0.392699082",
+            "0.0",
+            "0.0",
+            "base_link",
+            "lidar_left_link",
+        ],
+        condition=IfCondition(LaunchConfiguration("publish_mount_tfs")),
     )
 
     rviz_config = os.path.join(
@@ -85,4 +131,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_rviz")),
     )
 
-    return LaunchDescription(arguments + [lidar, rviz])
+    return LaunchDescription(
+        arguments + [lidar, right_mount_tf, left_mount_tf, rviz]
+    )
