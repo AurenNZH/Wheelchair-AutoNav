@@ -23,6 +23,9 @@ experiments/logs/*
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
+components/UniTree_L2/ros2_ws/build/
+components/UniTree_L2/ros2_ws/install/
+components/UniTree_L2/ros2_ws/log/
 
 # Large robotics / ML artifacts
 *.bag
