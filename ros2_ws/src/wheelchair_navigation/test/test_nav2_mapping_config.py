@@ -46,21 +46,19 @@ def test_right_l2_pipeline_has_disabled_optional_inflation_after_obstacles():
     assert "artifact_grid_mask_cells" not in parameters
 
 
-def test_launch_filters_right_l2_support_before_nav2_without_airy_geometry():
+def test_launch_filters_right_l2_support_before_nav2():
     path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
     source = path.read_text()
 
-    assert 'executable="artifact_point_filter"' in source
+    assert 'executable="point_support_filter"' in source
     assert '"lidar_topic": "/lidar_right/points"' in source
     assert '"/lidar_right/points_filtered"' in source
     assert "L2_lidar_right=/lidar_right/points_filtered" in source
-    assert '"artifact_grid_mask_cells"' not in source
-    assert '"artifact_grid_halo_spans"' not in source
-    assert '"self_filter_boxes"' not in source
-    assert '"artifact_min_points_per_cell": 1' in source
-    assert '"publish_artifact_markers": False' in source
+    assert '"min_points_per_cell"' in source
     assert 'default_value="3"' in source
-    assert '"/artifact_filter/source_header"' in source
+    assert '"/lidar_right/filter/source_header"' in source
+    assert '"use_sim_time": LaunchConfiguration("use_sim_time")' in source
+    assert '"validate_cloud_timestamps"' in source
     assert "/rslidar_points" not in source
 
 

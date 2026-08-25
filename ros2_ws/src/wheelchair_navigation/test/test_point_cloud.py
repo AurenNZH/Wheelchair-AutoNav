@@ -38,7 +38,7 @@ class PointCloudTests(unittest.TestCase):
         )
         self.assertTrue(np.isnan(cloud.xyz[3, 0]))
 
-    def test_decodes_airy_diagnostic_fields(self):
+    def test_decodes_auxiliary_lidar_fields(self):
         msg = PointCloud2()
         msg.height = 1
         msg.width = 1
@@ -134,7 +134,7 @@ class PointCloudTests(unittest.TestCase):
 
     def test_rejected_xyz_cloud_preserves_input_header(self):
         header = PointCloud2().header
-        header.frame_id = "rslidar"
+        header.frame_id = "lidar_right_link"
         header.stamp.sec = 123
         header.stamp.nanosec = 456
 
@@ -142,7 +142,7 @@ class PointCloudTests(unittest.TestCase):
             np.array([[1.0, 2.0, 3.0]], dtype=np.float32), header
         )
 
-        self.assertEqual(msg.header.frame_id, "rslidar")
+        self.assertEqual(msg.header.frame_id, "lidar_right_link")
         self.assertEqual(msg.header.stamp.sec, 123)
         self.assertEqual(msg.header.stamp.nanosec, 456)
         self.assertEqual(msg.width, 1)
@@ -150,7 +150,7 @@ class PointCloudTests(unittest.TestCase):
 
     def test_record_selection_preserves_fields_header_and_record_bytes(self):
         msg = PointCloud2()
-        msg.header.frame_id = "rslidar"
+        msg.header.frame_id = "lidar_right_link"
         msg.header.stamp.sec = 123
         msg.height = 1
         msg.width = 3

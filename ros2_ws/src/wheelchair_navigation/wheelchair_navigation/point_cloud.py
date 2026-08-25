@@ -166,7 +166,7 @@ def select_point_cloud_records(
 
     The result is compacted to an unorganized cloud because removing arbitrary
     points cannot preserve the source image layout. Every byte in each retained
-    point record is copied unchanged, including AIRY diagnostic fields that the
+    point record is copied unchanged, including vendor fields that the
     filtering algorithm does not interpret.
     """
 

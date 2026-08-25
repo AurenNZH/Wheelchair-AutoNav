@@ -182,19 +182,54 @@
     <origin xyz="0 0 0.85" rpy="0 0 0"/>
   </joint>
 
-  <!-- The frame is physically validated; visual origin assumes the frame is at the mount. -->
-  <link name="rslidar">
-    <visual name="airy_visual">
-      <origin xyz="0 0 0.0315"/>
+  <!-- Simulated right L2 uses the same frame and mount as physical bringup. -->
+  <link name="lidar_right_link">
+    <visual name="l2_right_visual">
       <geometry>
-        <cylinder radius="0.030" length="0.063"/>
+        <cylinder radius="0.040" length="0.075"/>
       </geometry>
       <material name="sensor_black"/>
     </visual>
   </link>
-  <joint name="rslidar_mount" type="fixed">
+  <joint name="lidar_right_mount" type="fixed">
     <parent link="base_link"/>
-    <child link="rslidar"/>
-    <origin xyz="0.330 -0.265 0.320" rpy="0 0 1.0472"/>
+    <child link="lidar_right_link"/>
+    <origin xyz="0.330 -0.265 0.320" rpy="0 0 0.392699082"/>
   </joint>
+
+  <gazebo reference="lidar_right_link">
+    <sensor name="lidar_right_sensor" type="ray">
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <update_rate>10.0</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-${pi}</min_angle>
+            <max_angle>${pi}</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>18</samples>
+            <resolution>1</resolution>
+            <min_angle>-${pi / 4.0}</min_angle>
+            <max_angle>${pi / 4.0}</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.45</min>
+          <max>100.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin name="lidar_right_ros" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <remapping>~/out:=/lidar_right/points</remapping>
+        </ros>
+        <output_type>sensor_msgs/PointCloud2</output_type>
+        <frame_name>lidar_right_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
 </robot>

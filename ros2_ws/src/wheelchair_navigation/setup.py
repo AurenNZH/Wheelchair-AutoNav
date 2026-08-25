@@ -25,9 +25,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "artifact_point_filter = wheelchair_navigation.artifact_point_filter_node:main",
-            "local_costmap = wheelchair_navigation.local_navigation_node:main",
-            "mapping_monitor = wheelchair_navigation.mapping_monitor:main",
+            "point_support_filter = wheelchair_navigation.point_support_filter_node:main",
             "nav2_costmap_monitor = wheelchair_navigation.nav2_costmap_monitor:main",
         ],
     },

@@ -21,7 +21,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "source_header_topic",
-                default_value="/artifact_filter/source_header",
+                default_value="/lidar_right/filter/source_header",
             ),
             DeclareLaunchArgument(
                 "freshness_mode", default_value="nav2_live"

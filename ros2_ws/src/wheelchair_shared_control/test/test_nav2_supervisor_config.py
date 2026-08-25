@@ -18,7 +18,7 @@ def test_production_defaults_to_weighted_nav2_costs():
 
     assert parameters["front_costmap_topic"] == "/nav2_front_costmap"
     assert parameters["source_header_topic"] == (
-        "/artifact_filter/source_header"
+        "/lidar_right/filter/source_header"
     )
     assert parameters["freshness_mode"] == NAV2_LIVE
     assert parameters["max_map_age_s"] == 0.5
@@ -40,7 +40,7 @@ def test_launch_exposes_costmap_topic_and_thresholds():
 
     assert '"front_costmap_topic"' in source
     assert 'default_value="/nav2_front_costmap"' in source
-    assert 'default_value="/artifact_filter/source_header"' in source
+    assert 'default_value="/lidar_right/filter/source_header"' in source
     assert '"freshness_mode", default_value="nav2_live"' in source
     assert '"max_map_age_s", default_value="0.50"' in source
     assert '"max_source_age_s", default_value="0.50"' in source
@@ -49,12 +49,13 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"forward_cone_half_angle_deg", default_value="30.0"' in source
 
 
-def test_replay_keeps_legacy_front_topic_explicit():
+def test_replay_uses_nav2_costmap_with_map_stamp_freshness():
     path = Path(__file__).parents[1] / "launch" / "intent_replay.launch.py"
     source = path.read_text()
 
-    assert '"front_costmap_topic": "/front_costmap"' in source
-    assert '"freshness_mode": "legacy_map_stamp"' in source
+    assert '"front_costmap_topic": "/nav2_front_costmap"' in source
+    assert '"freshness_mode": "map_stamp"' in source
+    assert '"/front_costmap"' not in source
 
 
 def test_supervisor_retains_weighted_grid_values():

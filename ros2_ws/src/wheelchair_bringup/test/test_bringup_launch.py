@@ -12,20 +12,20 @@ def test_defaults_are_lidar_first_and_non_actuating():
     assert LAUNCH_DEFAULTS["publish_camera_tf"] == "false"
     assert LAUNCH_DEFAULTS["use_mapping"] == "false"
     assert LAUNCH_DEFAULTS["use_rviz"] == "false"
-    assert LAUNCH_DEFAULTS["publish_base_lidar_tf"] == "true"
+    assert LAUNCH_DEFAULTS["publish_lidar_tf"] == "true"
 
 
 def test_sensor_mount_transforms_are_siblings_under_base_link():
     assert SENSOR_TRANSFORMS == {
-        "rslidar": {
+        "lidar_right_link": {
             "x": "0.330",
             "y": "-0.265",
             "z": "0.320",
-            "yaw": "1.04720",
+            "yaw": "0.392699082",
             "pitch": "0.0",
             "roll": "0.0",
             "parent": "base_link",
-            "child": "rslidar",
+            "child": "lidar_right_link",
         },
         "camera_link": {
             "x": "-0.360",
@@ -54,3 +54,15 @@ def test_launch_description_declares_every_public_argument():
     }
 
     assert declared == set(LAUNCH_DEFAULTS)
+
+
+def test_right_l2_configuration_retains_validated_runtime_contract():
+    config_path = Path(__file__).parents[1] / "config" / "unitree_l2_right.yaml"
+    source = config_path.read_text()
+
+    assert "lidar_ip: 192.168.1.62" in source
+    assert "local_ip: 192.168.1.2" in source
+    assert "cloud_topic: /lidar_right/points" in source
+    assert "cloud_frame: lidar_right_link" in source
+    assert "cloud_scan_num: 18" in source
+    assert "range_min: 0.45" in source

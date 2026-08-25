@@ -56,7 +56,7 @@ class SafetySupervisorNode(Node):
             "front_costmap_topic", "/nav2_front_costmap"
         )
         self.declare_parameter(
-            "source_header_topic", "/artifact_filter/source_header"
+            "source_header_topic", "/lidar_right/filter/source_header"
         )
         self.declare_parameter("freshness_mode", NAV2_LIVE)
         self.declare_parameter(

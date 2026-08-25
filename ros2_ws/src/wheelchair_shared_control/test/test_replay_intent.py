@@ -23,7 +23,7 @@ from wheelchair_shared_control.replay.intent_injector import (
     motion_lease_expired,
     validate_injector_config,
 )
-from wheelchair_shared_control.replay.map_restamper import (
+from wheelchair_shared_control.replay.costmap_restamper import (
     restamped_grid,
     validate_topic_separation,
 )
@@ -71,7 +71,7 @@ class IntentInjectorTests(unittest.TestCase):
         self.assertTrue(motion_lease_expired(FORWARD, 70.0, 100.0, 30.0))
 
 
-class ReplayMapRestamperTests(unittest.TestCase):
+class ReplayCostmapRestamperTests(unittest.TestCase):
     def test_only_header_timestamp_changes(self):
         original = OccupancyGrid()
         original.header.stamp.sec = 12

@@ -1,93 +1,54 @@
 # Start Here
 
-## 1. Build and Test
+## Build and test
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
 git submodule update --init --recursive
 source /opt/ros/foxy/setup.bash
 cd ros2_ws
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
+rosdep install --from-paths \
+  src/wheelchair_bringup src/wheelchair_msgs src/wheelchair_navigation \
+  src/wheelchair_shared_control src/wheelchair_simulation \
+  src/unilidar_sdk2/unitree_lidar_ros2/src/unitree_lidar_ros2 \
+  --ignore-src -r -y
+colcon build --symlink-install \
+  --packages-ignore unitree_lidar_ros unitree_lidar_sdk
 source install/setup.bash
 colcon test
 colcon test-result --verbose
 ```
 
-Run Pi software tests separately:
+Run Raspberry Pi software tests separately with
+`python3 -m pytest components/can_controller/tests`.
 
-```bash
-cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
-python3 -m pytest components/can_controller/tests
-```
+## Inspect L2/Nav2 without motion
 
-## 2. Inspect AIRY Mapping Without Motion
+Complete [L2 Ethernet preflight](l2_bringup.md), then run:
 
 ```bash
 source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
-export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=false use_rviz:=false
+  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true
 ```
 
-In a second terminal:
+Verify `/lidar_right/points`, `/lidar_right/points_filtered`,
+`/lidar_right/filter/source_header`, and `/nav2_front_costmap` independently.
+No node in this launch commands the wheelchair.
 
-```bash
-source /opt/ros/foxy/setup.bash
-source ros2_ws/install/setup.bash
-export ROS_LOCALHOST_ONLY=1
-ros2 launch wheelchair_navigation nav2_mapping.launch.py \
-  use_artifact_filter:=true use_inflation:=true use_rviz:=true
-```
-
-The artifact filter publishes `/rslidar_points_artifact_filtered`, and Nav2
-publishes `/nav2_front_costmap`. Shared control samples the weighted Nav2 map
-only along the requested forward trajectory union.
-
-## 3. Run Gazebo Before Hardware
-
-Use a separate ROS domain so simulated and physical sensor graphs cannot mix:
+## Run Gazebo before hardware
 
 ```bash
 export ROS_DOMAIN_ID=91
-source /opt/ros/foxy/setup.bash
-source ros2_ws/install/setup.bash
 ros2 launch wheelchair_simulation shared_control_sim.launch.py \
   gui:=false enable_sim_motion:=true operator_mode:=scenario scenario:=all
 ```
 
-For interactive exploration:
+## Physical progression
 
-```bash
-export ROS_DOMAIN_ID=91
-ros2 launch wheelchair_simulation shared_control_sim.launch.py \
-  gui:=true enable_sim_motion:=true operator_mode:=keyboard
-```
-
-Controls are W straight, D right, A unsupported-left test, S reverse-disabled
-test, Space/X stop, and Q quit. Movement expires unless the key is refreshed.
-The full scripted suite is not yet a release gate: Gazebo still reports a
-fixed-joint wheelchair self-return in `clear_forward`. See the simulation
-package README before interpreting that failure.
-
-## 4. Physical Progression
-
-Follow [shared_control_validation.md](shared_control_validation.md) in order:
-
-1. clean-dome, hood, coverage, and latency validation;
-2. measured swept geometry;
-3. `vcan` Jetson–Pi failure tests;
-4. live weighted-cost shadow and CLEAR/SLOW/STOP calibration;
-5. LiDAR-derived costmap freshness validation;
-6. only then, lowest-speed controlled-area tests with an independent cutoff.
-
-Never jump directly from RViz validation to obstacle-driving tests.
-
-Before physical-JSM shared control, complete the transparent-pass-through
-[physical joystick observation](physical_joystick_observer.md). That observer
-forwards the split bus unchanged and does not generate an actuator command.
-Then follow the staged
-[physical joystick shared-control test](physical_joystick_shared_control.md)
-for UDP shadow validation. Its low-speed enforcement section remains blocked
-until weighted costs and source freshness pass their documented gates.
+Follow [shared_control_validation.md](shared_control_validation.md): validate
+coverage and latency, measure swept geometry, test network failures, calibrate
+weighted decisions, then use raised-wheel and lowest-speed controlled-area
+tests with an independent cutoff. Never jump directly from RViz to an
+obstacle-driving test.

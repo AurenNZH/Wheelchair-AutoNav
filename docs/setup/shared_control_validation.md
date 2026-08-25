@@ -11,7 +11,7 @@ Keep all three live gates off until their preceding stages pass:
 - Jetson `enable_udp: false`
 - Pi `shared_control.enabled: false`
 
-Record the software revision, configuration files, chair/load, AIRY mounting
+Record the software revision, configuration files, chair/load, L2 mounting
 measurements, test layout, timestamps, and pass/fail evidence for every run.
 
 ## 1. Software and fail-closed checks
@@ -35,12 +35,12 @@ Launch shared control with its defaults. Confirm diagnostics say
 `live_control_disabled` once maps and intent exist, UDP reports disabled, and
 no node publishes a physical `cmd_vel` or accesses CAN.
 
-## 2. AIRY and weighted Nav2 mapping acceptance
+## 2. L2 and weighted Nav2 mapping acceptance
 
-With drive power physically isolated, run the AIRY mapper and inspect
-`/rslidar_points_artifact_filtered` and `/nav2_front_costmap` in RViz. Shared
-control consumes only the robot-relative Nav2 map; raw and rejected clouds
-remain diagnostic evidence for reflections and blind side/rear coverage.
+With drive power physically isolated, run the right-L2/Nav2 pipeline and inspect
+`/lidar_right/points_filtered` and `/nav2_front_costmap` in RViz. Shared control
+consumes only the robot-relative Nav2 map; raw and low-support clouds remain
+diagnostic evidence for sampling and blind side/rear coverage.
 
 Pass only if all of the following hold:
 
@@ -48,15 +48,15 @@ Pass only if all of the following hold:
   entire forward driving envelope, including beside both footrests.
 - Right-side obstacles remain in the observed raw map. Do not infer free space
   in the left-side sector occluded by the chair.
-- The AIRY dome is clean, the hood is secure, and empty-scene chassis returns
-  are absent or confined to the measured self-filter.
-- Nearby real targets are not removed by the hood or self-filter.
+- The L2 window and mount are clean and secure, and empty-scene chassis returns
+  do not enter the Nav2 obstacle map.
+- Nearby real targets are not removed by the point-support filter.
 - Raw obstacle size is credible.
 - No unobserved sector is shown or treated as clear.
 - At 10 Hz over ten minutes, processing p95 is below 100 ms, processing maximum
   and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
   grows.
-- `/artifact_filter/source_header` advances after every successfully filtered
+- `/lidar_right/filter/source_header` advances after every successfully filtered
   cloud, and supervisor diagnostics report `freshness_mode=nav2_live` and
   `map_age_basis=receipt_time`.
 - Stopping the filter produces `stale_source`; stopping Nav2 while the filter
@@ -78,11 +78,8 @@ ros2 launch wheelchair_simulation shared_control_sim.launch.py \
   gui:=false enable_sim_motion:=true operator_mode:=scenario scenario:=all
 ```
 
-The full suite must eventually pass, but `clear_forward` currently exposes a
-known Gazebo fixed-joint self-return. Keep this as a visible blocker; do not
-weaken the forward swept-footprint check to make the simulation pass.
-Meanwhile, launch
-`operator_mode:=keyboard gui:=true` and inspect straight, bounded-right,
+The full suite must pass without weakening the forward swept-footprint check.
+Also launch `operator_mode:=keyboard gui:=true` and inspect straight, bounded-right,
 unsupported-left, reverse-disabled, deadman-release, doorway, narrow-pole,
 and moving-dummy behaviour. `enable_sim_motion:=true` must never affect a
 non-`/sim` velocity topic.
@@ -108,8 +105,8 @@ The UDP protocol is unauthenticated; use only the isolated trusted router LAN.
 ## 5. Geometry, speed, and stopping calibration
 
 Record the 1.00 m × 0.53 m centred body, then measure the wheel/caster sweep,
-every supported footrest/mount position, AIRY yaw convention, and maximum
-intended loaded mass. AIRY pitch and roll are confirmed zero. Replace
+every supported footrest/mount position, L2 yaw convention, and maximum
+intended loaded mass. L2 pitch and roll are confirmed zero. Replace
 provisional collision dimensions only with the complete swept envelope.
 
 After vCAN failure tests and live shadow observation, use either raised wheels
@@ -167,18 +164,9 @@ with an independent observer holding the tested cutoff. Start well outside the
 stopping envelope and cross predictably. Stop immediately after any unexpected
 behavior; do not tune during a live human run.
 
-## AIRY versus Unitree L2 decision
+## Future left L2
 
-Keep the single AIRY through the August 31 delivery for forward/right motion if
-it passes the mapping, coverage, latency, and controlled-obstacle gates. Its
-working driver and good observed coverage are a schedule advantage.
-
-Trigger a single-L2 contingency only if the AIRY has a documented,
-safety-relevant blind/reflection sector that cannot be fixed physically or
-filtered without losing real targets. Freeze the delivery sensor choice no
-later than mid-August; a dual-L2 integration adds power, Ethernet, time
-synchronization, calibration, fusion, mounting, and regression work and should
-not be placed on the August 31 critical path. Consider dual L2 only as a
-post-delivery coverage upgrade after one L2 independently passes the same
-gates. Symmetric left/right shared control requires that additional left-side
-coverage.
+Add the left sensor only after the right sensor independently passes these
+gates. Dual-L2 integration requires separate power, Ethernet, timing, mounting,
+TF, fusion, and regression evidence. Do not publish a left sensor frame or
+claim symmetric coverage before that hardware is installed and validated.

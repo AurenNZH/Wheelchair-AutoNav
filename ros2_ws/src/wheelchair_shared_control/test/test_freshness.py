@@ -2,7 +2,7 @@ import unittest
 from dataclasses import replace
 
 from wheelchair_shared_control.freshness import (
-    LEGACY_MAP_STAMP,
+    MAP_STAMP,
     NAV2_LIVE,
     FreshnessInputs,
     FreshnessPolicy,
@@ -105,8 +105,8 @@ class FreshnessTests(unittest.TestCase):
         self.assertIsNone(stale_map.input_failure_reason)
         self.assertEqual(stale_map.map_age_failure_reason, "stale_map")
 
-    def test_legacy_mode_retains_map_header_semantics(self):
-        policy = replace(self.policy, mode=LEGACY_MAP_STAMP)
+    def test_map_stamp_mode_uses_map_header_semantics(self):
+        policy = replace(self.policy, mode=MAP_STAMP)
         invalid = self.evaluate(policy=policy)
         valid = self.evaluate(
             policy=policy,
@@ -132,7 +132,7 @@ class FreshnessTests(unittest.TestCase):
     def test_startup_validation_preserves_supported_settings(self):
         validate_freshness_policy(self.policy)
         validate_freshness_policy(
-            replace(self.policy, mode=LEGACY_MAP_STAMP)
+            replace(self.policy, mode=MAP_STAMP)
         )
         invalid = (
             replace(self.policy, mode="unknown"),
@@ -145,7 +145,7 @@ class FreshnessTests(unittest.TestCase):
 
     def test_mode_constants_remain_stable(self):
         self.assertEqual(NAV2_LIVE, "nav2_live")
-        self.assertEqual(LEGACY_MAP_STAMP, "legacy_map_stamp")
+        self.assertEqual(MAP_STAMP, "map_stamp")
 
 
 if __name__ == "__main__":

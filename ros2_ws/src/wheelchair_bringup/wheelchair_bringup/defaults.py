@@ -6,18 +6,19 @@ LAUNCH_DEFAULTS = {
     "use_camera": "false",
     "use_mapping": "false",
     "use_rviz": "false",
+    "use_sim_time": "false",
+    "support_min_points_per_cell": "3",
+    "use_inflation": "false",
+    "inflation_radius": "0.55",
+    "cost_scaling_factor": "3.0",
     "publish_camera_tf": "false",
-    "publish_base_lidar_tf": "true",
-    # Sensor poses converted from the legacy base axes (X left, Y backward)
-    # to REP-103 base axes (X forward, Y left): x_new=-y_old, y_new=x_old,
-    # yaw_new=yaw_old+pi/2.
-    "base_lidar_x": "0.330",
-    "base_lidar_y": "-0.265",
-    "base_lidar_z": "0.320",
-    # Physically validated with forward targets after the base-axis conversion.
-    "base_lidar_yaw": "1.04720",
-    "base_lidar_pitch": "0.0",
-    "base_lidar_roll": "0.0",
+    "publish_lidar_tf": "true",
+    "lidar_x": "0.330",
+    "lidar_y": "-0.265",
+    "lidar_z": "0.320",
+    "lidar_yaw": "0.392699082",
+    "lidar_pitch": "0.0",
+    "lidar_roll": "0.0",
     "base_camera_x": "-0.360",
     "base_camera_y": "0.265",
     "base_camera_z": "1.300",
@@ -28,15 +29,15 @@ LAUNCH_DEFAULTS = {
 
 
 SENSOR_TRANSFORMS = {
-    "rslidar": {
-        "x": LAUNCH_DEFAULTS["base_lidar_x"],
-        "y": LAUNCH_DEFAULTS["base_lidar_y"],
-        "z": LAUNCH_DEFAULTS["base_lidar_z"],
-        "yaw": LAUNCH_DEFAULTS["base_lidar_yaw"],
-        "pitch": LAUNCH_DEFAULTS["base_lidar_pitch"],
-        "roll": LAUNCH_DEFAULTS["base_lidar_roll"],
+    "lidar_right_link": {
+        "x": LAUNCH_DEFAULTS["lidar_x"],
+        "y": LAUNCH_DEFAULTS["lidar_y"],
+        "z": LAUNCH_DEFAULTS["lidar_z"],
+        "yaw": LAUNCH_DEFAULTS["lidar_yaw"],
+        "pitch": LAUNCH_DEFAULTS["lidar_pitch"],
+        "roll": LAUNCH_DEFAULTS["lidar_roll"],
         "parent": "base_link",
-        "child": "rslidar",
+        "child": "lidar_right_link",
     },
     "camera_link": {
         "x": LAUNCH_DEFAULTS["base_camera_x"],

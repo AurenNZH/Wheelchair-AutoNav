@@ -1,4 +1,4 @@
-"""Restamp recorded obstacle grids for wall-time ROS 2 Foxy playback."""
+"""Restamp recorded Nav2 grids for wall-time ROS 2 Foxy playback."""
 
 from __future__ import annotations
 
@@ -26,36 +26,36 @@ def validate_topic_separation(topics: tuple[str, str]) -> None:
         raise ValueError("replay input and output map topics must differ")
 
 
-class ReplayMapRestamperNode(Node):
-    """Bridge a recorded front map into its live topic without a sensor sim."""
+class ReplayCostmapRestamperNode(Node):
+    """Bridge a recorded Nav2 costmap into its live topic."""
 
     def __init__(self) -> None:
-        super().__init__("replay_map_restamper")
+        super().__init__("replay_costmap_restamper")
         self.declare_parameter(
-            "input_front_topic", "/replay/front_costmap"
+            "input_costmap_topic", "/replay/nav2_front_costmap"
         )
-        self.declare_parameter("output_front_topic", "/front_costmap")
+        self.declare_parameter("output_costmap_topic", "/nav2_front_costmap")
 
         topics = (
-            str(self.get_parameter("input_front_topic").value),
-            str(self.get_parameter("output_front_topic").value),
+            str(self.get_parameter("input_costmap_topic").value),
+            str(self.get_parameter("output_costmap_topic").value),
         )
         validate_topic_separation(topics)
-        input_front, output_front = topics
+        input_costmap, output_costmap = topics
 
-        self._front_pub = self.create_publisher(
-            OccupancyGrid, output_front, 10
+        self._costmap_pub = self.create_publisher(
+            OccupancyGrid, output_costmap, 10
         )
         self.create_subscription(
-            OccupancyGrid, input_front, self._on_front, 10
+            OccupancyGrid, input_costmap, self._on_costmap, 10
         )
         self.get_logger().info(
-            "Front-map restamping enabled for Foxy wall-time playback. Original "
+            "Nav2 costmap restamping enabled for wall-time playback. Original "
             "map timestamps are intentionally not used for latency tests."
         )
 
-    def _on_front(self, msg: OccupancyGrid) -> None:
-        self._front_pub.publish(
+    def _on_costmap(self, msg: OccupancyGrid) -> None:
+        self._costmap_pub.publish(
             restamped_grid(msg, self.get_clock().now().to_msg())
         )
 
@@ -64,7 +64,7 @@ def main() -> int:
     rclpy.init()
     node = None
     try:
-        node = ReplayMapRestamperNode()
+        node = ReplayCostmapRestamperNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

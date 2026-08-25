@@ -26,7 +26,7 @@ def generate_launch_description():
         name="sim_operator_intent",
         output="screen",
         emulate_tty=True,
-        parameters=[{"use_sim_time": False}],
+        parameters=[{"use_sim_time": True}],
         condition=IfCondition(
             PythonExpression(
                 ["'", LaunchConfiguration("operator_mode"), "' == 'keyboard'"]
@@ -41,7 +41,7 @@ def generate_launch_description():
         parameters=[
             {
                 "scenario": LaunchConfiguration("scenario"),
-                "use_sim_time": False,
+                "use_sim_time": True,
             }
         ],
         condition=IfCondition(
@@ -70,29 +70,18 @@ def generate_launch_description():
                 ),
                 launch_arguments={"gui": LaunchConfiguration("gui")}.items(),
             ),
-            Node(
-                package="wheelchair_navigation",
-                executable="local_costmap",
-                name="local_costmap",
-                output="screen",
-                parameters=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
                     os.path.join(
-                        navigation_share, "config", "local_mapping.yaml"
-                    ),
-                    {
-                        "use_sim_time": False,
-                        "validate_cloud_timestamps": False,
-                        "restamp_output_with_node_time": True,
-                        "self_filter_boxes": [
-                            -0.55,
-                            0.55,
-                            -0.40,
-                            0.40,
-                            0.0,
-                            0.90,
-                        ],
-                    },
-                ],
+                        navigation_share, "launch", "nav2_mapping.launch.py"
+                    )
+                ),
+                launch_arguments={
+                    "use_sim_time": "true",
+                    "validate_cloud_timestamps": "true",
+                    "use_rviz": "false",
+                    "support_min_points_per_cell": "3",
+                }.items(),
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -103,7 +92,7 @@ def generate_launch_description():
                 launch_arguments={
                     "enable_motion": "true",
                     "geometry_calibrated": "true",
-                    "use_sim_time": "false",
+                    "use_sim_time": "true",
                     "max_map_age_s": "1.0",
                 }.items(),
             ),
@@ -117,7 +106,7 @@ def generate_launch_description():
                         "enable_sim_motion": LaunchConfiguration(
                             "enable_sim_motion"
                         ),
-                        "use_sim_time": False,
+                        "use_sim_time": True,
                     }
                 ],
             ),
@@ -126,7 +115,7 @@ def generate_launch_description():
                 executable="moving_dummy",
                 name="moving_dummy",
                 output="screen",
-                parameters=[{"use_sim_time": False}],
+                parameters=[{"use_sim_time": True}],
                 condition=IfCondition(LaunchConfiguration("move_dummy")),
             ),
             keyboard_operator,

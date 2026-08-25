@@ -27,8 +27,8 @@ setup(
         "console_scripts": [
             "operator_intent_injector = "
             "wheelchair_shared_control.replay.intent_injector:main",
-            "replay_map_restamper = "
-            "wheelchair_shared_control.replay.map_restamper:main",
+            "replay_costmap_restamper = "
+            "wheelchair_shared_control.replay.costmap_restamper:main",
             "safety_supervisor = wheelchair_shared_control.supervisor_node:main",
             "safety_envelope_monitor = "
             "wheelchair_shared_control.replay.envelope_monitor:main",

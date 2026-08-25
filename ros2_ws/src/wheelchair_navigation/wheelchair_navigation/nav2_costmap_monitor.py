@@ -146,13 +146,13 @@ def filtered_continuity_summary(
     }
 
 
-def artifact_filter_diagnostic_values(
+def point_support_diagnostic_values(
     msg: DiagnosticArray,
 ) -> dict[str, str] | None:
-    """Extract the upstream filter's latest self-reported counters."""
+    """Extract the point-support filter's latest self-reported counters."""
 
     for status in msg.status:
-        if status.name == "wheelchair_navigation/artifact_point_filter":
+        if status.name == "wheelchair_navigation/point_support_filter/lidar_right":
             return {item.key: item.value for item in status.values}
     return None
 
@@ -162,14 +162,12 @@ def _number(value: float | None) -> str:
 
 
 class Nav2CostmapMonitor(Node):
-    """Measure raw, artifact-filtered, and Nav2 streams side by side."""
+    """Measure raw, support-filtered, and Nav2 streams side by side."""
 
     def __init__(self) -> None:
         super().__init__("nav2_costmap_monitor")
-        self.declare_parameter("cloud_topic", "/rslidar_points")
-        self.declare_parameter(
-            "filtered_cloud_topic", "/rslidar_points_artifact_filtered"
-        )
+        self.declare_parameter("cloud_topic", "/lidar_right/points")
+        self.declare_parameter("filtered_cloud_topic", "/lidar_right/points_filtered")
         self.declare_parameter("costmap_topic", "/nav2_front_costmap")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("warmup_s", 10.0)
@@ -308,7 +306,7 @@ class Nav2CostmapMonitor(Node):
         self._latest_occupied_cells = sum(value >= 100 for value in msg.data)
 
     def _on_diagnostics(self, msg: DiagnosticArray) -> None:
-        values = artifact_filter_diagnostic_values(msg)
+        values = point_support_diagnostic_values(msg)
         if values is not None:
             self._filter_diagnostics = values
 

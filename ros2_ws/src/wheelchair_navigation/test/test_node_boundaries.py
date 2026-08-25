@@ -8,10 +8,7 @@ class NodeBoundaryTests(unittest.TestCase):
         package_dir = (
             Path(__file__).resolve().parents[1] / "wheelchair_navigation"
         )
-        nodes = (
-            package_dir / "local_navigation_node.py",
-            package_dir / "artifact_point_filter_node.py",
-        )
+        nodes = (package_dir / "point_support_filter_node.py",)
 
         for path in nodes:
             with self.subTest(node=path.name):

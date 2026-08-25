@@ -2,18 +2,17 @@
 
 | Area | Purpose |
 |---|---|
-| `components/can_controller` | Raspberry Pi keyboard, CAN/RNET, and UDP safety client |
-| `components/perception` | Standalone YOLO pose/velocity experiments |
-| `configs/wheelchair/default.yaml` | Pi CAN, gateway, safety, and shared-control defaults |
-| `docs/architecture` | Current Jetson/Pi data flow and safety boundaries |
-| `docs/protocols` | RNET notes and the Jetson–Pi safety heartbeat |
-| `docs/setup` | AIRY, simulation, and physical validation procedures |
-| `ros2_ws/src/wheelchair_bringup` | Sensor, TF, mapper, and RViz launch |
-| `ros2_ws/src/wheelchair_navigation` | Point-cloud decoding and raw obstacle maps |
-| `ros2_ws/src/wheelchair_shared_control` | Swept-footprint STOP/SLOW/CLEAR supervisor |
-| `ros2_ws/src/wheelchair_simulation` | Gazebo model, fixtures, operator, and scenarios |
+| `components/can_controller` | Raspberry Pi CAN/RNET and UDP safety client |
+| `components/perception` | Standalone camera experiments |
+| `configs/wheelchair/default.yaml` | Pi CAN, gateway, and safety defaults |
+| `docs/architecture` | Current Jetson/Pi data flow and boundaries |
+| `docs/setup` | L2, Nav2, simulation, and physical validation |
+| `ros2_ws/src/unilidar_sdk2` | Pinned vendor L2 SDK |
+| `ros2_ws/src/wheelchair_bringup` | Sensor configuration, TF, launch, and RViz |
 | `ros2_ws/src/wheelchair_msgs` | ROS interface contracts |
+| `ros2_ws/src/wheelchair_navigation` | Point support filtering and Nav2 maps |
+| `ros2_ws/src/wheelchair_shared_control` | Swept-path STOP/SLOW/CLEAR supervisor |
+| `ros2_ws/src/wheelchair_simulation` | Gazebo sensor, fixtures, and scenarios |
 
-Package-owned ROS configuration stays beside the package so `colcon` installs
-it correctly. Large weights, videos, ROS bags, build products, and caches are
-local artifacts and are ignored by Git.
+Package-owned ROS assets remain beside their package so `colcon` installs them.
+Large bags, build products, and caches remain local and ignored by Git.

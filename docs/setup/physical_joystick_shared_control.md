@@ -22,7 +22,7 @@ default and must be selected explicitly for this test.
 
 ## 1. Jetson LiDAR and Nav2 mapping
 
-Start the AIRY and measured transform without the legacy mapper:
+Start the right L2, measured transform, support filter, Nav2 map, and RViz:
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
@@ -30,19 +30,8 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_bringup wheelchair.launch.py \
-  use_lidar:=true use_camera:=false use_mapping:=false use_rviz:=false
-```
-
-In a second Jetson terminal, start the artifact filter, inflated Nav2 map, and
-RViz:
-
-```bash
-cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
-source /opt/ros/foxy/setup.bash
-source ros2_ws/install/setup.bash
-export ROS_LOCALHOST_ONLY=1
-ros2 launch wheelchair_navigation nav2_mapping.launch.py \
-  use_artifact_filter:=true use_inflation:=true use_rviz:=true
+  use_lidar:=true use_camera:=false use_mapping:=true use_rviz:=true \
+  use_inflation:=true
 ```
 
 Confirm RViz shows a current, credible `/nav2_front_costmap` before
@@ -125,7 +114,7 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 bag record -o /tmp/physical_shared_enforce_01 \
-  /operator_intent /artifact_filter/source_header \
+  /operator_intent /lidar_right/filter/source_header \
   /nav2_front_costmap /safety_envelope /shared_control/diagnostics \
   /shared_control/checked_corridor
 ```
@@ -160,7 +149,7 @@ Validate in this order:
    magnitude of 65 and report `reverse_unmonitored_slow`. Rear obstacles are
    not observed in this scope; use open rear clearance and the physical cutoff.
    Hard turns must remain zero; centre both axes before re-arming.
-7. At the capped CLEAR speed, stop the artifact filter, Jetson supervisor, and
+7. At the capped CLEAR speed, stop the point-support filter, Jetson supervisor, and
    network separately. Each must centre output within the 200 ms envelope
    timeout. Restart the full pipeline and return to neutral between drills.
 

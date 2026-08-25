@@ -17,19 +17,63 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
-      Color Transformer: Intensity
-      Enabled: true
-      Name: AIRY LiDAR
+      Color Transformer: AxisColor
+      Decay Time: 1.2
+      Enabled: false
+      Name: L2 right raw
       Position Transformer: XYZ
       Size (Pixels): 2
       Style: Points
       Topic:
-        Depth: 5
+        Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Best Effort
-        Value: /rslidar_points
+        Reliability Policy: Reliable
+        Value: /lidar_right/points
       Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: AxisColor
+      Decay Time: 1.2
+      Enabled: true
+      Name: L2 right support filtered
+      Position Transformer: XYZ
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_right/points_filtered
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 220; 0
+      Color Transformer: FlatColor
+      Enabled: false
+      Name: L2 right low-support points
+      Position Transformer: XYZ
+      Size (Pixels): 5
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_right/low_support_points
+      Use Fixed Frame: true
+    - Alpha: 0.75
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Enabled: true
+      Name: Nav2 front costmap
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_front_costmap
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: RGB8
@@ -45,89 +89,13 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /camera/depth/color/points
       Use Fixed Frame: true
-    - Alpha: 0.7
-      Class: rviz_default_plugins/Map
-      Color Scheme: map
-      Enabled: false
-      Name: Raw LiDAR Obstacles
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_obstacles
-    - Alpha: 0.35
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
-      Enabled: false
-      Name: Front 180 Costmap (Raw)
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /front_costmap
-    - Alpha: 0.75
-      Class: rviz_default_plugins/Map
-      Color Scheme: costmap
+    - Class: rviz_default_plugins/TF
       Enabled: true
-      Name: Front Artifact Filtered (SHADOW ONLY)
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /front_costmap_artifact_filtered
-    - Alpha: 1
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 0; 255
-      Color Transformer: FlatColor
-      Enabled: true
-      Name: Prism-Rejected Points (Magenta)
-      Position Transformer: XYZ
-      Size (Pixels): 4
-      Style: Points
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /artifact_filter/rejected_points
-      Use Fixed Frame: true
-    - Alpha: 1
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 220; 0
-      Color Transformer: FlatColor
-      Enabled: true
-      Name: Low-Support Points (Yellow)
-      Position Transformer: XYZ
-      Size (Pixels): 5
-      Style: Points
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /artifact_filter/low_support_points
-      Use Fixed Frame: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Artifact Staircases + Cell Halo
-      Topic:
-        Depth: 1
-        Durability Policy: Transient Local
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /artifact_filter/masks
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: Threshold Scope Cells (Cyan/Yellow)
-      Topic:
-        Depth: 1
-        Durability Policy: Transient Local
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /artifact_filter/threshold_cells
+      Frame Timeout: 15
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

@@ -40,7 +40,7 @@ class SharedControlBoundaryTests(unittest.TestCase):
             "udp_bridge_node.py",
             "replay/envelope_monitor.py",
             "replay/intent_injector.py",
-            "replay/map_restamper.py",
+            "replay/costmap_restamper.py",
         )
         for module_name in executable_modules:
             with self.subTest(module=module_name):

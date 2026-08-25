@@ -1,74 +1,34 @@
 # Current System Architecture
 
-## MVP Data Flow
-
 ```text
-AIRY /rslidar_points
+Unitree L2 /lidar_right/points
         |
-        v
-Jetson wheelchair_navigation
-  artifact-filtered PointCloud2 ---- sensor diagnostics / RViz
-  /nav2_front_costmap -------------- weighted trajectory evidence
+wheelchair_navigation
+  point-support filtered PointCloud2
+  /nav2_front_costmap
         |
-        v
-Jetson wheelchair_shared_control
-  OperatorIntent + provisional-fresh /nav2_front_costmap
+wheelchair_shared_control + OperatorIntent
         |
-        v
   SafetyEnvelope: STOP / SLOW / CLEAR
         |
    UDP safety link
         |
-        v
-Raspberry Pi wheelchair_teleop
-  2-D intent class + deadman + sequence + timeout + vector-preserving cap
-        |
-        v
-CAN/RNET joystick frames
+Raspberry Pi wheelchair_teleop -> CAN/RNET joystick frames
 ```
 
-The operator always selects the requested direction. The Jetson never chooses
-a route and never publishes a physical `Twist` or CAN frame.
+`wheelchair_bringup` owns how physical sensors and transforms start.
+`wheelchair_navigation` owns filtering and map generation.
+`wheelchair_shared_control` owns how weighted costs affect motion permission.
+`wheelchair_simulation` substitutes Gazebo sensors and motion while preserving
+the same ROS interfaces. The operator remains the source of requested direction.
 
-## Responsibilities
-
-- `wheelchair_bringup` owns sensor launch and calibrated static transforms.
-- `wheelchair_navigation` filters calibrated AIRY artifacts and feeds the
-  retained PointCloud2 records to Nav2's obstacle and inflation layers.
-- `wheelchair_shared_control` samples weighted costs from straight through the
-  requested correction and emits a normalized safety envelope.
-- `wheelchair_teleop` owns keyboard input, CAN timing, command ramping, the
-  physical deadman, and the fail-closed UDP client.
-- `wheelchair_simulation` substitutes Gazebo differential drive for CAN and
-  provides deterministic and interactive intent sources.
-
-## Frames and Coverage
-
-`base_link` follows the ROS mobile-base convention: X forward, Y left, Z up.
-The validated AIRY transform is:
+`base_link` uses X forward, Y left, and Z up. The installed right sensor is:
 
 ```text
-base_link -> rslidar: 0.330 -0.265 0.320 1.04720 0 0
+base_link -> lidar_right_link: 0.330 -0.265 0.320 0.392699082 0 0
 ```
 
-The software supports a symmetric forward-correction cone, but physical use on
-either side remains conditional on RViz coverage and controlled obstacle gates.
-Hard turns, rear obstacle avoidance, drop-offs, steps, curbs, and low hazards
-beneath the observed height remain outside the validated scope. Reverse-cone
-input is speed-limited only and requires independently verified rear clearance.
-
-## Fail-Closed Layers
-
-Motion is zero when the required costmap, intent, timestamp, sequence, peer,
-session, or heartbeat is invalid or stale. Live Nav2 supervision independently
-watches monotonic costmap receipt and the original timestamp of each
-successfully filtered AIRY cloud; it does not claim exact scan-to-map latency.
-Physical enforcement remains blocked until those watchdogs pass the documented
-fault tests. Side and rear obstacles outside the sampled path are outside the
-current front-map supervisor contract. Reverse-cone input is capped to SLOW
-without rear obstacle monitoring. STOP latches on the Pi until the
-operator releases the motion key. Gazebo uses the same intent and envelope
-contracts but can publish velocity only to `/sim/safe_cmd_vel`.
-
-Future autonomous route selection must enter through a separate arbitration
-interface; it must not impersonate operator intent.
+Motion fails closed when required intent, map receipt, source timestamp,
+sequence, peer, session, or heartbeat data is invalid or stale. The current
+right-only sensing scope does not validate hard left turns, rear obstacle
+avoidance, drop-offs, steps, curbs, or hazards below the observed height.

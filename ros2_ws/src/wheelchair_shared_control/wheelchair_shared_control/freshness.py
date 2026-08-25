@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 
 NAV2_LIVE = "nav2_live"
-LEGACY_MAP_STAMP = "legacy_map_stamp"
-FRESHNESS_MODES = (NAV2_LIVE, LEGACY_MAP_STAMP)
+MAP_STAMP = "map_stamp"
+FRESHNESS_MODES = (NAV2_LIVE, MAP_STAMP)
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ def evaluate_freshness(
             map_age_basis=basis,
         )
 
-    if policy.mode == LEGACY_MAP_STAMP:
+    if policy.mode == MAP_STAMP:
         if inputs.map_stamp_ns <= 0:
             return FreshnessStatus(
                 intent_age_s=intent_age_s,
@@ -204,7 +204,7 @@ def evaluate_freshness(
 
 __all__ = [
     "FRESHNESS_MODES",
-    "LEGACY_MAP_STAMP",
+    "MAP_STAMP",
     "NAV2_LIVE",
     "FreshnessInputs",
     "FreshnessPolicy",

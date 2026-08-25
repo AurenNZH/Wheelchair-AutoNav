@@ -91,10 +91,10 @@ python scripts/velocity_overlay.py --source path/to/video.mp4 --save outputs/vel
 - `--arrow-scale` controls visual arrow length without changing the numeric velocity.
 - The latency measurement does not include camera sensor exposure time, camera driver buffering, display refresh, or motor command transmission.
 
-## Bring Up RoboSense AIRY LiDAR
+## Bring Up the Navigation L2
 
-The RoboSense SDK and message packages are pinned in this repository. Initialize
-the submodules and build the shared ROS2 workspace before launching:
+The Unitree SDK is pinned in the main ROS 2 workspace. Initialize submodules and
+build before launching:
 
 ```bash
 source /opt/ros/foxy/setup.bash
@@ -103,25 +103,17 @@ git submodule update --init --recursive
 cd ros2_ws
 colcon build --symlink-install
 source install/setup.bash
-ros2 launch wheelchair_bringup wheelchair.launch.py
+ros2 launch wheelchair_bringup l2_right.launch.py
 ```
-
-The bring-up-owned RoboSense configuration uses:
-
-- `lidar_type: RSAIRY`
-- `msg_source: 1`
-- `send_point_cloud_ros: true`
-- MSOP port `6699`
-- DIFOP port `7788`
 
 Check that the point cloud is publishing:
 
 ```bash
 ros2 topic list
-timeout 5 ros2 topic echo /rslidar_points
+timeout 5 ros2 topic echo /lidar_right/points --no-arr
 ```
 
-In RViz, add a `PointCloud2` display and select `/rslidar_points`.
+In RViz, add a `PointCloud2` display and select `/lidar_right/points`.
 
 ## RealSense RGB-D Geometry
 
@@ -131,26 +123,21 @@ purposes:
 - `/camera/depth/image_rect_raw` is the depth image published by the installed
   L515 wrapper (some wrapper versions call it `/camera/depth/image_raw`).
 - `/camera/depth/color/points` is the camera-derived colored `PointCloud2`.
-- `/rslidar_points` is the independent AIRY `PointCloud2` with wider coverage.
+- `/lidar_right/points` is the independent L2 `PointCloud2`.
 
-Recoloring AIRY points with the camera does not add navigation geometry, so the
-former `/rslidar_points_colored` prototype has been retired. Navigation starts
-with `/rslidar_points`; after the LiDAR-only baseline passes, the RealSense
+Recoloring L2 points with the camera does not add navigation geometry.
+Navigation starts with `/lidar_right/points`; after the LiDAR-only baseline passes, the RealSense
 cloud can contribute independent obstacle evidence to the same local costmap.
 
 The marked sensor mounts are direct children of `base_link`:
 
 ```bash
-base_link -> rslidar:      0.330 -0.265 0.320 1.04720 0 0
+base_link -> lidar_right_link: 0.330 -0.265 0.320 0.392699082 0 0
 base_link -> camera_link: -0.360  0.265 1.300 0.00000 0 0
 ```
 
 These poses use the ROS mobile-base convention: `base_link` X points forward,
-Y points left, and Z points up. They were converted from the legacy project
-axes (X left, Y backward) with `x_new=-y_old`, `y_new=x_old`, and
-`yaw_new=yaw_old+pi/2`. A forward-target test refined the AIRY mounting yaw to
-the validated `1.04720` rad (60 degrees). The AIRY data frame retains its
-native axes; the RealSense `camera_link` X axis is forward.
+Y points left, and Z points up. The RealSense `camera_link` X axis is forward.
 
 The RealSense driver owns the transforms below `camera_link`. Never publish a
 second parent directly to `camera_color_optical_frame`.

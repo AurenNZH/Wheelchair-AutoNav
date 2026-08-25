@@ -23,38 +23,42 @@ def generate_launch_description():
     realsense_launch = os.path.join(
         get_package_share_directory("realsense2_camera"), "launch", "rs_launch.py"
     )
+    lidar_launch = os.path.join(
+        get_package_share_directory("wheelchair_bringup"),
+        "launch",
+        "l2_right.launch.py",
+    )
     mapping_launch = os.path.join(
         get_package_share_directory("wheelchair_navigation"),
         "launch",
-        "local_mapping.launch.py",
+        "nav2_mapping.launch.py",
     )
     rviz_config = os.path.join(
         get_package_share_directory("wheelchair_bringup"),
         "rviz",
         "wheelchair.rviz",
     )
-    lidar_config = os.path.join(
-        get_package_share_directory("wheelchair_bringup"),
-        "config",
-        "rslidar_airy.yaml",
-    )
-
     declarations = [
-        _argument("use_lidar", "Start the RoboSense AIRY driver."),
+        _argument("use_lidar", "Start the right Unitree L2 driver."),
         _argument("use_camera", "Start the RealSense L515 driver."),
-        _argument("use_mapping", "Start non-actuating LiDAR local mapping."),
+        _argument("use_mapping", "Start non-actuating Nav2 local mapping."),
         _argument("use_rviz", "Start RViz with the wheelchair view."),
-        _argument("publish_camera_tf", "Publish base_link -> camera_link."),
+        _argument("use_sim_time", "Use the ROS simulation clock."),
         _argument(
-            "publish_base_lidar_tf",
-            "Publish the measured base_link -> rslidar transform.",
+            "support_min_points_per_cell",
+            "Minimum L2 points required in each 0.1 m obstacle cell.",
         ),
-        _argument("base_lidar_x", "Measured LiDAR X translation in metres."),
-        _argument("base_lidar_y", "Measured LiDAR Y translation in metres."),
-        _argument("base_lidar_z", "Measured LiDAR Z translation in metres."),
-        _argument("base_lidar_yaw", "Measured LiDAR yaw in radians."),
-        _argument("base_lidar_pitch", "Measured LiDAR pitch in radians."),
-        _argument("base_lidar_roll", "Measured LiDAR roll in radians."),
+        _argument("use_inflation", "Enable weighted Nav2 inflation costs."),
+        _argument("inflation_radius", "Nav2 inflation radius in metres."),
+        _argument("cost_scaling_factor", "Nav2 inflation cost scaling factor."),
+        _argument("publish_camera_tf", "Publish base_link -> camera_link."),
+        _argument("publish_lidar_tf", "Publish the measured right-L2 transform."),
+        _argument("lidar_x", "Measured right-L2 X translation in metres."),
+        _argument("lidar_y", "Measured right-L2 Y translation in metres."),
+        _argument("lidar_z", "Measured right-L2 Z translation in metres."),
+        _argument("lidar_yaw", "Measured right-L2 yaw in radians."),
+        _argument("lidar_pitch", "Measured right-L2 pitch in radians."),
+        _argument("lidar_roll", "Measured right-L2 roll in radians."),
         _argument("base_camera_x", "Measured camera X translation in metres."),
         _argument("base_camera_y", "Measured camera Y translation in metres."),
         _argument("base_camera_z", "Measured camera Z translation in metres."),
@@ -63,12 +67,19 @@ def generate_launch_description():
         _argument("base_camera_roll", "Measured camera roll in radians."),
     ]
 
-    lidar = Node(
-        package="rslidar_sdk",
-        executable="rslidar_sdk_node",
-        name="rslidar_sdk_node",
-        output="screen",
-        parameters=[{"config_path": lidar_config}],
+    lidar = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(lidar_launch),
+        launch_arguments={
+            "publish_mount_tf": LaunchConfiguration("publish_lidar_tf"),
+            "mount_x": LaunchConfiguration("lidar_x"),
+            "mount_y": LaunchConfiguration("lidar_y"),
+            "mount_z": LaunchConfiguration("lidar_z"),
+            "mount_yaw": LaunchConfiguration("lidar_yaw"),
+            "mount_pitch": LaunchConfiguration("lidar_pitch"),
+            "mount_roll": LaunchConfiguration("lidar_roll"),
+            "use_rviz": "false",
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+        }.items(),
         condition=IfCondition(LaunchConfiguration("use_lidar")),
     )
     camera = IncludeLaunchDescription(
@@ -100,24 +111,18 @@ def generate_launch_description():
         ],
         condition=IfCondition(LaunchConfiguration("publish_camera_tf")),
     )
-    base_lidar_tf = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="lidar_mount_tf",
-        arguments=[
-            LaunchConfiguration("base_lidar_x"),
-            LaunchConfiguration("base_lidar_y"),
-            LaunchConfiguration("base_lidar_z"),
-            LaunchConfiguration("base_lidar_yaw"),
-            LaunchConfiguration("base_lidar_pitch"),
-            LaunchConfiguration("base_lidar_roll"),
-            "base_link",
-            "rslidar",
-        ],
-        condition=IfCondition(LaunchConfiguration("publish_base_lidar_tf")),
-    )
     mapping = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(mapping_launch),
+        launch_arguments={
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "use_rviz": "false",
+            "support_min_points_per_cell": LaunchConfiguration(
+                "support_min_points_per_cell"
+            ),
+            "use_inflation": LaunchConfiguration("use_inflation"),
+            "inflation_radius": LaunchConfiguration("inflation_radius"),
+            "cost_scaling_factor": LaunchConfiguration("cost_scaling_factor"),
+        }.items(),
         condition=IfCondition(LaunchConfiguration("use_mapping")),
     )
     rviz = Node(
@@ -131,5 +136,5 @@ def generate_launch_description():
 
     return LaunchDescription(
         declarations
-        + [lidar, camera, camera_tf, base_lidar_tf, mapping, rviz]
+        + [lidar, camera, camera_tf, mapping, rviz]
     )

@@ -4,7 +4,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 
 from wheelchair_navigation.nav2_costmap_monitor import (
     ArrivalStats,
-    artifact_filter_diagnostic_values,
+    point_support_diagnostic_values,
     continuity_summary,
     filtered_continuity_summary,
     percentile,
@@ -12,12 +12,12 @@ from wheelchair_navigation.nav2_costmap_monitor import (
 
 
 class ArrivalStatsTests(unittest.TestCase):
-    def test_extracts_only_artifact_filter_diagnostics(self):
+    def test_extracts_only_point_support_diagnostics(self):
         message = DiagnosticArray()
         unrelated = DiagnosticStatus()
         unrelated.name = "other"
         filtered = DiagnosticStatus()
-        filtered.name = "wheelchair_navigation/artifact_point_filter"
+        filtered.name = "wheelchair_navigation/point_support_filter/lidar_right"
         filtered.values = [
             KeyValue(key="received_clouds", value="12"),
             KeyValue(key="published_clouds", value="12"),
@@ -25,7 +25,7 @@ class ArrivalStatsTests(unittest.TestCase):
         message.status = [unrelated, filtered]
 
         self.assertEqual(
-            artifact_filter_diagnostic_values(message),
+            point_support_diagnostic_values(message),
             {"received_clouds": "12", "published_clouds": "12"},
         )
 

@@ -1,17 +1,22 @@
-# ROS2 Workspace Packages
+# ROS 2 Workspace Sources
 
-Current packages:
+First-party packages:
 
-- `wheelchair_msgs`: operator-intent and safety-envelope ROS 2 contracts.
-- `wheelchair_navigation`: observed raw and robot-forward AIRY obstacle maps.
+- `wheelchair_bringup`: sensor drivers, physical transforms, launch composition, and RViz.
+- `wheelchair_msgs`: operator-intent and safety-envelope contracts.
+- `wheelchair_navigation`: point support filtering and Nav2 costmap production.
 - `wheelchair_shared_control`: fail-safe limits for operator-requested motion.
-- `wheelchair_bringup`: top-level sensor, TF, navigation, and RViz launching.
-- `wheelchair_simulation`: isolated Gazebo mapping/shared-control fixtures.
-- `rslidar_sdk`: pinned RoboSense LiDAR driver submodule.
-- `rslidar_msg`: pinned RoboSense packet-message submodule.
+- `wheelchair_simulation`: isolated Gazebo mapping and shared-control fixtures.
 
-Initialize vendor sources after cloning with
-`git submodule update --init --recursive` from the repository root.
+`unilidar_sdk2` is the pinned Unitree vendor submodule. Initialize it after
+cloning with `git submodule update --init --recursive` from the repository root.
+The upstream repository also exposes ROS 1 and standalone example package
+descriptors. For a normal workspace build, use:
+
+```bash
+colcon build --symlink-install \
+  --packages-ignore unitree_lidar_ros unitree_lidar_sdk
+```
 
 The physical shared-control and UDP gates are disabled by default. Complete the
 [shared-control validation checklist](../../docs/setup/shared_control_validation.md)

@@ -37,35 +37,17 @@ def generate_launch_description():
 
     support_filter = Node(
         package="wheelchair_navigation",
-        executable="artifact_point_filter",
+        executable="point_support_filter",
         name="l2_lidar_right_support_filter",
         output="screen",
         parameters=[
             {
                 "sensor_label": "Unitree L2 right",
                 "lidar_topic": "/lidar_right/points",
-                "artifact_filtered_cloud_topic": (
-                    "/lidar_right/points_filtered"
-                ),
-                # Retain the established supervisor freshness interface while
-                # the system has only one active obstacle sensor.
-                "artifact_filtered_source_header_topic": (
-                    "/artifact_filter/source_header"
-                ),
-                "artifact_rejected_points_topic": (
-                    "/lidar_right/artifact_rejected_points"
-                ),
-                "artifact_low_support_points_topic": (
-                    "/lidar_right/low_support_points"
-                ),
-                "artifact_masks_topic": (
-                    "/lidar_right/support_filter/masks"
-                ),
-                "artifact_threshold_cells_topic": (
-                    "/lidar_right/support_filter/threshold_cells"
-                ),
+                "filtered_cloud_topic": "/lidar_right/points_filtered",
+                "source_header_topic": "/lidar_right/filter/source_header",
+                "low_support_points_topic": "/lidar_right/low_support_points",
                 "target_frame": "base_link",
-                "artifact_filter_frame": "base_link",
                 "size_m": 8.0,
                 "resolution_m": 0.1,
                 "min_height_m": 0.05,
@@ -76,14 +58,14 @@ def generate_launch_description():
                 "front_width_m": 8.0,
                 "front_resolution_m": 0.1,
                 "front_fov_deg": 180.0,
-                # The node defaults for self-filter boxes, AIRY mask cells,
-                # and AIRY halo spans are empty. Do not load AIRY geometry.
-                "artifact_min_points_per_cell": 1,
-                "artifact_global_min_points_per_cell": ParameterValue(
+                "min_points_per_cell": ParameterValue(
                     LaunchConfiguration("support_min_points_per_cell"),
                     value_type=int,
                 ),
-                "publish_artifact_markers": False,
+                "validate_cloud_timestamps": LaunchConfiguration(
+                    "validate_cloud_timestamps"
+                ),
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
             }
         ],
     )
@@ -133,6 +115,9 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "validate_cloud_timestamps", default_value="true"
+            ),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument(
                 "support_min_points_per_cell",

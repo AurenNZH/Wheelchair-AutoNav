@@ -1,8 +1,10 @@
 # Wheelchair Simulation
 
-Gazebo Classic fixtures for LiDAR mapping and supervised shared control.
-Nothing in this package accesses CAN or a physical actuator. Simulated motion
-is published only on `/sim/safe_cmd_vel`.
+Gazebo Classic fixtures for the current right-L2/Nav2/shared-control pipeline.
+The simulated sensor publishes `/lidar_right/points` in `lidar_right_link`, so
+simulation uses the same point-support filter, `/nav2_front_costmap`, freshness
+heartbeat, and supervisor interfaces as physical operation. Nothing in this
+package accesses CAN; simulated motion is confined to `/sim/safe_cmd_vel`.
 
 Use an isolated ROS domain:
 
@@ -10,64 +12,33 @@ Use an isolated ROS domain:
 export ROS_DOMAIN_ID=91
 source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
-```
-
-## Automated Scenarios
-
-```bash
 ros2 launch wheelchair_simulation shared_control_sim.launch.py \
   gui:=false enable_sim_motion:=true operator_mode:=scenario scenario:=all
 ```
 
-Available individual scenarios:
-
-- `missing_intent`
-- `clear_forward`
-- `obstacle_slow`
-- `obstacle_stop`
-- `right_sweep_blocked`
-- `moving_dummy_stop`
-- `left_unobserved`
-- `reverse_disabled`
-- `stale_intent`
+Available individual scenarios are `missing_intent`, `clear_forward`,
+`obstacle_slow`, `obstacle_stop`, `right_sweep_blocked`,
+`moving_dummy_stop`, `left_unobserved`, `reverse_disabled`, and
+`stale_intent`.
 
 The runner positions Gazebo fixtures, publishes intent, observes
 `/safety_envelope` and `/sim/safe_cmd_vel`, and exits non-zero when the
-expected fail-closed result is not sustained. Use interactive mode to inspect
-the resulting physical motion and clearance visually.
+expected fail-closed result is not sustained.
 
 Current calibration status: `missing_intent` passes end to end. The full suite
 currently stops at `clear_forward` because Gazebo's ray model reports part of
-the fixed-joint wheelchair model as a near obstacle. This is a simulation
-frame/self-return issue, not a reason to weaken the physical surround check.
-Resolve it before treating `scenario:=all` as a regression gate.
+the fixed-joint wheelchair model as a near obstacle. This known simulation
+self-return must be resolved before treating `scenario:=all` as a regression
+gate; it is not a reason to weaken the physical L2/Nav2 safety path.
 
-## Interactive Exploration
+For interactive exploration:
 
 ```bash
 ros2 launch wheelchair_simulation shared_control_sim.launch.py \
   gui:=true enable_sim_motion:=true operator_mode:=keyboard
 ```
 
-Controls:
-
-- W: straight request
-- D: bounded-right request
-- A: unsupported-left test
-- S: reverse-disabled test
-- Space or X: release/stop
-- Q: quit
-
-The movement deadman expires after 350 ms unless a motion key is refreshed.
-
-## Safe Defaults
-
-With `operator_mode:=none` and `enable_sim_motion:=false`, the supervisor
-remains fail closed and the adapter continuously publishes zero velocity.
-`enable_sim_motion` affects only the simulation adapter.
-
-Gazebo validates transforms, mapping interfaces, decision logic, watchdogs,
-and simulated motion. It does not reproduce AIRY multipath, dome
-contamination, real network delay, real wheelchair braking, caster behaviour,
-or reliable detection of hazards below the physical sensor. Physical
-validation remains mandatory.
+Interactive mode uses W/D/A/S for requests, Space or X to release, and Q to
+quit. All simulation nodes use ROS simulation time. Physical validation remains
+mandatory because Gazebo cannot reproduce real L2 sampling, network delay,
+wheelchair braking, caster behavior, or low/drop-off hazard coverage.

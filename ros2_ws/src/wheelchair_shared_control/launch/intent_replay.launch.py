@@ -39,7 +39,7 @@ def generate_launch_description():
             ),
             LogInfo(
                 msg=(
-                    "Recorded front-costmap decision replay only: UDP, CAN, "
+                    "Recorded Nav2-costmap decision replay only: UDP, CAN, "
                     "Gazebo, and velocity adapters are not launched."
                 )
             ),
@@ -69,8 +69,8 @@ def generate_launch_description():
             ),
             Node(
                 package="wheelchair_shared_control",
-                executable="replay_map_restamper",
-                name="replay_map_restamper",
+                executable="replay_costmap_restamper",
+                name="replay_costmap_restamper",
                 output="screen",
                 parameters=[{"use_sim_time": False}],
                 arguments=[
@@ -90,11 +90,8 @@ def generate_launch_description():
                     {
                         "enable_motion": True,
                         "geometry_calibrated": True,
-                        # Existing bags and the replay restamper retain the
-                        # legacy topic explicitly; production defaults to the
-                        # weighted Nav2 costmap.
-                        "front_costmap_topic": "/front_costmap",
-                        "freshness_mode": "legacy_map_stamp",
+                        "front_costmap_topic": "/nav2_front_costmap",
+                        "freshness_mode": "map_stamp",
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),
@@ -115,6 +112,7 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {
+                        "front_costmap_topic": "/nav2_front_costmap",
                         "map_timeout_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),

@@ -152,7 +152,7 @@ class SafetyEnvelopeMonitorNode(Node):
         super().__init__("safety_envelope_monitor")
         self.declare_parameter("intent_topic", "/operator_intent")
         self.declare_parameter("envelope_topic", "/safety_envelope")
-        self.declare_parameter("front_costmap_topic", "/front_costmap")
+        self.declare_parameter("front_costmap_topic", "/nav2_front_costmap")
         self.declare_parameter("map_timeout_s", 2.0)
         self.declare_parameter("status_rate_hz", 5.0)
 
