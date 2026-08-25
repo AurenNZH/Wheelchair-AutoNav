@@ -11,11 +11,15 @@
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>unitree_lidar_ros2</exec_depend>
   <exec_depend>wheelchair_navigation</exec_depend>
+  <exec_depend>wheelchair_simulation</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_pytest</test_depend>
   <test_depend>python3-pytest</test_depend>

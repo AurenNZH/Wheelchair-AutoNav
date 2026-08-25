@@ -2,6 +2,20 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="wheelchair">
   <xacro:include filename="wheelchair_components.xacro"/>
 
+  <!-- Physical bringup may override these measured mount values. -->
+  <xacro:arg name="lidar_right_x" default="0.330"/>
+  <xacro:arg name="lidar_right_y" default="-0.265"/>
+  <xacro:arg name="lidar_right_z" default="0.320"/>
+  <xacro:arg name="lidar_right_yaw" default="0.392699082"/>
+  <xacro:arg name="lidar_right_pitch" default="0.0"/>
+  <xacro:arg name="lidar_right_roll" default="0.0"/>
+  <xacro:arg name="lidar_left_x" default="0.330"/>
+  <xacro:arg name="lidar_left_y" default="0.265"/>
+  <xacro:arg name="lidar_left_z" default="0.320"/>
+  <xacro:arg name="lidar_left_yaw" default="-0.392699082"/>
+  <xacro:arg name="lidar_left_pitch" default="0.0"/>
+  <xacro:arg name="lidar_left_roll" default="0.0"/>
+
   <!-- Coordinate convention has X forward, Y left, and Z up from the floor. -->
   <xacro:property name="chassis_length" value="0.75"/>
   <xacro:property name="chassis_width" value="0.37"/>
@@ -194,7 +208,26 @@
   <joint name="lidar_right_mount" type="fixed">
     <parent link="base_link"/>
     <child link="lidar_right_link"/>
-    <origin xyz="0.330 -0.265 0.320" rpy="0 0 0.392699082"/>
+    <origin
+      xyz="$(arg lidar_right_x) $(arg lidar_right_y) $(arg lidar_right_z)"
+      rpy="$(arg lidar_right_roll) $(arg lidar_right_pitch) $(arg lidar_right_yaw)"/>
+  </joint>
+
+  <!-- The mounted left L2 frame is defined, but no left driver is launched. -->
+  <link name="lidar_left_link">
+    <visual name="l2_left_visual">
+      <geometry>
+        <cylinder radius="0.040" length="0.075"/>
+      </geometry>
+      <material name="sensor_black"/>
+    </visual>
+  </link>
+  <joint name="lidar_left_mount" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_left_link"/>
+    <origin
+      xyz="$(arg lidar_left_x) $(arg lidar_left_y) $(arg lidar_left_z)"
+      rpy="$(arg lidar_left_roll) $(arg lidar_left_pitch) $(arg lidar_left_yaw)"/>
   </joint>
 
   <gazebo reference="lidar_right_link">

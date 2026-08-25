@@ -18,6 +18,14 @@ network settings, frames, transforms, launch, and RViz remain in
 The driver uses system timestamps, 18 scans per cloud, and a 0.45–100 m range.
 Vendor TF is isolated on `/lidar_right/vendor_tf`.
 
+By default, the launch also publishes the wheelchair URDF through
+`robot_state_publisher`. The model owns the measured
+`base_link -> lidar_right_link` transform and the symmetric, defined
+`base_link -> lidar_left_link` mount transform. Only the right L2 driver is
+started; the left frame does not imply that a left cloud is available. With
+`use_robot_model:=false`, equivalent static mount transforms are published
+instead, avoiding duplicate TF publishers.
+
 ## Ethernet preflight
 
 ```bash
@@ -39,6 +47,9 @@ colcon build --symlink-install \
 source install/setup.bash
 ros2 launch wheelchair_bringup l2_right.launch.py use_rviz:=true
 ```
+
+The default RViz profile displays the wheelchair model. To troubleshoot the
+sensor without loading the URDF, launch with `use_robot_model:=false`.
 
 In another terminal:
 

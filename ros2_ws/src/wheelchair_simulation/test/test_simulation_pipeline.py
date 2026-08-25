@@ -6,6 +6,8 @@ def test_simulated_sensor_uses_production_l2_interface():
     urdf = (root / "urdf" / "wheelchair.urdf.xacro").read_text()
 
     assert 'name="lidar_right_link"' in urdf
+    assert 'name="lidar_left_link"' in urdf
+    assert 'name="lidar_left_mount"' in urdf
     assert "/lidar_right/points" in urdf
     assert "sensor_msgs/PointCloud2" in urdf
     assert 'name="rslidar"' not in urdf
