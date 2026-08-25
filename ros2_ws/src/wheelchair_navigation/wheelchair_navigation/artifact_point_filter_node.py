@@ -1,4 +1,4 @@
-"""Upstream AIRY PointCloud2 artifact filter for stock Nav2."""
+"""Upstream PointCloud2 artifact and cell-support filter for stock Nav2."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ from wheelchair_navigation.timing import cloud_timestamp_error
 
 
 class ArtifactPointFilterNode(Node):
-    """Remove calibrated AIRY artifacts without generating a costmap."""
+    """Remove configured artifacts and low-support cells before Nav2."""
 
     def __init__(self) -> None:
         super().__init__("artifact_point_filter")
@@ -139,15 +139,17 @@ class ArtifactPointFilterNode(Node):
         self._last_threshold_publish_s = float("-inf")
         self._last_success_diagnostics_s = float("-inf")
         self.get_logger().warn(
-            "AIRY artifact PointCloud2 filter active: %s -> %s. "
+            "%s PointCloud2 filter active: %s -> %s. "
             "No costmaps or motion commands are published."
             % (
+                self.get_parameter("sensor_label").value,
                 self.get_parameter("lidar_topic").value,
                 self.get_parameter("artifact_filtered_cloud_topic").value,
             )
         )
 
     def _declare_parameters(self) -> None:
+        self.declare_parameter("sensor_label", "AIRY")
         self.declare_parameter("lidar_topic", "/rslidar_points")
         self.declare_parameter(
             "artifact_filtered_cloud_topic",
@@ -189,6 +191,7 @@ class ArtifactPointFilterNode(Node):
         self.declare_parameter("artifact_grid_halo_spans", [])
         self.declare_parameter("artifact_global_min_points_per_cell", 1)
         self.declare_parameter("artifact_min_points_per_cell", 2)
+        self.declare_parameter("publish_artifact_markers", True)
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("validate_cloud_timestamps", True)
@@ -260,7 +263,8 @@ class ArtifactPointFilterNode(Node):
             ) * 1000.0
         except ValueError as exc:
             self.get_logger().warn(
-                "Invalid AIRY PointCloud2: %s" % exc,
+                "Invalid %s PointCloud2: %s"
+                % (self.get_parameter("sensor_label").value, exc),
                 throttle_duration_sec=5.0,
             )
             self._reject("invalid_lidar", started)
@@ -324,7 +328,7 @@ class ArtifactPointFilterNode(Node):
             ) * 1000.0
         except (TypeError, ValueError) as exc:
             self.get_logger().error(
-                "Artifact PointCloud2 filter suppressed output: %s" % exc,
+                "PointCloud2 filter suppressed output: %s" % exc,
                 throttle_duration_sec=5.0,
             )
             self._reject("invalid_artifact_filter", started)
@@ -332,7 +336,7 @@ class ArtifactPointFilterNode(Node):
 
         stage_started = time.perf_counter()
         self._filtered_pub.publish(filtered)
-        # A small, reliable heartbeat exposes the original AIRY acquisition
+        # A small, reliable heartbeat exposes the original sensor acquisition
         # stamp without making the supervisor deserialize another PointCloud2.
         # Publish only after the corresponding filtered cloud succeeds.
         self._source_header_pub.publish(filtered.header)
@@ -352,13 +356,14 @@ class ArtifactPointFilterNode(Node):
                     cloud.xyz[result.support.low_support_mask], msg.header
                 )
             )
-        self._publish_markers(
-            msg,
-            result,
-            self._cached_cells,
-            self._cached_halo_spans,
-            self._cached_front_config,
-        )
+        if bool(self.get_parameter("publish_artifact_markers").value):
+            self._publish_markers(
+                msg,
+                result,
+                self._cached_cells,
+                self._cached_halo_spans,
+                self._cached_front_config,
+            )
         stage_ms["publish_debug_ms"] = (
             time.perf_counter() - stage_started
         ) * 1000.0
@@ -517,7 +522,7 @@ class ArtifactPointFilterNode(Node):
             )
         status = DiagnosticStatus()
         status.name = "wheelchair_navigation/artifact_point_filter"
-        status.hardware_id = "AIRY"
+        status.hardware_id = str(self.get_parameter("sensor_label").value)
         status.level = level
         status.message = message
         status.values = [

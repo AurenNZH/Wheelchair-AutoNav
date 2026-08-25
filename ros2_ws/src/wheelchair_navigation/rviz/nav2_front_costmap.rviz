@@ -19,7 +19,7 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: Intensity
       Decay Time: 1.2
-      Enabled: true
+      Enabled: false
       Name: L2 right PointCloud2 (raw)
       Position Transformer: XYZ
       Size (Pixels): 2
@@ -30,6 +30,22 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /lidar_right/points
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: Intensity
+      Decay Time: 1.2
+      Enabled: true
+      Name: L2 right PointCloud2 (three-point filtered)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_right/points_filtered
       Use Fixed Frame: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true

@@ -46,23 +46,42 @@ def test_right_l2_pipeline_has_disabled_optional_inflation_after_obstacles():
     assert "artifact_grid_mask_cells" not in parameters
 
 
-def test_launch_consumes_raw_right_l2_without_airy_filter():
+def test_launch_filters_right_l2_support_before_nav2_without_airy_geometry():
     path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
     source = path.read_text()
 
-    assert '"/nav2_obstacle_points_right", "/lidar_right/points"' in source
-    assert "L2_lidar_right=/lidar_right/points" in source
-    assert 'executable="artifact_point_filter"' not in source
+    assert 'executable="artifact_point_filter"' in source
+    assert '"lidar_topic": "/lidar_right/points"' in source
+    assert '"/lidar_right/points_filtered"' in source
+    assert "L2_lidar_right=/lidar_right/points_filtered" in source
+    assert '"artifact_grid_mask_cells"' not in source
+    assert '"artifact_grid_halo_spans"' not in source
+    assert '"self_filter_boxes"' not in source
+    assert '"artifact_min_points_per_cell": 1' in source
+    assert '"publish_artifact_markers": False' in source
+    assert 'default_value="3"' in source
+    assert '"/artifact_filter/source_header"' in source
     assert "/rslidar_points" not in source
-    assert "use_artifact_filter" not in source
 
 
-def test_rviz_retains_right_l2_cloud_for_interpretation_only():
+def test_rviz_defaults_to_filtered_l2_and_retains_raw_comparison():
     path = Path(__file__).parents[1] / "rviz" / "nav2_front_costmap.rviz"
-    source = path.read_text()
+    document = yaml.safe_load(path.read_text())
+    displays = {
+        display["Name"]: display
+        for display in document["Visualization Manager"]["Displays"]
+    }
+    raw = displays["L2 right PointCloud2 (raw)"]
+    filtered = displays[
+        "L2 right PointCloud2 (three-point filtered)"
+    ]
 
-    assert "Value: /lidar_right/points" in source
-    assert "Decay Time: 1.2" in source
+    assert raw["Topic"]["Value"] == "/lidar_right/points"
+    assert raw["Enabled"] is False
+    assert raw["Decay Time"] == 1.2
+    assert filtered["Topic"]["Value"] == "/lidar_right/points_filtered"
+    assert filtered["Enabled"] is True
+    assert filtered["Decay Time"] == 1.2
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():

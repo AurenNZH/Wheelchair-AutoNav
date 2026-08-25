@@ -27,8 +27,8 @@ costmap:
       footprint_padding: 0.0
 
       # Keep Foxy's ObstacleLayer unmodified. The launch remaps this stable
-      # right-sensor input to the raw point cloud selected by hardware
-      # bring-up; filtering is not part of this baseline.
+      # right-sensor input to a support-filtered L2 cloud. The filter uses the
+      # same 0.1 m geometry and requires three points per occupied cell.
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"

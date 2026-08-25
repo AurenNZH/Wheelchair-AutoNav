@@ -27,6 +27,41 @@ from wheelchair_navigation.costmap import (
 
 
 class ArtifactFilterTests(unittest.TestCase):
+    def test_l2_support_only_mode_requires_three_points_per_front_cell(self):
+        config = FrontCostmapConfig(
+            length_m=1.0, width_m=1.0, resolution_m=0.1
+        )
+        points = np.array(
+            [
+                [0.05, 0.05, 0.20],
+                [0.06, 0.06, 0.30],
+                [0.15, 0.05, 0.20],
+                [0.16, 0.06, 0.30],
+                [0.17, 0.07, 0.40],
+                [-0.10, 0.00, 0.20],
+            ],
+            dtype=np.float32,
+        )
+
+        result = filter_artifact_points(
+            points,
+            np.ones(points.shape[0], dtype=bool),
+            (),
+            (),
+            (),
+            config,
+            min_points_per_cell=1,
+            global_min_points_per_cell=3,
+        )
+
+        np.testing.assert_array_equal(
+            result.keep_mask,
+            [False, False, True, True, True, True],
+        )
+        self.assertEqual(result.support.stats.low_support_cells, 1)
+        self.assertEqual(result.support.stats.low_support_points, 2)
+        self.assertEqual(result.artifact_stats.unique_rejected_points, 0)
+
     def test_upstream_keep_mask_retains_nav2_owned_points(self):
         config = FrontCostmapConfig(
             length_m=2.0, width_m=2.0, resolution_m=1.0

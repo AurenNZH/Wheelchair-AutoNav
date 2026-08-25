@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from nav2_common.launch import RewrittenYaml
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -34,6 +35,59 @@ def generate_launch_description():
         convert_types=True,
     )
 
+    support_filter = Node(
+        package="wheelchair_navigation",
+        executable="artifact_point_filter",
+        name="l2_lidar_right_support_filter",
+        output="screen",
+        parameters=[
+            {
+                "sensor_label": "Unitree L2 right",
+                "lidar_topic": "/lidar_right/points",
+                "artifact_filtered_cloud_topic": (
+                    "/lidar_right/points_filtered"
+                ),
+                # Retain the established supervisor freshness interface while
+                # the system has only one active obstacle sensor.
+                "artifact_filtered_source_header_topic": (
+                    "/artifact_filter/source_header"
+                ),
+                "artifact_rejected_points_topic": (
+                    "/lidar_right/artifact_rejected_points"
+                ),
+                "artifact_low_support_points_topic": (
+                    "/lidar_right/low_support_points"
+                ),
+                "artifact_masks_topic": (
+                    "/lidar_right/support_filter/masks"
+                ),
+                "artifact_threshold_cells_topic": (
+                    "/lidar_right/support_filter/threshold_cells"
+                ),
+                "target_frame": "base_link",
+                "artifact_filter_frame": "base_link",
+                "size_m": 8.0,
+                "resolution_m": 0.1,
+                "min_height_m": 0.05,
+                "max_height_m": 1.5,
+                "min_range_m": 0.45,
+                "max_range_m": 4.0,
+                "front_length_m": 4.0,
+                "front_width_m": 8.0,
+                "front_resolution_m": 0.1,
+                "front_fov_deg": 180.0,
+                # The node defaults for self-filter boxes, AIRY mask cells,
+                # and AIRY halo spans are empty. Do not load AIRY geometry.
+                "artifact_min_points_per_cell": 1,
+                "artifact_global_min_points_per_cell": ParameterValue(
+                    LaunchConfiguration("support_min_points_per_cell"),
+                    value_type=int,
+                ),
+                "publish_artifact_markers": False,
+            }
+        ],
+    )
+
     costmap = Node(
         package="nav2_costmap_2d",
         executable="nav2_costmap_2d",
@@ -42,7 +96,10 @@ def generate_launch_description():
         # wildcard parameter files produced by a launch dictionary.
         parameters=[configured_parameters],
         remappings=[
-            ("/nav2_obstacle_points_right", "/lidar_right/points"),
+            (
+                "/nav2_obstacle_points_right",
+                "/lidar_right/points_filtered",
+            ),
             ("costmap", "/nav2_front_costmap"),
             ("costmap_raw", "/nav2_front_costmap_raw"),
             ("costmap_updates", "/nav2_front_costmap_updates"),
@@ -77,6 +134,14 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
+            DeclareLaunchArgument(
+                "support_min_points_per_cell",
+                default_value="3",
+                description=(
+                    "Minimum points in each 0.1 m Nav2 cell; set 1 for "
+                    "a support-filter pass-through comparison"
+                ),
+            ),
             DeclareLaunchArgument("use_inflation", default_value="false"),
             DeclareLaunchArgument("inflation_radius", default_value="0.55"),
             DeclareLaunchArgument(
@@ -85,7 +150,10 @@ def generate_launch_description():
             LogInfo(
                 msg=[
                     "Stock Foxy Nav2 observation only: "
-                    "L2_lidar_right=/lidar_right/points",
+                    "L2_lidar_right=/lidar_right/points_filtered",
+                    " (support points/cell=",
+                    LaunchConfiguration("support_min_points_per_cell"),
+                    ")",
                     "; inflation=",
                     LaunchConfiguration("use_inflation"),
                     " (radius=",
@@ -96,6 +164,7 @@ def generate_launch_description():
                     "physical command process is launched.",
                 ]
             ),
+            support_filter,
             costmap,
             lifecycle_manager,
             rviz,

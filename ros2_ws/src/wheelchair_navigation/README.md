@@ -1,9 +1,9 @@
 # Wheelchair Local Mapping
 
-Non-actuating local obstacle mapping. The active Nav2 profile consumes the raw
-right-L2 cloud. Legacy AIRY mapping and calibrated filter utilities remain
-dormant for a limited validation period. This package never publishes velocity,
-trajectories, or CAN commands.
+Non-actuating local obstacle mapping. The active Nav2 profile consumes the
+right-L2 cloud after a three-point, 10 cm cell-support filter. Legacy AIRY
+mapping and calibrated geometry remain dormant for a limited validation
+period. This package never publishes velocity, trajectories, or CAN commands.
 
 ## Legacy AIRY geometry
 
@@ -19,16 +19,21 @@ convention.
 
 ## Interfaces
 
-Active right-L2 Nav2 baseline:
+Active right-L2 Nav2 pipeline:
 
-- Input: `/lidar_right/points` (`sensor_msgs/PointCloud2`)
+- Raw input: `/lidar_right/points` (`sensor_msgs/PointCloud2`)
+- Support-filtered cloud: `/lidar_right/points_filtered`
+- Rejected low-support points, published only when subscribed:
+  `/lidar_right/low_support_points`
+- Source-stamp heartbeat: `/artifact_filter/source_header`
 - Input frame: `lidar_right_link`
 - Output: `/nav2_front_costmap` (`nav_msgs/OccupancyGrid`)
 - Target frame: `base_link`
 
-RViz retains 1.2 seconds of the raw L2 cloud to make its non-repetitive scan
-pattern interpretable. This display decay does not change Nav2 observations or
-the published costmap.
+RViz enables the filtered L2 cloud and retains the raw cloud as a disabled A/B
+display. Both use a permanent 1.2-second decay so the non-repetitive scan
+pattern remains interpretable. Display decay does not change filtering, Nav2
+observations, or the published costmap.
 
 Legacy AIRY local-mapping interfaces, not launched by
 `nav2_mapping.launch.py`:
@@ -73,9 +78,12 @@ ros2 launch wheelchair_navigation local_mapping.launch.py
 
 ## Stock Nav2 Evaluation
 
-`nav2_mapping.launch.py` is an isolated evaluation of Foxy Nav2's unmodified
-`ObstacleLayer`, fed directly by raw `/lidar_right/points` through the
-`L2_lidar_right` observation source. It publishes `/nav2_front_costmap`; it does not publish
+`nav2_mapping.launch.py` keeps Foxy Nav2's `ObstacleLayer` unmodified. An
+upstream filter transforms each cloud into `base_link`, counts eligible points
+in the same 10 cm cells as Nav2, and removes all points from cells containing
+fewer than three points. No AIRY masks, halos, or self-filter boxes are applied.
+Nav2 consumes `/lidar_right/points_filtered` through the `L2_lidar_right`
+observation source and publishes `/nav2_front_costmap`; it does not publish
 `/front_costmap`, launch the safety supervisor, or command the wheelchair.
 The optional Nav2 `InflationLayer` remains disabled by default so weighted
 policy calibration must be enabled explicitly.
@@ -94,6 +102,15 @@ and then launch the stock Nav2 profile:
 ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true
 ```
 
+The support threshold defaults to three. For a diagnostic comparison, restart
+the launch with a threshold of one; this keeps the preprocessing path active
+while disabling low-support rejection:
+
+```bash
+ros2 launch wheelchair_navigation nav2_mapping.launch.py \
+  support_min_points_per_cell:=1 use_rviz:=true
+```
+
 Enable the uncalibrated weighted-cost A/B profile explicitly:
 
 ```bash
@@ -102,26 +119,26 @@ ros2 launch wheelchair_navigation nav2_mapping.launch.py \
   cost_scaling_factor:=3.0 use_rviz:=true
 ```
 
-Both modes publish `/nav2_front_costmap`; restart the launch to switch. For the
-raw baseline, verify the source and map independently:
+All modes publish `/nav2_front_costmap`; restart the launch to switch. Verify
+the raw source, filtered output, and map independently:
 
 ```bash
 ros2 topic hz /lidar_right/points
+ros2 topic hz /lidar_right/points_filtered
 ros2 topic hz /nav2_front_costmap
 ```
 
-The existing mapping monitors retain AIRY-specific defaults and are not part of
-this right-L2 baseline. L2 continuity and freshness diagnostics are deferred.
-
-Monitor performance:
+Monitor raw-to-filtered and filtered-to-costmap continuity by overriding the
+legacy AIRY topic defaults:
 
 ```bash
-ros2 run wheelchair_navigation mapping_monitor
+ros2 run wheelchair_navigation nav2_costmap_monitor --ros-args \
+  -p cloud_topic:=/lidar_right/points \
+  -p filtered_cloud_topic:=/lidar_right/points_filtered
 ```
 
-The monitor reports effective rate, current/p95/maximum processing time, cloud
-age/p95, point and artifact-filter time, raw/shadow front cells,
-chassis-filtered and artifact-rejected points, rejected clouds, and lag spikes.
+The monitor reports stream rates, maximum gaps, cloud age, filter delay, map
+continuity, and the support filter's diagnostic counters.
 
 ## Artifact Shadow Calibration
 
