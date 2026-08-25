@@ -2,12 +2,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (
-    DeclareLaunchArgument,
-    LogInfo,
-    SetLaunchConfiguration,
-)
-from launch.conditions import IfCondition, UnlessCondition
+from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from nav2_common.launch import RewrittenYaml
 from launch_ros.actions import Node
@@ -17,9 +13,6 @@ def generate_launch_description():
     package_share = get_package_share_directory("wheelchair_navigation")
     parameters = os.path.join(
         package_share, "config", "nav2_front_costmap.yaml"
-    )
-    artifact_parameters = os.path.join(
-        package_share, "config", "local_mapping.yaml"
     )
     rviz_config = os.path.join(
         package_share, "rviz", "nav2_front_costmap.rviz"
@@ -49,31 +42,12 @@ def generate_launch_description():
         # wildcard parameter files produced by a launch dictionary.
         parameters=[configured_parameters],
         remappings=[
-            (
-                "/nav2_obstacle_points",
-                LaunchConfiguration("nav2_points_topic"),
-            ),
+            ("/nav2_obstacle_points_right", "/lidar_right/points"),
             ("costmap", "/nav2_front_costmap"),
             ("costmap_raw", "/nav2_front_costmap_raw"),
             ("costmap_updates", "/nav2_front_costmap_updates"),
             ("published_footprint", "/nav2_front_costmap_footprint"),
         ],
-    )
-    artifact_filter = Node(
-        package="wheelchair_navigation",
-        executable="artifact_point_filter",
-        name="artifact_point_filter",
-        output="screen",
-        parameters=[
-            artifact_parameters,
-            {
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
-                "validate_cloud_timestamps": LaunchConfiguration(
-                    "validate_cloud_timestamps"
-                ),
-            },
-        ],
-        condition=IfCondition(LaunchConfiguration("use_artifact_filter")),
     )
     lifecycle_manager = Node(
         package="nav2_lifecycle_manager",
@@ -103,35 +77,15 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
-            DeclareLaunchArgument(
-                "use_artifact_filter", default_value="true"
-            ),
-            DeclareLaunchArgument(
-                "validate_cloud_timestamps", default_value="true"
-            ),
             DeclareLaunchArgument("use_inflation", default_value="false"),
             DeclareLaunchArgument("inflation_radius", default_value="0.55"),
             DeclareLaunchArgument(
                 "cost_scaling_factor", default_value="3.0"
             ),
-            SetLaunchConfiguration(
-                "nav2_points_topic",
-                "/rslidar_points_artifact_filtered",
-                condition=IfCondition(
-                    LaunchConfiguration("use_artifact_filter")
-                ),
-            ),
-            SetLaunchConfiguration(
-                "nav2_points_topic",
-                "/rslidar_points",
-                condition=UnlessCondition(
-                    LaunchConfiguration("use_artifact_filter")
-                ),
-            ),
             LogInfo(
                 msg=[
-                    "Stock Foxy Nav2 observation only: input=",
-                    LaunchConfiguration("nav2_points_topic"),
+                    "Stock Foxy Nav2 observation only: "
+                    "L2_lidar_right=/lidar_right/points",
                     "; inflation=",
                     LaunchConfiguration("use_inflation"),
                     " (radius=",
@@ -142,7 +96,6 @@ def generate_launch_description():
                     "physical command process is launched.",
                 ]
             ),
-            artifact_filter,
             costmap,
             lifecycle_manager,
             rviz,

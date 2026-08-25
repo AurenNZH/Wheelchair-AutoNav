@@ -2,8 +2,9 @@
 
 This component brings up one Unitree L2 on the wheelchair's right footrest.
 It is intentionally isolated from the repository's main `ros2_ws`: the current
-milestone proves stable raw point-cloud and IMU publication and defines the
-measured sensor mounts before adding filtering, Nav2, or shared control.
+milestone proves stable raw point-cloud and IMU publication, defines the
+measured sensor mounts, and supplies the raw right-L2 input to Nav2. Filtering,
+dual-L2 operation, and shared control remain deferred.
 
 The official Unitree SDK2 is pinned as a Git submodule under
 `ros2_ws/src/unilidar_sdk2`. The wrapper package supplies the
@@ -35,7 +36,7 @@ vendor's separate IMU-derived TF broadcasts are remapped to
 wheelchair mount for ownership of `lidar_right_link`.
 
 The driver uses Ethernet mode, standard 3D field of view, IMU enabled, system
-timestamps, 18 scans per cloud, and a 0-100 m range. The upstream driver
+timestamps, 18 scans per cloud, and a 0.45-100 m range. The upstream driver
 publishes reliable, volatile topics with a depth of 10.
 
 `cloud_scan_num` is a batching control, not a hardware sampling-rate control.

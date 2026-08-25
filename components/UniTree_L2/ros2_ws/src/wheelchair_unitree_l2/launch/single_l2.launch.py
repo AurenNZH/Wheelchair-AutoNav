@@ -36,7 +36,7 @@ def generate_launch_description():
         _argument("imu_topic", "/lidar_right/imu", "Published IMU topic"),
         _argument("imu_frame", "lidar_right_imu_link", "IMU frame ID"),
         _argument("cloud_scan_num", "18", "Number of scans accumulated per cloud"),
-        _argument("range_min", "0.0", "Minimum accepted range in metres"),
+        _argument("range_min", "0.45", "Minimum accepted range in metres"),
         _argument("range_max", "100.0", "Maximum accepted range in metres"),
         _argument(
             "publish_mount_tfs",

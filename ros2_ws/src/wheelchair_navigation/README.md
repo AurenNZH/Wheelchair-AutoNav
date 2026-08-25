@@ -1,9 +1,11 @@
 # Wheelchair Local Mapping
 
-Non-actuating RoboSense AIRY obstacle mapping. This package never publishes
-velocity, trajectories, or CAN commands.
+Non-actuating local obstacle mapping. The active Nav2 profile consumes the raw
+right-L2 cloud. Legacy AIRY mapping and calibrated filter utilities remain
+dormant for a limited validation period. This package never publishes velocity,
+trajectories, or CAN commands.
 
-## Geometry
+## Legacy AIRY geometry
 
 `base_link` uses X forward, Y left, and Z up. The physically validated mount is:
 
@@ -16,6 +18,20 @@ targets after converting the legacy project axes to the ROS mobile-base
 convention.
 
 ## Interfaces
+
+Active right-L2 Nav2 baseline:
+
+- Input: `/lidar_right/points` (`sensor_msgs/PointCloud2`)
+- Input frame: `lidar_right_link`
+- Output: `/nav2_front_costmap` (`nav_msgs/OccupancyGrid`)
+- Target frame: `base_link`
+
+RViz retains 1.2 seconds of the raw L2 cloud to make its non-repetitive scan
+pattern interpretable. This display decay does not change Nav2 observations or
+the published costmap.
+
+Legacy AIRY local-mapping interfaces, not launched by
+`nav2_mapping.launch.py`:
 
 - Input: `/rslidar_points` (`sensor_msgs/PointCloud2`, best effort, depth 1)
 - Full local raw obstacles: `/local_obstacles`
@@ -58,10 +74,9 @@ ros2 launch wheelchair_navigation local_mapping.launch.py
 ## Stock Nav2 Evaluation
 
 `nav2_mapping.launch.py` is an isolated evaluation of Foxy Nav2's unmodified
-`ObstacleLayer`, fed by the calibrated artifact-filtered PointCloud2 by
-default. It publishes `/nav2_front_costmap`; it does not publish
+`ObstacleLayer`, fed directly by raw `/lidar_right/points` through the
+`L2_lidar_right` observation source. It publishes `/nav2_front_costmap`; it does not publish
 `/front_costmap`, launch the safety supervisor, or command the wheelchair.
-The supervisor may subscribe separately for non-actuating shadow decisions.
 The optional Nav2 `InflationLayer` remains disabled by default so weighted
 policy calibration must be enabled explicitly.
 
@@ -72,11 +87,11 @@ sudo apt-get install ros-foxy-nav2-costmap-2d \
   ros-foxy-nav2-lifecycle-manager
 ```
 
-Build this package, start the AIRY driver without the legacy mapper, and then
-launch the stock Nav2 profile:
+Build this package, start the right L2 with its default 0.45 m minimum range,
+and then launch the stock Nav2 profile:
 
 ```bash
-ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=false
+ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true
 ```
 
 Enable the uncalibrated weighted-cost A/B profile explicitly:
@@ -87,22 +102,16 @@ ros2 launch wheelchair_navigation nav2_mapping.launch.py \
   cost_scaling_factor:=3.0 use_rviz:=true
 ```
 
-Both modes publish `/nav2_front_costmap`; restart the launch to switch. The
-supervisor initially interprets costs `1..98` as SLOW candidates and
-`99..100` as STOP candidates along the requested path. These thresholds and
-the inflation profile are shadow-only until physically calibrated.
-
-Measure both source and map continuity for six minutes:
+Both modes publish `/nav2_front_costmap`; restart the launch to switch. For the
+raw baseline, verify the source and map independently:
 
 ```bash
-ros2 run wheelchair_navigation nav2_costmap_monitor
+ros2 topic hz /lidar_right/points
+ros2 topic hz /nav2_front_costmap
 ```
 
-The monitor deliberately does not report Nav2's OccupancyGrid header as sensor
-latency: Foxy does not preserve the cloud acquisition timestamp there. A
-`pass=true` result means only that both streams maintained the configured rate
-and avoided gaps over 300 ms. See
-`docs/setup/nav2_costmap_evaluation.md` for the complete procedure.
+The existing mapping monitors retain AIRY-specific defaults and are not part of
+this right-L2 baseline. L2 continuity and freshness diagnostics are deferred.
 
 Monitor performance:
 
