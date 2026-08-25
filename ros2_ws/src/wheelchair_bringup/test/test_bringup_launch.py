@@ -92,3 +92,12 @@ def test_right_l2_launch_restores_model_and_defined_left_mount_without_driver():
     assert 'package="unitree_lidar_ros2"' in launch_source
     assert launch_source.count('package="unitree_lidar_ros2"') == 1
     assert "rviz_default_plugins/RobotModel" in rviz_source
+
+
+def test_child_rviz_arguments_are_scoped_from_top_level_rviz_toggle():
+    launch_path = Path(__file__).parents[1] / "launch" / "wheelchair.launch.py"
+    source = launch_path.read_text()
+
+    assert "GroupAction" in source
+    assert source.count("scoped=True") == 2
+    assert source.count('"use_rviz": "false"') == 2

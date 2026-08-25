@@ -2,7 +2,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    GroupAction,
+    IncludeLaunchDescription,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -78,30 +82,39 @@ def generate_launch_description():
         _argument("base_camera_roll", "Measured camera roll in radians."),
     ]
 
-    lidar = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(lidar_launch),
-        launch_arguments={
-            "publish_mount_tf": LaunchConfiguration("publish_lidar_tf"),
-            "mount_x": LaunchConfiguration("lidar_x"),
-            "mount_y": LaunchConfiguration("lidar_y"),
-            "mount_z": LaunchConfiguration("lidar_z"),
-            "mount_yaw": LaunchConfiguration("lidar_yaw"),
-            "mount_pitch": LaunchConfiguration("lidar_pitch"),
-            "mount_roll": LaunchConfiguration("lidar_roll"),
-            "publish_left_mount_tf": LaunchConfiguration(
-                "publish_left_lidar_tf"
-            ),
-            "left_mount_x": LaunchConfiguration("lidar_left_x"),
-            "left_mount_y": LaunchConfiguration("lidar_left_y"),
-            "left_mount_z": LaunchConfiguration("lidar_left_z"),
-            "left_mount_yaw": LaunchConfiguration("lidar_left_yaw"),
-            "left_mount_pitch": LaunchConfiguration("lidar_left_pitch"),
-            "left_mount_roll": LaunchConfiguration("lidar_left_roll"),
-            "use_robot_model": LaunchConfiguration("use_robot_model"),
-            "use_rviz": "false",
-            "use_sim_time": LaunchConfiguration("use_sim_time"),
-        }.items(),
-        condition=IfCondition(LaunchConfiguration("use_lidar")),
+    lidar = GroupAction(
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(lidar_launch),
+                launch_arguments={
+                    "publish_mount_tf": LaunchConfiguration(
+                        "publish_lidar_tf"
+                    ),
+                    "mount_x": LaunchConfiguration("lidar_x"),
+                    "mount_y": LaunchConfiguration("lidar_y"),
+                    "mount_z": LaunchConfiguration("lidar_z"),
+                    "mount_yaw": LaunchConfiguration("lidar_yaw"),
+                    "mount_pitch": LaunchConfiguration("lidar_pitch"),
+                    "mount_roll": LaunchConfiguration("lidar_roll"),
+                    "publish_left_mount_tf": LaunchConfiguration(
+                        "publish_left_lidar_tf"
+                    ),
+                    "left_mount_x": LaunchConfiguration("lidar_left_x"),
+                    "left_mount_y": LaunchConfiguration("lidar_left_y"),
+                    "left_mount_z": LaunchConfiguration("lidar_left_z"),
+                    "left_mount_yaw": LaunchConfiguration("lidar_left_yaw"),
+                    "left_mount_pitch": LaunchConfiguration(
+                        "lidar_left_pitch"
+                    ),
+                    "left_mount_roll": LaunchConfiguration("lidar_left_roll"),
+                    "use_robot_model": LaunchConfiguration("use_robot_model"),
+                    "use_rviz": "false",
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                }.items(),
+                condition=IfCondition(LaunchConfiguration("use_lidar")),
+            )
+        ],
+        scoped=True,
     )
     camera = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(realsense_launch),
@@ -132,19 +145,28 @@ def generate_launch_description():
         ],
         condition=IfCondition(LaunchConfiguration("publish_camera_tf")),
     )
-    mapping = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(mapping_launch),
-        launch_arguments={
-            "use_sim_time": LaunchConfiguration("use_sim_time"),
-            "use_rviz": "false",
-            "support_min_points_per_cell": LaunchConfiguration(
-                "support_min_points_per_cell"
-            ),
-            "use_inflation": LaunchConfiguration("use_inflation"),
-            "inflation_radius": LaunchConfiguration("inflation_radius"),
-            "cost_scaling_factor": LaunchConfiguration("cost_scaling_factor"),
-        }.items(),
-        condition=IfCondition(LaunchConfiguration("use_mapping")),
+    mapping = GroupAction(
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(mapping_launch),
+                launch_arguments={
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "use_rviz": "false",
+                    "support_min_points_per_cell": LaunchConfiguration(
+                        "support_min_points_per_cell"
+                    ),
+                    "use_inflation": LaunchConfiguration("use_inflation"),
+                    "inflation_radius": LaunchConfiguration(
+                        "inflation_radius"
+                    ),
+                    "cost_scaling_factor": LaunchConfiguration(
+                        "cost_scaling_factor"
+                    ),
+                }.items(),
+                condition=IfCondition(LaunchConfiguration("use_mapping")),
+            )
+        ],
+        scoped=True,
     )
     rviz = Node(
         package="rviz2",
