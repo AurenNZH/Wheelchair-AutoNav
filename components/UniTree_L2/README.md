@@ -60,6 +60,7 @@ cd components/UniTree_L2/ros2_ws
 source /opt/ros/foxy/setup.bash
 rosdep install \
   --from-paths \
+  ../../../ros2_ws/src/wheelchair_simulation \
   src/unilidar_sdk2/unitree_lidar_ros2/src/unitree_lidar_ros2 \
   src/wheelchair_unitree_l2 \
   --ignore-src -r -y
@@ -98,12 +99,27 @@ source install/setup.bash
 ros2 launch wheelchair_unitree_l2 single_l2.launch.py
 ```
 
-RViz starts by default with `lidar_right_link` as its fixed frame. To run the
-driver without RViz:
+RViz uses `base_link` as its fixed frame so the cloud, measured L2 frames, and
+optional wheelchair model share one view. To run the driver without RViz:
 
 ```bash
 ros2 launch wheelchair_unitree_l2 single_l2.launch.py use_rviz:=false
 ```
+
+To overlay the detailed wheelchair URDF, source the repository's main workspace
+before the L2 overlay and enable the model toggle:
+
+```bash
+cd ~/Wheelchair-AutoNav
+source /opt/ros/foxy/setup.bash
+source ros2_ws/install/setup.bash
+source components/UniTree_L2/ros2_ws/install/setup.bash
+ros2 launch wheelchair_unitree_l2 single_l2.launch.py use_robot_model:=true
+```
+
+This publishes neutral drive-wheel and caster joint positions for visualization
+only. It does not provide wheelchair odometry, and the URDF geometry does not
+replace the Nav2 footprint or safety-supervisor configuration.
 
 The network, topic, frame, range, and scan-count defaults are exposed as launch
 arguments. List them with:

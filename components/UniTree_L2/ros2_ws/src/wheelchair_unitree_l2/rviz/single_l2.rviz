@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /L2 Point Cloud1
+        - /Wheelchair Model1
         - /TF1
       Splitter Ratio: 0.5
     Tree Height: 620
@@ -66,6 +67,22 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Alpha: 0.65
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Name: Wheelchair Model
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
       Frame Timeout: 15
@@ -81,7 +98,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: lidar_right_link
+    Fixed Frame: base_link
     Frame Rate: 30
   Name: root
   Tools:

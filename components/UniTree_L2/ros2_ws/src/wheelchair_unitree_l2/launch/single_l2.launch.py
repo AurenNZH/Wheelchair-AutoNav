@@ -6,9 +6,15 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import (
+    Command,
+    FindExecutable,
+    LaunchConfiguration,
+    PathJoinSubstitution,
+)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 
 
 def _argument(name, default, description):
@@ -36,6 +42,11 @@ def generate_launch_description():
             "publish_mount_tfs",
             "true",
             "Publish the measured base_link-to-L2 mount transforms",
+        ),
+        _argument(
+            "use_robot_model",
+            "false",
+            "Display the wheelchair_simulation URDF in RViz",
         ),
         _argument("use_rviz", "true", "Start RViz with the single-L2 view"),
     ]
@@ -100,6 +111,36 @@ def generate_launch_description():
         ],
         condition=IfCondition(LaunchConfiguration("publish_mount_tfs")),
     )
+
+    wheelchair_xacro = PathJoinSubstitution(
+        [
+            FindPackageShare("wheelchair_simulation"),
+            "urdf",
+            "wheelchair.urdf.xacro",
+        ]
+    )
+    robot_description = ParameterValue(
+        Command([FindExecutable(name="xacro"), " ", wheelchair_xacro]),
+        value_type=str,
+    )
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="wheelchair_robot_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description}],
+        condition=IfCondition(LaunchConfiguration("use_robot_model")),
+    )
+    # No wheel or caster encoders are assumed. Neutral joint positions let
+    # RViz render every URDF link but do not represent odometry or motion.
+    joint_state_publisher = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        name="wheelchair_model_joint_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description}],
+        condition=IfCondition(LaunchConfiguration("use_robot_model")),
+    )
     left_mount_tf = Node(
         package="tf2_ros",
         executable="static_transform_publisher",
@@ -132,5 +173,13 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        arguments + [lidar, right_mount_tf, left_mount_tf, rviz]
+        arguments
+        + [
+            lidar,
+            right_mount_tf,
+            left_mount_tf,
+            robot_state_publisher,
+            joint_state_publisher,
+            rviz,
+        ]
     )
