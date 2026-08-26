@@ -40,13 +40,13 @@ uses the same user-space bidirectional passthrough pattern as keyboard teleop,
 forwards every CAN frame unchanged, and displays the physical JSM's two signed
 axes before forwarding its frame to the controller side.
 
-Use the keyboard teleop interface convention: `can0` is the wheelchair
-controller side and `can1` is the physical-JSM side. Remove kernel `cangw`
-rules first; otherwise two gateways would operate concurrently:
+In the current wiring, `can1` is the wheelchair-controller side and `can0` is
+the physical-JSM side. Remove kernel `cangw` rules first; otherwise two
+gateways would operate concurrently:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 2
+  --can-interface can1 --gateway-interface can0 --device-slot 2
 ```
 
 To retain every valid 100 Hz sample while exercising neutral, forward,
@@ -54,7 +54,7 @@ reverse, left, right, and diagonal positions:
 
 ```bash
 python scripts/observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 2 \
+  --can-interface can1 --gateway-interface can0 --device-slot 2 \
   --duration-s 30 --csv /tmp/physical_jsm.csv
 ```
 
@@ -81,8 +81,10 @@ every link failure are centred.
 ```bash
 python scripts/supervise_physical_joystick.py \
   --mode shadow \
-  --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 10.0.0.48 --deadzone 4 --forward-cone-deg 30
+  --can-interface can1 --gateway-interface can0 --device-slot 2 \
+  --jetson-address 192.168.0.102 \
+  --allowed-jetson-address 192.168.0.102 \
+  --deadzone 4 --forward-cone-deg 30
 ```
 
 Do not run this alongside `cangw`, keyboard teleop, the observer, or another
@@ -102,8 +104,9 @@ matching safety envelope:
 ```bash
 python scripts/teleoperate_keyboard.py \
   --config ../../configs/wheelchair/default.yaml \
+  --can-interface can1 \
   --enable-shared-control \
-  --jetson-address 192.168.1.10
+  --jetson-address 192.168.0.102
 ```
 
 Do not run this against a live chair until the
@@ -286,14 +289,14 @@ python3 teleoperate_keyboard.py
 ### Remote Operation (Recommended)
 
 ```bash
-# On your PC
-ssh pi@192.168.1.100
+# From the Jetson or another host on the isolated router LAN
+ssh raspberrywheelchair@192.168.0.101
 
 # On Pi (in SSH session)
 ./teleoperate_keyboard.py
 
 # Or with specific CAN interface
-./teleoperate_keyboard.py --can-interface can0
+./teleoperate_keyboard.py --can-interface can1
 
 # Or with custom config
 ./teleoperate_keyboard.py --config my_config.yaml
@@ -574,8 +577,8 @@ sudo ip link set can0 up type can bitrate 125000
 ```bash
 # Add to ~/.ssh/config on your PC
 Host raspberry_pi
-    HostName 192.168.1.100
-    User pi
+    HostName 192.168.0.101
+    User raspberrywheelchair
     ServerAliveInterval 60    # Keep-alive every 60 seconds
     ServerAliveCountMax 10
 ```
@@ -589,7 +592,8 @@ Host raspberry_pi
 ./teleoperate_keyboard.py --log-level DEBUG
 
 # If using over SSH, ensure terminal is not buffered
-ssh -t pi@192.168.1.100 'cd wheelchair_teleop && python3 teleoperate_keyboard.py'
+ssh -t raspberrywheelchair@192.168.0.101 \
+  'cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controller/scripts && python3 teleoperate_keyboard.py --can-interface can1'
 ```
 
 ### Problem: Wheelchair moves slowly or not at all
@@ -597,8 +601,8 @@ ssh -t pi@192.168.1.100 'cd wheelchair_teleop && python3 teleoperate_keyboard.py
 **Check:**
 
 ```bash
-# Verify can0 is transmitting frames
-candump can0 -L
+# Verify the current controller-side interface is transmitting frames
+candump can1 -L
 
 # Check if joystick position frame exists (should see 02000100#...)
 # If no frames appear, teleoperation is not sending

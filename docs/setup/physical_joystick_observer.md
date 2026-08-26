@@ -13,9 +13,9 @@ forward-positive.
 
 ## 1. Prepare the in-line interfaces
 
-Use the same topology as keyboard teleop: `can0` connects to the wheelchair
-controller and `can1` connects to the physical JSM. Bring both interfaces up
-at 125 kbit/s before powering or operating the chair:
+In the current wiring, `can1` connects to the wheelchair controller and
+`can0` connects to the physical JSM. Bring both interfaces up at 125 kbit/s
+before powering or operating the chair:
 
 ```bash
 sudo ip link set can0 down
@@ -39,11 +39,11 @@ The command uses the same interface meanings as keyboard teleop:
 ```bash
 cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controller/scripts
 ./observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 2
+  --can-interface can1 --gateway-interface can0 --device-slot 2
 ```
 
-Here `--can-interface can0` is the controller side and
-`--gateway-interface can1` is the physical-JSM side. Do not swap them merely
+Here `--can-interface can1` is the controller side and
+`--gateway-interface can0` is the physical-JSM side. Do not swap them merely
 to diagnose missing output: the direction determines which frames are trusted
 as operator input. A normal slot-1 stream should be close to 100 Hz and
 centered input should report raw `(0, 0)` or a small repeatable neutral offset.
@@ -51,7 +51,7 @@ centered input should report raw `(0, 0)` or a small repeatable neutral offset.
 Example output:
 
 ```text
-Physical-JSM observer gateway active: JSM can1 <-> controller can0 frame=02000200#XxYy
+Physical-JSM observer gateway active: JSM can0 <-> controller can1 frame=02000200#XxYy
 TRANSPARENT PASS-THROUGH: CAN frames are forwarded unchanged; no joystick commands, UDP packets, or ROS messages are generated.
 JSM neutral       raw=(   0,   0) ros=(steer=+0.00 forward=0.00 reverse=0.00) rate= 100.0 Hz interval_ms=10.000 forwarded=(JSM->ctl:100 ctl->JSM:120)
 JSM forward_right raw=(  20,  40) ros=(steer=-0.20 forward=0.40 reverse=0.00) rate= 100.0 Hz interval_ms=10.000 forwarded=(JSM->ctl:200 ctl->JSM:240)
@@ -73,7 +73,7 @@ Record every valid sample:
 
 ```bash
 ./observe_physical_joystick.py \
-  --can-interface can0 --gateway-interface can1 --device-slot 2 \
+  --can-interface can1 --gateway-interface can0 --device-slot 2 \
   --duration-s 30 --csv /tmp/physical_jsm.csv
 ```
 

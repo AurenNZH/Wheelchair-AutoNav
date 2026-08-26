@@ -8,11 +8,26 @@ at SLOW 65 with reason `reverse_unmonitored_slow`. Correction X scales with
 the permitted Y magnitude so the input direction is preserved. Hard turns
 stop locally and remain latched until both joystick axes return to neutral.
 
-The Pi and Jetson use lockstep UDP protocol v2. Deploy and rebuild both sides
-before testing; a mixed v1/v2 enforce setup intentionally fails closed.
+The Pi and Jetson use lockstep UDP protocol v2 over the isolated Ethernet
+router. Deploy and rebuild both sides before testing; a mixed v1/v2 enforce
+setup intentionally fails closed. The validated control addresses are
+`192.168.0.101` for the Pi and `192.168.0.102` for the Jetson. The separate
+`192.168.1.0/24` addresses remain dedicated to the dual-L2 path.
 
-Use the measured fixed addresses on the isolated router: `10.0.0.222` for the
-Pi and `10.0.0.48` for the Jetson.
+Before launch, verify that both control routes use Ethernet:
+
+```bash
+# Jetson
+ip route get 192.168.0.101
+ping -I 192.168.0.102 -c 4 192.168.0.101
+
+# Raspberry Pi
+ip route get 192.168.0.102
+ping -I 192.168.0.101 -c 4 192.168.0.102
+```
+
+The route output must report `dev eth0`. `ROS_LOCALHOST_ONLY=1` may remain set
+on the Jetson: it limits ROS DDS traffic, not this explicit UDP safety link.
 
 The only enforced use covered here is one attended, controlled-floor,
 low-speed validation. It is not approval for normal operation. The Pi changes
@@ -51,7 +66,8 @@ source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
-  pi_address:=10.0.0.222 allowed_pi_address:=10.0.0.222 \
+  bind_address:=192.168.0.102 \
+  pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101 \
   slow_forward_limit:=0.60 reverse_limit:=0.65 \
   slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
@@ -75,8 +91,9 @@ ip -brief link show can0 can1
 cangw -L
 ```
 
-`cangw -L` must be empty. Do not run keyboard teleop, the observer, or another
-gateway concurrently.
+`cangw -L` must be empty. In the current physical wiring, `can1` is the
+wheelchair-controller side and `can0` is the physical-JSM side. Do not run
+keyboard teleop, the observer, or another gateway concurrently.
 
 ## 4. Shadow gate
 
@@ -86,8 +103,9 @@ Start the Pi program before powering the wheelchair:
 cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controller/scripts
 python3 supervise_physical_joystick.py \
   --mode shadow \
-  --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 10.0.0.48 \
+  --can-interface can1 --gateway-interface can0 --device-slot 2 \
+  --jetson-address 192.168.0.102 \
+  --allowed-jetson-address 192.168.0.102 \
   --deadzone 4 --forward-cone-deg 30 \
   --csv /tmp/physical_shared_shadow_01.csv
 ```
@@ -129,8 +147,9 @@ path must not already exist:
 ```bash
 python3 supervise_physical_joystick.py \
   --mode enforce \
-  --can-interface can0 --gateway-interface can1 --device-slot 2 \
-  --jetson-address 10.0.0.48 \
+  --can-interface can1 --gateway-interface can0 --device-slot 2 \
+  --jetson-address 192.168.0.102 \
+  --allowed-jetson-address 192.168.0.102 \
   --clear-cap 90 --slow-cap 60 --reverse-cap 65 \
   --deadzone 4 --forward-cone-deg 30 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
