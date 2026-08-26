@@ -33,9 +33,9 @@ def generate_launch_description():
         _argument("config_file", default_config, "Right-L2 ROS parameter file"),
         _argument("publish_mount_tf", "true", "Publish base_link to right-L2 TF"),
         _argument("mount_x", "0.330", "Right-L2 X translation in metres"),
-        _argument("mount_y", "-0.265", "Right-L2 Y translation in metres"),
+        _argument("mount_y", "-0.220", "Right-L2 Y translation in metres"),
         _argument("mount_z", "0.320", "Right-L2 Z translation in metres"),
-        _argument("mount_yaw", "0.392699082", "Right-L2 yaw in radians"),
+        _argument("mount_yaw", "0.479965544", "Right-L2 yaw in radians"),
         _argument("mount_pitch", "0.0", "Right-L2 pitch in radians"),
         _argument("mount_roll", "0.0", "Right-L2 roll in radians"),
         _argument(
@@ -44,9 +44,9 @@ def generate_launch_description():
             "Publish the defined base_link to left-L2 mount frame",
         ),
         _argument("left_mount_x", "0.330", "Left-L2 X translation in metres"),
-        _argument("left_mount_y", "0.265", "Left-L2 Y translation in metres"),
+        _argument("left_mount_y", "0.220", "Left-L2 Y translation in metres"),
         _argument("left_mount_z", "0.320", "Left-L2 Z translation in metres"),
-        _argument("left_mount_yaw", "-0.392699082", "Left-L2 yaw in radians"),
+        _argument("left_mount_yaw", "-0.479965544", "Left-L2 yaw in radians"),
         _argument("left_mount_pitch", "0.0", "Left-L2 pitch in radians"),
         _argument("left_mount_roll", "0.0", "Left-L2 roll in radians"),
         _argument(

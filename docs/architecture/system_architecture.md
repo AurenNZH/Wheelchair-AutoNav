@@ -25,7 +25,7 @@ the same ROS interfaces. The operator remains the source of requested direction.
 `base_link` uses X forward, Y left, and Z up. The installed right sensor is:
 
 ```text
-base_link -> lidar_right_link: 0.330 -0.265 0.320 0.392699082 0 0
+base_link -> lidar_right_link: 0.330 -0.220 0.320 0.479965544 0 0
 ```
 
 Motion fails closed when required intent, map receipt, source timestamp,

@@ -4,15 +4,15 @@
 
   <!-- Physical bringup may override these measured mount values. -->
   <xacro:arg name="lidar_right_x" default="0.330"/>
-  <xacro:arg name="lidar_right_y" default="-0.265"/>
+  <xacro:arg name="lidar_right_y" default="-0.220"/>
   <xacro:arg name="lidar_right_z" default="0.320"/>
-  <xacro:arg name="lidar_right_yaw" default="0.392699082"/>
+  <xacro:arg name="lidar_right_yaw" default="0.479965544"/>
   <xacro:arg name="lidar_right_pitch" default="0.0"/>
   <xacro:arg name="lidar_right_roll" default="0.0"/>
   <xacro:arg name="lidar_left_x" default="0.330"/>
-  <xacro:arg name="lidar_left_y" default="0.265"/>
+  <xacro:arg name="lidar_left_y" default="0.220"/>
   <xacro:arg name="lidar_left_z" default="0.320"/>
-  <xacro:arg name="lidar_left_yaw" default="-0.392699082"/>
+  <xacro:arg name="lidar_left_yaw" default="-0.479965544"/>
   <xacro:arg name="lidar_left_pitch" default="0.0"/>
   <xacro:arg name="lidar_left_roll" default="0.0"/>
 

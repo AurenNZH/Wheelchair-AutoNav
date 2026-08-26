@@ -21,9 +21,9 @@ def test_sensor_mount_transforms_are_siblings_under_base_link():
     assert SENSOR_TRANSFORMS == {
         "lidar_right_link": {
             "x": "0.330",
-            "y": "-0.265",
+            "y": "-0.220",
             "z": "0.320",
-            "yaw": "0.392699082",
+            "yaw": "0.479965544",
             "pitch": "0.0",
             "roll": "0.0",
             "parent": "base_link",
@@ -31,9 +31,9 @@ def test_sensor_mount_transforms_are_siblings_under_base_link():
         },
         "lidar_left_link": {
             "x": "0.330",
-            "y": "0.265",
+            "y": "0.220",
             "z": "0.320",
-            "yaw": "-0.392699082",
+            "yaw": "-0.479965544",
             "pitch": "0.0",
             "roll": "0.0",
             "parent": "base_link",
