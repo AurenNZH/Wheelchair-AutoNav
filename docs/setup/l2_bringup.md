@@ -62,3 +62,43 @@ timeout 3 ros2 topic echo /lidar_right/points sensor_msgs/msg/PointCloud2 --no-a
 Passing means the rate remains nonzero, timestamps advance, the TF tree has one
 parent for `lidar_right_link`, and moving a target moves the corresponding
 points. Leave the sensor running for at least ten minutes before mapping tests.
+
+## One-time left-L2 MAC configuration
+
+Factory L2 units may share an Ethernet MAC address. Two devices with the same
+MAC cannot coexist reliably on a switched LAN even after assigning unique IP
+addresses. The guarded hardware utility assigns the already readdressed left
+L2 the locally administered unicast MAC `02:29:ab:7c:00:63`.
+
+Before applying it, power off the right L2, stop every Unitree driver, confirm
+that the left L2 responds at `192.168.1.63`, and confirm UDP port 6202 is free.
+
+```bash
+cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
+ping -I eth0 -c 4 192.168.1.63
+sudo ss -lunp | rg ':6202'
+
+cmake -S ros2_ws/src/wheelchair_bringup/tools \
+  -B /tmp/wheelchair_l2_mac_build
+cmake --build /tmp/wheelchair_l2_mac_build \
+  --target configure_l2_left_mac -j2
+
+# Dry run: prints the exact endpoints and target MAC without changing hardware.
+/tmp/wheelchair_l2_mac_build/configure_l2_left_mac
+
+# Persistent change: run only after checking the dry-run output.
+/tmp/wheelchair_l2_mac_build/configure_l2_left_mac --apply
+```
+
+Power-cycle only the left L2, then clear the stale neighbour entry and verify:
+
+```bash
+sudo ip neigh flush to 192.168.1.63 dev eth0
+ping -I eth0 -c 20 192.168.1.63
+ip neigh show 192.168.1.63 dev eth0
+```
+
+The neighbour entry must show `02:29:ab:7c:00:63` with no material packet
+loss. Only then power the right L2 and verify that `.62` retains
+`0c:29:ab:7c:00:01`, both pings are stable, and the two MAC addresses remain
+distinct.

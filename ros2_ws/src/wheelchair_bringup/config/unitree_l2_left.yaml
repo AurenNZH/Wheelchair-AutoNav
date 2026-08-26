@@ -1,0 +1,16 @@
+unitree_l2_left:
+  ros__parameters:
+    initialize_type: 2
+    work_mode: 0
+    use_system_timestamp: true
+    lidar_ip: 192.168.1.63
+    lidar_port: 6101
+    local_ip: 192.168.1.2
+    local_port: 6202
+    cloud_topic: /lidar_left/points
+    cloud_frame: lidar_left_link
+    imu_topic: /lidar_left/imu
+    imu_frame: lidar_left_imu_link
+    cloud_scan_num: 18
+    range_min: 0.45
+    range_max: 100.0
