@@ -1,0 +1,18 @@
+# Provisional base_link rules measured from dual_l2_artifact_empty_01.
+# The boxes contain the central persistent artifact envelopes (approximately
+# the 5th-to-95th percentile on each axis). A 0.10 m XY halo handles sparse
+# fringes with a 15-point cell threshold. These values are not approved for
+# physical enforcement until nearby real-obstacle preservation is recorded.
+l2_lidar_right_support_filter:
+  ros__parameters:
+    artifact_filter_frame: base_link
+    artifact_box: [-0.02, 0.67, -0.60, 0.14, 0.61, 0.77]
+    artifact_halo_margin_m: 0.10
+    artifact_halo_min_points_per_cell: 15
+
+l2_lidar_left_support_filter:
+  ros__parameters:
+    artifact_filter_frame: base_link
+    artifact_box: [0.34, 0.67, -0.11, 0.51, 0.61, 0.75]
+    artifact_halo_margin_m: 0.10
+    artifact_halo_min_points_per_cell: 15
