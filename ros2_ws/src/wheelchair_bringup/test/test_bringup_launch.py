@@ -96,6 +96,26 @@ def test_left_l2_configuration_uses_distinct_network_and_ros_interfaces():
     assert '("/tf", "/lidar_left/vendor_tf")' in launch_source
 
 
+def test_dual_l2_launch_composes_both_validated_driver_launches():
+    root = Path(__file__).parents[1]
+    source = (root / "launch" / "dual_l2.launch.py").read_text()
+    top_level = (root / "launch" / "wheelchair.launch.py").read_text()
+    rviz_source = (root / "rviz" / "wheelchair.rviz").read_text()
+
+    assert '"l2_right.launch.py"' in source
+    assert '"l2_left.launch.py"' in source
+    assert '"unitree_l2_right.yaml"' in source
+    assert '"unitree_l2_left.yaml"' in source
+    assert source.count("scoped=True") == 2
+    assert '"use_robot_model": LaunchConfiguration("use_robot_model")' in source
+    assert '"use_rviz": LaunchConfiguration("use_rviz")' in source
+    assert '"dual_l2.launch.py"' in top_level
+    assert "Value: /lidar_right/points_filtered" in rviz_source
+    assert "Value: /lidar_left/points_filtered" in rviz_source
+    assert "Value: /lidar_right/low_support_points" in rviz_source
+    assert "Value: /lidar_left/low_support_points" in rviz_source
+
+
 def test_right_l2_launch_restores_model_and_defined_left_mount_without_driver():
     root = Path(__file__).parents[1]
     launch_source = (root / "launch" / "l2_right.launch.py").read_text()

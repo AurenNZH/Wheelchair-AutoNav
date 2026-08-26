@@ -1,10 +1,11 @@
 # Current System Architecture
 
 ```text
-Unitree L2 /lidar_right/points
+right + left Unitree L2 PointCloud2 streams
         |
 wheelchair_navigation
-  point-support filtered PointCloud2
+  independent point-support filters
+  stock Nav2 ObstacleLayer with two observation sources
   /nav2_front_costmap
         |
 wheelchair_shared_control + OperatorIntent
@@ -30,5 +31,7 @@ base_link -> lidar_right_link: 0.330 -0.220 0.320 0.479965544 0 0
 
 Motion fails closed when required intent, map receipt, source timestamp,
 sequence, peer, session, or heartbeat data is invalid or stale. The current
-right-only sensing scope does not validate hard left turns, rear obstacle
-avoidance, drop-offs, steps, curbs, or hazards below the observed height.
+supervisor source-freshness heartbeat remains right-only pending a separate
+dual-source physical-safety validation. Rear obstacle avoidance, drop-offs,
+steps, curbs, and hazards below the observed height remain outside the accepted
+scope.

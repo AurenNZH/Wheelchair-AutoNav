@@ -30,7 +30,7 @@ def generate_launch_description():
     lidar_launch = os.path.join(
         get_package_share_directory("wheelchair_bringup"),
         "launch",
-        "l2_right.launch.py",
+        "dual_l2.launch.py",
     )
     mapping_launch = os.path.join(
         get_package_share_directory("wheelchair_navigation"),
@@ -43,7 +43,7 @@ def generate_launch_description():
         "wheelchair.rviz",
     )
     declarations = [
-        _argument("use_lidar", "Start the right Unitree L2 driver."),
+        _argument("use_lidar", "Start both Unitree L2 drivers."),
         _argument("use_camera", "Start the RealSense L515 driver."),
         _argument("use_mapping", "Start non-actuating Nav2 local mapping."),
         _argument("use_rviz", "Start RViz with the wheelchair view."),

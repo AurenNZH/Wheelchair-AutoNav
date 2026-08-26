@@ -98,7 +98,8 @@ class PointSupportFilterNode(Node):
         )
         self._last_success_diagnostics_s = float("-inf")
         self.get_logger().warn(
-            "%s support filter active: %s -> %s. No motion commands are published."
+            "%s support filter active: %s -> %s. No motion commands are "
+            "published."
             % (
                 self.get_parameter("sensor_label").value,
                 self.get_parameter("lidar_topic").value,
@@ -109,9 +110,19 @@ class PointSupportFilterNode(Node):
     def _declare_parameters(self) -> None:
         self.declare_parameter("sensor_label", "L2 right")
         self.declare_parameter("lidar_topic", "/lidar_right/points")
-        self.declare_parameter("filtered_cloud_topic", "/lidar_right/points_filtered")
-        self.declare_parameter("source_header_topic", "/lidar_right/filter/source_header")
-        self.declare_parameter("low_support_points_topic", "/lidar_right/low_support_points")
+        self.declare_parameter(
+            "filtered_cloud_topic", "/lidar_right/points_filtered"
+        )
+        self.declare_parameter(
+            "source_header_topic", "/lidar_right/filter/source_header"
+        )
+        self.declare_parameter(
+            "low_support_points_topic", "/lidar_right/low_support_points"
+        )
+        self.declare_parameter(
+            "diagnostic_name",
+            "wheelchair_navigation/point_support_filter/lidar_right",
+        )
         self.declare_parameter("target_frame", "base_link")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("size_m", 8.0)
@@ -319,7 +330,7 @@ class PointSupportFilterNode(Node):
                 }
             )
         status = DiagnosticStatus()
-        status.name = "wheelchair_navigation/point_support_filter/lidar_right"
+        status.name = str(self.get_parameter("diagnostic_name").value)
         status.hardware_id = str(self.get_parameter("sensor_label").value)
         status.level = level
         status.message = message

@@ -22,15 +22,24 @@ def test_stock_costmap_is_forward_base_link_grid():
     assert parameters["resolution"] == 0.1
 
 
-def test_right_l2_pipeline_has_disabled_optional_inflation_after_obstacles():
+def test_dual_l2_pipeline_has_symmetric_sources_and_optional_inflation():
     parameters = _parameters()
     obstacle = parameters["obstacle_layer"]
     right_l2 = obstacle["L2_lidar_right"]
+    left_l2 = obstacle["L2_lidar_left"]
 
     assert parameters["plugins"] == ["obstacle_layer", "inflation_layer"]
     assert obstacle["plugin"] == "nav2_costmap_2d::ObstacleLayer"
-    assert obstacle["observation_sources"] == "L2_lidar_right"
+    assert obstacle["observation_sources"] == (
+        "L2_lidar_right L2_lidar_left"
+    )
     assert right_l2["topic"] == "/nav2_obstacle_points_right"
+    assert left_l2["topic"] == "/nav2_obstacle_points_left"
+    assert {
+        key: value for key, value in right_l2.items() if key != "topic"
+    } == {
+        key: value for key, value in left_l2.items() if key != "topic"
+    }
     assert right_l2["data_type"] == "PointCloud2"
     assert right_l2["marking"] is True
     assert right_l2["clearing"] is True
@@ -46,23 +55,31 @@ def test_right_l2_pipeline_has_disabled_optional_inflation_after_obstacles():
     assert "artifact_grid_mask_cells" not in parameters
 
 
-def test_launch_filters_right_l2_support_before_nav2():
+def test_launch_filters_both_l2_sources_symmetrically_before_nav2():
     path = Path(__file__).parents[1] / "launch" / "nav2_mapping.launch.py"
     source = path.read_text()
 
     assert 'executable="point_support_filter"' in source
-    assert '"lidar_topic": "/lidar_right/points"' in source
+    assert 'support_filter_right = _support_filter("right", "right")' in source
+    assert 'support_filter_left = _support_filter("left", "left")' in source
+    assert 'topic_root = "/lidar_%s" % side' in source
+    assert '"lidar_topic": topic_root + "/points"' in source
+    assert '"filtered_cloud_topic": topic_root + "/points_filtered"' in source
+    assert '"source_header_topic": topic_root + "/filter/source_header"' in source
+    assert '"low_support_points_topic": topic_root + "/low_support_points"' in source
     assert '"/lidar_right/points_filtered"' in source
+    assert '"/lidar_left/points_filtered"' in source
     assert "L2_lidar_right=/lidar_right/points_filtered" in source
+    assert "L2_lidar_left=/lidar_left/points_filtered" in source
     assert '"min_points_per_cell"' in source
     assert 'default_value="3"' in source
-    assert '"/lidar_right/filter/source_header"' in source
+    assert '"diagnostic_name"' in source
     assert '"use_sim_time": LaunchConfiguration("use_sim_time")' in source
     assert '"validate_cloud_timestamps"' in source
     assert "/rslidar_points" not in source
 
 
-def test_rviz_defaults_to_filtered_l2_and_retains_raw_comparison():
+def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
     path = Path(__file__).parents[1] / "rviz" / "nav2_front_costmap.rviz"
     document = yaml.safe_load(path.read_text())
     displays = {
@@ -70,8 +87,12 @@ def test_rviz_defaults_to_filtered_l2_and_retains_raw_comparison():
         for display in document["Visualization Manager"]["Displays"]
     }
     raw = displays["L2 right PointCloud2 (raw)"]
+    raw_left = displays["L2 left PointCloud2 (raw)"]
     filtered = displays[
         "L2 right PointCloud2 (three-point filtered)"
+    ]
+    filtered_left = displays[
+        "L2 left PointCloud2 (three-point filtered)"
     ]
 
     assert raw["Topic"]["Value"] == "/lidar_right/points"
@@ -80,6 +101,13 @@ def test_rviz_defaults_to_filtered_l2_and_retains_raw_comparison():
     assert filtered["Topic"]["Value"] == "/lidar_right/points_filtered"
     assert filtered["Enabled"] is True
     assert filtered["Decay Time"] == 1.2
+    assert raw_left["Topic"]["Value"] == "/lidar_left/points"
+    assert raw_left["Enabled"] is False
+    assert raw_left["Decay Time"] == 1.2
+    assert filtered_left["Topic"]["Value"] == "/lidar_left/points_filtered"
+    assert filtered_left["Enabled"] is True
+    assert filtered_left["Decay Time"] == 1.2
+    assert filtered["Color"] != filtered_left["Color"]
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():

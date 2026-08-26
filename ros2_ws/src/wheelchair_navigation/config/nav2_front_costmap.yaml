@@ -26,9 +26,9 @@ costmap:
       footprint: "[[0.40, 0.35], [0.40, -0.35], [-0.40, -0.35], [-0.40, 0.35]]"
       footprint_padding: 0.0
 
-      # Keep Foxy's ObstacleLayer unmodified. The launch remaps this stable
-      # right-sensor input to a support-filtered L2 cloud. The filter uses the
-      # same 0.1 m geometry and requires three points per occupied cell.
+      # Keep Foxy's ObstacleLayer unmodified. The launch remaps these stable
+      # sensor-neutral inputs to independently support-filtered L2 clouds.
+      # Both filters use the same 0.1 m geometry and point-support threshold.
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -36,9 +36,22 @@ costmap:
         footprint_clearing_enabled: true
         max_obstacle_height: 1.5
         combination_method: 1
-        observation_sources: L2_lidar_right
+        observation_sources: L2_lidar_right L2_lidar_left
         L2_lidar_right:
           topic: /nav2_obstacle_points_right
+          sensor_frame: ""
+          data_type: PointCloud2
+          min_obstacle_height: 0.05
+          max_obstacle_height: 1.5
+          obstacle_range: 4.0
+          raytrace_range: 4.0
+          observation_persistence: 0.0
+          expected_update_rate: 0.15
+          inf_is_valid: false
+          marking: true
+          clearing: true
+        L2_lidar_left:
+          topic: /nav2_obstacle_points_left
           sensor_frame: ""
           data_type: PointCloud2
           min_obstacle_height: 0.05

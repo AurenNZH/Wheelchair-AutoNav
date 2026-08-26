@@ -37,17 +37,18 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 
 ## 2. L2 and weighted Nav2 mapping acceptance
 
-With drive power physically isolated, run the right-L2/Nav2 pipeline and inspect
-`/lidar_right/points_filtered` and `/nav2_front_costmap` in RViz. Shared control
-consumes only the robot-relative Nav2 map; raw and low-support clouds remain
-diagnostic evidence for sampling and blind side/rear coverage.
+With drive power physically isolated, run the dual-L2/Nav2 pipeline and inspect
+both filtered clouds and `/nav2_front_costmap` in RViz. Shared control consumes
+only the robot-relative Nav2 map; raw and low-support clouds remain diagnostic
+evidence for sampling and blind rear coverage. Do not enable physical
+enforcement until the supervisor validates both source heartbeats.
 
 Pass only if all of the following hold:
 
 - A measured target appears at the correct distance and size throughout the
   entire forward driving envelope, including beside both footrests.
-- Right-side obstacles remain in the observed raw map. Do not infer free space
-  in the left-side sector occluded by the chair.
+- Obstacles remain present at both lateral edges and across the sensor-overlap
+  region.
 - The L2 window and mount are clean and secure, and empty-scene chassis returns
   do not enter the Nav2 obstacle map.
 - Nearby real targets are not removed by the point-support filter.
@@ -56,9 +57,9 @@ Pass only if all of the following hold:
 - At 10 Hz over ten minutes, processing p95 is below 100 ms, processing maximum
   and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
   grows.
-- `/lidar_right/filter/source_header` advances after every successfully filtered
-  cloud, and supervisor diagnostics report `freshness_mode=nav2_live` and
-  `map_age_basis=receipt_time`.
+- Both `/lidar_<side>/filter/source_header` topics advance after every
+  successfully filtered cloud. Supervisor diagnostics currently validate only
+  the right heartbeat; extending that gate is required before enforcement.
 - Stopping the filter produces `stale_source`; stopping Nav2 while the filter
   remains live produces `stale_map`. Each transition must occur within the
   configured 0.50-second limit.

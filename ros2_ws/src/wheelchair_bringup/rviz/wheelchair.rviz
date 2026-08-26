@@ -51,6 +51,23 @@ Visualization Manager:
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: AxisColor
       Decay Time: 1.2
+      Enabled: false
+      Name: L2 left raw
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_left/points
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 0; 220; 255
+      Color Transformer: FlatColor
+      Decay Time: 1.2
       Enabled: true
       Name: L2 right support filtered
       Position Transformer: XYZ
@@ -62,6 +79,23 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /lidar_right/points_filtered
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 80; 220
+      Color Transformer: FlatColor
+      Decay Time: 1.2
+      Enabled: true
+      Name: L2 left support filtered
+      Position Transformer: XYZ
+      Size (Pixels): 3
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_left/points_filtered
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
@@ -78,6 +112,22 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /lidar_right/low_support_points
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 120; 0
+      Color Transformer: FlatColor
+      Enabled: false
+      Name: L2 left low-support points
+      Position Transformer: XYZ
+      Size (Pixels): 5
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_left/low_support_points
       Use Fixed Frame: true
     - Alpha: 0.75
       Class: rviz_default_plugins/Map

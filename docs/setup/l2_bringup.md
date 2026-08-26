@@ -1,4 +1,4 @@
-# Right Unitree L2 Bringup
+# Dual Unitree L2 Bringup
 
 The vendor SDK is pinned at `ros2_ws/src/unilidar_sdk2`. Wheelchair-specific
 network settings, frames, transforms, launch, and RViz remain in
@@ -6,25 +6,24 @@ network settings, frames, transforms, launch, and RViz remain in
 
 ## Fixed interface
 
-| Item | Value |
-|---|---|
-| L2 address | `192.168.1.62:6101` |
-| Jetson receive address | `192.168.1.2:6201` |
-| Point cloud | `/lidar_right/points` |
-| Cloud frame | `lidar_right_link` |
-| IMU | `/lidar_right/imu` |
-| IMU frame | `lidar_right_imu_link` |
+| Item | Right | Left |
+|---|---|---|
+| L2 address | `192.168.1.62:6101` | `192.168.1.63:6101` |
+| Jetson receive address | `192.168.1.2:6201` | `192.168.1.2:6202` |
+| Point cloud | `/lidar_right/points` | `/lidar_left/points` |
+| Cloud frame | `lidar_right_link` | `lidar_left_link` |
+| IMU | `/lidar_right/imu` | `/lidar_left/imu` |
+| IMU frame | `lidar_right_imu_link` | `lidar_left_imu_link` |
 
 The driver uses system timestamps, 18 scans per cloud, and a 0.45–100 m range.
 Vendor TF is isolated on `/lidar_right/vendor_tf`.
 
 By default, the launch also publishes the wheelchair URDF through
 `robot_state_publisher`. The model owns the measured
-`base_link -> lidar_right_link` transform and the symmetric, defined
-`base_link -> lidar_left_link` mount transform. Only the right L2 driver is
-started; the left frame does not imply that a left cloud is available. With
-`use_robot_model:=false`, equivalent static mount transforms are published
-instead, avoiding duplicate TF publishers.
+`base_link -> lidar_right_link` and `base_link -> lidar_left_link` transforms.
+The dual launch starts both drivers. With `use_robot_model:=false`, equivalent
+static mount transforms are published instead, avoiding duplicate TF
+publishers.
 
 ## Ethernet preflight
 
@@ -32,10 +31,12 @@ instead, avoiding duplicate TF publishers.
 ip -brief address show eth0
 sudo ip address add 192.168.1.2/24 dev eth0
 ping -c 3 192.168.1.62
+ping -c 3 192.168.1.63
 ss -lunp | rg ':6201\b' || true
+ss -lunp | rg ':6202\b' || true
 ```
 
-Do not add the address twice. Port 6201 must be free before launching.
+Do not add the address twice. Ports 6201 and 6202 must be free before launching.
 
 ## Build, launch, and verify
 
@@ -45,7 +46,7 @@ cd ros2_ws
 colcon build --symlink-install \
   --packages-select unitree_lidar_ros2 wheelchair_bringup
 source install/setup.bash
-ros2 launch wheelchair_bringup l2_right.launch.py use_rviz:=true
+ros2 launch wheelchair_bringup dual_l2.launch.py use_rviz:=true
 ```
 
 The default RViz profile displays the wheelchair model. To troubleshoot the
@@ -57,11 +58,16 @@ In another terminal:
 ros2 topic info /lidar_right/points --verbose
 ros2 topic hz /lidar_right/points
 timeout 3 ros2 topic echo /lidar_right/points sensor_msgs/msg/PointCloud2 --no-arr
+ros2 topic info /lidar_left/points --verbose
+ros2 topic hz /lidar_left/points
+timeout 3 ros2 topic echo /lidar_left/points sensor_msgs/msg/PointCloud2 --no-arr
 ```
 
-Passing means the rate remains nonzero, timestamps advance, the TF tree has one
-parent for `lidar_right_link`, and moving a target moves the corresponding
-points. Leave the sensor running for at least ten minutes before mapping tests.
+Passing means both rates remain nonzero, timestamps advance, the TF tree has
+one parent per lidar link, and moving a target moves the corresponding points.
+The standalone `l2_right.launch.py` and `l2_left.launch.py` launches remain
+available for isolation tests. Leave both sensors running for at least ten
+minutes before mapping tests.
 
 ## One-time left-L2 MAC configuration
 

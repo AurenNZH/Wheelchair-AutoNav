@@ -10,6 +10,48 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
+def _support_filter(side, label):
+    topic_root = "/lidar_%s" % side
+    return Node(
+        package="wheelchair_navigation",
+        executable="point_support_filter",
+        name="l2_lidar_%s_support_filter" % side,
+        output="screen",
+        parameters=[
+            {
+                "sensor_label": "Unitree L2 %s" % label,
+                "lidar_topic": topic_root + "/points",
+                "filtered_cloud_topic": topic_root + "/points_filtered",
+                "source_header_topic": topic_root + "/filter/source_header",
+                "low_support_points_topic": topic_root + "/low_support_points",
+                "diagnostic_name": (
+                    "wheelchair_navigation/point_support_filter/lidar_%s"
+                    % side
+                ),
+                "target_frame": "base_link",
+                "size_m": 8.0,
+                "resolution_m": 0.1,
+                "min_height_m": 0.05,
+                "max_height_m": 1.5,
+                "min_range_m": 0.45,
+                "max_range_m": 4.0,
+                "front_length_m": 4.0,
+                "front_width_m": 8.0,
+                "front_resolution_m": 0.1,
+                "front_fov_deg": 180.0,
+                "min_points_per_cell": ParameterValue(
+                    LaunchConfiguration("support_min_points_per_cell"),
+                    value_type=int,
+                ),
+                "validate_cloud_timestamps": LaunchConfiguration(
+                    "validate_cloud_timestamps"
+                ),
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+            }
+        ],
+    )
+
+
 def generate_launch_description():
     package_share = get_package_share_directory("wheelchair_navigation")
     parameters = os.path.join(
@@ -35,40 +77,8 @@ def generate_launch_description():
         convert_types=True,
     )
 
-    support_filter = Node(
-        package="wheelchair_navigation",
-        executable="point_support_filter",
-        name="l2_lidar_right_support_filter",
-        output="screen",
-        parameters=[
-            {
-                "sensor_label": "Unitree L2 right",
-                "lidar_topic": "/lidar_right/points",
-                "filtered_cloud_topic": "/lidar_right/points_filtered",
-                "source_header_topic": "/lidar_right/filter/source_header",
-                "low_support_points_topic": "/lidar_right/low_support_points",
-                "target_frame": "base_link",
-                "size_m": 8.0,
-                "resolution_m": 0.1,
-                "min_height_m": 0.05,
-                "max_height_m": 1.5,
-                "min_range_m": 0.45,
-                "max_range_m": 4.0,
-                "front_length_m": 4.0,
-                "front_width_m": 8.0,
-                "front_resolution_m": 0.1,
-                "front_fov_deg": 180.0,
-                "min_points_per_cell": ParameterValue(
-                    LaunchConfiguration("support_min_points_per_cell"),
-                    value_type=int,
-                ),
-                "validate_cloud_timestamps": LaunchConfiguration(
-                    "validate_cloud_timestamps"
-                ),
-                "use_sim_time": LaunchConfiguration("use_sim_time"),
-            }
-        ],
-    )
+    support_filter_right = _support_filter("right", "right")
+    support_filter_left = _support_filter("left", "left")
 
     costmap = Node(
         package="nav2_costmap_2d",
@@ -81,6 +91,10 @@ def generate_launch_description():
             (
                 "/nav2_obstacle_points_right",
                 "/lidar_right/points_filtered",
+            ),
+            (
+                "/nav2_obstacle_points_left",
+                "/lidar_left/points_filtered",
             ),
             ("costmap", "/nav2_front_costmap"),
             ("costmap_raw", "/nav2_front_costmap_raw"),
@@ -135,7 +149,8 @@ def generate_launch_description():
             LogInfo(
                 msg=[
                     "Stock Foxy Nav2 observation only: "
-                    "L2_lidar_right=/lidar_right/points_filtered",
+                    "L2_lidar_right=/lidar_right/points_filtered, ",
+                    "L2_lidar_left=/lidar_left/points_filtered",
                     " (support points/cell=",
                     LaunchConfiguration("support_min_points_per_cell"),
                     ")",
@@ -149,7 +164,8 @@ def generate_launch_description():
                     "physical command process is launched.",
                 ]
             ),
-            support_filter,
+            support_filter_right,
+            support_filter_left,
             costmap,
             lifecycle_manager,
             rviz,

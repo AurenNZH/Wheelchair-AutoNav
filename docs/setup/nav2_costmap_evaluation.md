@@ -1,7 +1,8 @@
 # Nav2 Costmap Evaluation
 
-The production mapping path uses the right Unitree L2, a three-point support
-filter, and Foxy's unmodified Nav2 `ObstacleLayer`. It publishes
+The production mapping path uses both Unitree L2 sensors, one identical
+three-point support filter per sensor, and Foxy's unmodified Nav2
+`ObstacleLayer` with two observation sources. It publishes
 `/nav2_front_costmap` and never commands motion.
 
 ## Launch
@@ -24,6 +25,9 @@ ros2 topic info /lidar_right/points --verbose
 ros2 topic hz /lidar_right/points
 ros2 topic hz /lidar_right/points_filtered
 ros2 topic hz /lidar_right/filter/source_header
+ros2 topic hz /lidar_left/points
+ros2 topic hz /lidar_left/points_filtered
+ros2 topic hz /lidar_left/filter/source_header
 ros2 topic hz /nav2_front_costmap
 ros2 run wheelchair_navigation nav2_costmap_monitor
 ```
@@ -35,7 +39,8 @@ filtered cloud and heartbeat. Stopping Nav2 must stop the map while leaving the
 filter streams alive.
 
 Validate measured obstacle distances, thin poles, low blocks, empty scenes,
-doorways, and each edge of the supported forward/right envelope. The right-only
-system must not depict unobserved left, rear, step, curb, or drop-off regions as
-safe. Record the exact launch arguments and sensor mounting state with every
-acceptance run.
+doorways, the overlap region, and each lateral edge of the supported forward
+envelope. Test right-only, left-only, and dual-source behavior before accepting
+the combined map. The system must not depict unobserved rear, step, curb, or
+drop-off regions as safe. Record the exact launch arguments and sensor mounting
+state with every acceptance run.

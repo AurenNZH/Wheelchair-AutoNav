@@ -22,7 +22,7 @@ default and must be selected explicitly for this test.
 
 ## 1. Jetson LiDAR and Nav2 mapping
 
-Start the right L2, measured transform, support filter, Nav2 map, and RViz:
+Start both L2s, measured transforms, support filters, Nav2 map, and RViz:
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
@@ -35,7 +35,10 @@ ros2 launch wheelchair_bringup wheelchair.launch.py \
 ```
 
 Confirm RViz shows a current, credible `/nav2_front_costmap` before
-continuing.
+continuing. This dual-source mapping change does not yet make physical
+enforcement acceptable: the supervisor still monitors only the right filter's
+source heartbeat. Revalidate dual-source freshness before using this procedure
+for motion.
 
 ## 2. Jetson supervisor and UDP bridge
 
