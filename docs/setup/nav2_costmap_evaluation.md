@@ -18,6 +18,10 @@ For a filter comparison, set `support_min_points_per_cell:=1` in a separate
 navigation-only launch. For weighted safety-policy evaluation, explicitly set
 `use_inflation:=true`; inflation remains disabled by default.
 
+The independently calibrated L2 hard boxes and fifteen-point halos are enabled
+by default. Isolate either rule with `use_right_artifact_filter:=false` or
+`use_left_artifact_filter:=false` while leaving the global support rule active.
+
 ## Interface checks
 
 ```bash
@@ -31,6 +35,10 @@ ros2 topic hz /lidar_left/filter/source_header
 ros2 topic hz /nav2_front_costmap
 ros2 run wheelchair_navigation nav2_costmap_monitor
 ```
+
+RViz exposes each static hard box and halo. The optional rejected-point topics
+are `/lidar_<side>/artifact_rejected_points`; enable them only while diagnosing
+or calibrating to avoid unnecessary debug-cloud construction.
 
 The raw and filtered clouds must advance at comparable rates, the heartbeat
 must follow successful filtered publication, and the Nav2 map must remain

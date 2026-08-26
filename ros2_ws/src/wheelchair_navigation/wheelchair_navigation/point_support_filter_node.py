@@ -18,7 +18,14 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformException, TransformListener
+from visualization_msgs.msg import MarkerArray
 
+from wheelchair_navigation.artifact_filter import (
+    artifact_halo_cell_ids,
+    parse_artifact_box,
+    points_in_artifact_box,
+)
+from wheelchair_navigation.artifact_markers import build_artifact_markers
 from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     LocalCostmapConfig,
@@ -46,10 +53,13 @@ class PointSupportFilterNode(Node):
         super().__init__("point_support_filter")
         self._declare_parameters()
         self._configuration_error = None
+        self._artifact_box = None
+        self._artifact_halo_cell_ids = np.empty(0, dtype=np.int64)
         try:
             self._map_config = self._load_map_config()
             self._front_config = self._load_front_config()
             validate_mapping_configs(self._map_config, self._front_config)
+            self._load_artifact_configuration()
             if float(self.get_parameter("diagnostics_period_s").value) <= 0.0:
                 raise ValueError("diagnostics_period_s must be positive")
         except (TypeError, ValueError) as exc:
@@ -63,6 +73,12 @@ class PointSupportFilterNode(Node):
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
+        )
+        marker_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         self._filtered_pub = self.create_publisher(
             PointCloud2,
@@ -78,6 +94,16 @@ class PointSupportFilterNode(Node):
             PointCloud2,
             str(self.get_parameter("low_support_points_topic").value),
             sensor_qos,
+        )
+        self._artifact_rejected_pub = self.create_publisher(
+            PointCloud2,
+            str(self.get_parameter("artifact_rejected_points_topic").value),
+            sensor_qos,
+        )
+        self._artifact_markers_pub = self.create_publisher(
+            MarkerArray,
+            str(self.get_parameter("artifact_markers_topic").value),
+            marker_qos,
         )
         self._diagnostics_pub = self.create_publisher(
             DiagnosticArray,
@@ -97,13 +123,15 @@ class PointSupportFilterNode(Node):
             int(self.get_parameter("latency_window_samples").value)
         )
         self._last_success_diagnostics_s = float("-inf")
+        self._publish_artifact_markers()
         self.get_logger().warn(
-            "%s support filter active: %s -> %s. No motion commands are "
-            "published."
+            "%s support filter active: %s -> %s; artifact_rule=%s. "
+            "No motion commands are published."
             % (
                 self.get_parameter("sensor_label").value,
                 self.get_parameter("lidar_topic").value,
                 self.get_parameter("filtered_cloud_topic").value,
+                self.get_parameter("artifact_filter_enabled").value,
             )
         )
 
@@ -118,6 +146,13 @@ class PointSupportFilterNode(Node):
         )
         self.declare_parameter(
             "low_support_points_topic", "/lidar_right/low_support_points"
+        )
+        self.declare_parameter(
+            "artifact_rejected_points_topic",
+            "/lidar_right/artifact_rejected_points",
+        )
+        self.declare_parameter(
+            "artifact_markers_topic", "/lidar_right/artifact_filter/markers"
         )
         self.declare_parameter(
             "diagnostic_name",
@@ -136,6 +171,12 @@ class PointSupportFilterNode(Node):
         self.declare_parameter("front_resolution_m", 0.1)
         self.declare_parameter("front_fov_deg", 180.0)
         self.declare_parameter("min_points_per_cell", 3)
+        self.declare_parameter("artifact_filter_enabled", False)
+        self.declare_parameter("artifact_filter_frame", "base_link")
+        self.declare_parameter("artifact_box", [])
+        self.declare_parameter("artifact_halo_margin_m", 0.10)
+        self.declare_parameter("artifact_halo_min_points_per_cell", 15)
+        self.declare_parameter("artifact_marker_namespace", "lidar_right")
         self.declare_parameter("max_cloud_age_s", 1.0)
         self.declare_parameter("max_future_offset_s", 0.1)
         self.declare_parameter("validate_cloud_timestamps", True)
@@ -161,6 +202,47 @@ class PointSupportFilterNode(Node):
             width_m=float(self.get_parameter("front_width_m").value),
             resolution_m=float(self.get_parameter("front_resolution_m").value),
             fov_deg=float(self.get_parameter("front_fov_deg").value),
+        )
+
+    def _load_artifact_configuration(self) -> None:
+        if not bool(self.get_parameter("artifact_filter_enabled").value):
+            return
+        target_frame = str(self.get_parameter("target_frame").value)
+        filter_frame = str(self.get_parameter("artifact_filter_frame").value)
+        if not filter_frame or filter_frame != target_frame:
+            raise ValueError(
+                "artifact filter frame must match target_frame '%s'"
+                % target_frame
+            )
+        self._artifact_box = parse_artifact_box(
+            self.get_parameter("artifact_box").value
+        )
+        self._artifact_halo_cell_ids = artifact_halo_cell_ids(
+            self._artifact_box,
+            self._front_config,
+            float(self.get_parameter("artifact_halo_margin_m").value),
+        )
+        halo_minimum = self.get_parameter(
+            "artifact_halo_min_points_per_cell"
+        ).value
+        if isinstance(halo_minimum, bool) or int(halo_minimum) != halo_minimum:
+            raise ValueError("artifact halo threshold must be an integer")
+        if int(halo_minimum) < 1:
+            raise ValueError("artifact halo threshold must be at least one")
+
+    def _publish_artifact_markers(self) -> None:
+        if self._artifact_box is None or self._configuration_error is not None:
+            return
+        header = Header()
+        header.stamp = self.get_clock().now().to_msg()
+        header.frame_id = str(self.get_parameter("artifact_filter_frame").value)
+        self._artifact_markers_pub.publish(
+            build_artifact_markers(
+                header,
+                self._artifact_box,
+                float(self.get_parameter("artifact_halo_margin_m").value),
+                str(self.get_parameter("artifact_marker_namespace").value),
+            )
         )
 
     def _on_cloud(self, msg: PointCloud2) -> None:
@@ -226,11 +308,21 @@ class PointSupportFilterNode(Node):
         try:
             stage_started = time.perf_counter()
             eligible, _ = obstacle_point_mask(points_base, self._map_config)
+            artifact_rejected = (
+                points_in_artifact_box(points_base, self._artifact_box)
+                if self._artifact_box is not None
+                else np.zeros(points_base.shape[0], dtype=bool)
+            )
             result = filter_points_by_cell_support(
                 points_base,
                 eligible,
                 self._front_config,
                 min_points_per_cell=self.get_parameter("min_points_per_cell").value,
+                hard_rejected_mask=artifact_rejected,
+                halo_cell_ids=self._artifact_halo_cell_ids,
+                halo_min_points_per_cell=self.get_parameter(
+                    "artifact_halo_min_points_per_cell"
+                ).value,
             )
             stage_ms["filter_ms"] = (time.perf_counter() - stage_started) * 1000.0
             stage_started = time.perf_counter()
@@ -250,6 +342,12 @@ class PointSupportFilterNode(Node):
         if self._low_support_pub.get_subscription_count() > 0:
             self._low_support_pub.publish(
                 xyz_to_point_cloud(cloud.xyz[result.low_support_mask], msg.header)
+            )
+        if self._artifact_rejected_pub.get_subscription_count() > 0:
+            self._artifact_rejected_pub.publish(
+                xyz_to_point_cloud(
+                    cloud.xyz[result.hard_rejected_mask], msg.header
+                )
             )
         stage_ms["publish_ms"] = (time.perf_counter() - stage_started) * 1000.0
         self._published_clouds += 1
@@ -327,6 +425,37 @@ class PointSupportFilterNode(Node):
                     "occupied_cells": result.stats.occupied_cells,
                     "low_support_cells": result.stats.low_support_cells,
                     "low_support_points": result.stats.low_support_points,
+                    "hard_rejected_points": result.stats.hard_rejected_points,
+                    "global_low_support_cells": (
+                        result.stats.global_low_support_cells
+                    ),
+                    "halo_candidate_cells": result.stats.halo_candidate_cells,
+                    "halo_low_support_cells": (
+                        result.stats.halo_low_support_cells
+                    ),
+                    "halo_low_support_points": (
+                        result.stats.halo_low_support_points
+                    ),
+                    "artifact_filter_enabled": self._artifact_box is not None,
+                    "artifact_box": (
+                        "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f"
+                        % (
+                            self._artifact_box.min_x_m,
+                            self._artifact_box.max_x_m,
+                            self._artifact_box.min_y_m,
+                            self._artifact_box.max_y_m,
+                            self._artifact_box.min_z_m,
+                            self._artifact_box.max_z_m,
+                        )
+                        if self._artifact_box is not None
+                        else "disabled"
+                    ),
+                    "artifact_halo_margin_m": self.get_parameter(
+                        "artifact_halo_margin_m"
+                    ).value,
+                    "artifact_halo_min_points_per_cell": self.get_parameter(
+                        "artifact_halo_min_points_per_cell"
+                    ).value,
                 }
             )
         status = DiagnosticStatus()

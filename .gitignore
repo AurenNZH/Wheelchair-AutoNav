@@ -34,6 +34,7 @@ ros2_ws/log/
 *.weights
 *.mp4
 *.avi
+dual_l2_artifact_empty_*/
 
 # OS/editor files
 .DS_Store

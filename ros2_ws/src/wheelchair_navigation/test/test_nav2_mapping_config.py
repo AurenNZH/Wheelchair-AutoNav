@@ -60,13 +60,21 @@ def test_launch_filters_both_l2_sources_symmetrically_before_nav2():
     source = path.read_text()
 
     assert 'executable="point_support_filter"' in source
-    assert 'support_filter_right = _support_filter("right", "right")' in source
-    assert 'support_filter_left = _support_filter("left", "left")' in source
+    assert 'support_filter_right = _support_filter(' in source
+    assert '"right", "right", artifact_config' in source
+    assert (
+        'support_filter_left = _support_filter("left", "left", artifact_config)'
+        in source
+    )
     assert 'topic_root = "/lidar_%s" % side' in source
     assert '"lidar_topic": topic_root + "/points"' in source
     assert '"filtered_cloud_topic": topic_root + "/points_filtered"' in source
     assert '"source_header_topic": topic_root + "/filter/source_header"' in source
     assert '"low_support_points_topic": topic_root + "/low_support_points"' in source
+    assert '"artifact_rejected_points_topic"' in source
+    assert '"artifact_markers_topic"' in source
+    assert '"use_%s_artifact_filter" % side' in source
+    assert '"l2_artifact_filters.yaml"' in source
     assert '"/lidar_right/points_filtered"' in source
     assert '"/lidar_left/points_filtered"' in source
     assert "L2_lidar_right=/lidar_right/points_filtered" in source
@@ -77,6 +85,26 @@ def test_launch_filters_both_l2_sources_symmetrically_before_nav2():
     assert '"use_sim_time": LaunchConfiguration("use_sim_time")' in source
     assert '"validate_cloud_timestamps"' in source
     assert "/rslidar_points" not in source
+
+
+def test_l2_artifact_rules_are_independent_and_active_by_default():
+    root = Path(__file__).parents[1]
+    document = yaml.safe_load(
+        (root / "config" / "l2_artifact_filters.yaml").read_text()
+    )
+    right = document["l2_lidar_right_support_filter"]["ros__parameters"]
+    left = document["l2_lidar_left_support_filter"]["ros__parameters"]
+    launch = (root / "launch" / "nav2_mapping.launch.py").read_text()
+
+    assert right["artifact_filter_frame"] == "base_link"
+    assert left["artifact_filter_frame"] == "base_link"
+    assert right["artifact_box"] != left["artifact_box"]
+    assert right["artifact_halo_margin_m"] == 0.10
+    assert left["artifact_halo_margin_m"] == 0.10
+    assert right["artifact_halo_min_points_per_cell"] == 15
+    assert left["artifact_halo_min_points_per_cell"] == 15
+    assert '"use_right_artifact_filter",\n                default_value="true"' in launch
+    assert '"use_left_artifact_filter",\n                default_value="true"' in launch
 
 
 def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
@@ -108,6 +136,10 @@ def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
     assert filtered_left["Enabled"] is True
     assert filtered_left["Decay Time"] == 1.2
     assert filtered["Color"] != filtered_left["Color"]
+    assert displays["L2 right artifact box and halo"]["Enabled"] is True
+    assert displays["L2 left artifact box and halo"]["Enabled"] is True
+    assert displays["L2 right hard-rejected artifacts"]["Enabled"] is False
+    assert displays["L2 left hard-rejected artifacts"]["Enabled"] is False
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():

@@ -129,6 +129,58 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /lidar_left/low_support_points
       Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 40; 40
+      Color Transformer: FlatColor
+      Decay Time: 1.2
+      Enabled: false
+      Name: L2 right hard-rejected artifacts
+      Position Transformer: XYZ
+      Size (Pixels): 5
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_right/artifact_rejected_points
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 80; 80
+      Color Transformer: FlatColor
+      Decay Time: 1.2
+      Enabled: false
+      Name: L2 left hard-rejected artifacts
+      Position Transformer: XYZ
+      Size (Pixels): 5
+      Style: Points
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_left/artifact_rejected_points
+      Use Fixed Frame: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: L2 right artifact box and halo
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_right/artifact_filter/markers
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: L2 left artifact box and halo
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /lidar_left/artifact_filter/markers
     - Alpha: 0.75
       Class: rviz_default_plugins/Map
       Color Scheme: costmap

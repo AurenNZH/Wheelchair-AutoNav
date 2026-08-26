@@ -8,6 +8,8 @@ LAUNCH_DEFAULTS = {
     "use_rviz": "false",
     "use_sim_time": "false",
     "support_min_points_per_cell": "3",
+    "use_right_artifact_filter": "true",
+    "use_left_artifact_filter": "true",
     "use_inflation": "false",
     "inflation_radius": "0.55",
     "cost_scaling_factor": "3.0",

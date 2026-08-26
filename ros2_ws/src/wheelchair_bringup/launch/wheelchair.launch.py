@@ -52,6 +52,14 @@ def generate_launch_description():
             "support_min_points_per_cell",
             "Minimum L2 points required in each 0.1 m obstacle cell.",
         ),
+        _argument(
+            "use_right_artifact_filter",
+            "Apply the calibrated right-L2 hard box and support halo.",
+        ),
+        _argument(
+            "use_left_artifact_filter",
+            "Apply the calibrated left-L2 hard box and support halo.",
+        ),
         _argument("use_inflation", "Enable weighted Nav2 inflation costs."),
         _argument("inflation_radius", "Nav2 inflation radius in metres."),
         _argument("cost_scaling_factor", "Nav2 inflation cost scaling factor."),
@@ -154,6 +162,12 @@ def generate_launch_description():
                     "use_rviz": "false",
                     "support_min_points_per_cell": LaunchConfiguration(
                         "support_min_points_per_cell"
+                    ),
+                    "use_right_artifact_filter": LaunchConfiguration(
+                        "use_right_artifact_filter"
+                    ),
+                    "use_left_artifact_filter": LaunchConfiguration(
+                        "use_left_artifact_filter"
                     ),
                     "use_inflation": LaunchConfiguration("use_inflation"),
                     "inflation_radius": LaunchConfiguration(

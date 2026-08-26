@@ -10,7 +10,7 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
 
-def _support_filter(side, label):
+def _support_filter(side, label, artifact_config):
     topic_root = "/lidar_%s" % side
     return Node(
         package="wheelchair_navigation",
@@ -18,12 +18,20 @@ def _support_filter(side, label):
         name="l2_lidar_%s_support_filter" % side,
         output="screen",
         parameters=[
+            artifact_config,
             {
                 "sensor_label": "Unitree L2 %s" % label,
                 "lidar_topic": topic_root + "/points",
                 "filtered_cloud_topic": topic_root + "/points_filtered",
                 "source_header_topic": topic_root + "/filter/source_header",
                 "low_support_points_topic": topic_root + "/low_support_points",
+                "artifact_rejected_points_topic": (
+                    topic_root + "/artifact_rejected_points"
+                ),
+                "artifact_markers_topic": (
+                    topic_root + "/artifact_filter/markers"
+                ),
+                "artifact_marker_namespace": "lidar_%s" % side,
                 "diagnostic_name": (
                     "wheelchair_navigation/point_support_filter/lidar_%s"
                     % side
@@ -43,6 +51,10 @@ def _support_filter(side, label):
                     LaunchConfiguration("support_min_points_per_cell"),
                     value_type=int,
                 ),
+                "artifact_filter_enabled": ParameterValue(
+                    LaunchConfiguration("use_%s_artifact_filter" % side),
+                    value_type=bool,
+                ),
                 "validate_cloud_timestamps": LaunchConfiguration(
                     "validate_cloud_timestamps"
                 ),
@@ -59,6 +71,9 @@ def generate_launch_description():
     )
     rviz_config = os.path.join(
         package_share, "rviz", "nav2_front_costmap.rviz"
+    )
+    artifact_config = os.path.join(
+        package_share, "config", "l2_artifact_filters.yaml"
     )
     configured_parameters = RewrittenYaml(
         source_file=parameters,
@@ -77,8 +92,10 @@ def generate_launch_description():
         convert_types=True,
     )
 
-    support_filter_right = _support_filter("right", "right")
-    support_filter_left = _support_filter("left", "left")
+    support_filter_right = _support_filter(
+        "right", "right", artifact_config
+    )
+    support_filter_left = _support_filter("left", "left", artifact_config)
 
     costmap = Node(
         package="nav2_costmap_2d",
@@ -141,6 +158,16 @@ def generate_launch_description():
                     "a support-filter pass-through comparison"
                 ),
             ),
+            DeclareLaunchArgument(
+                "use_right_artifact_filter",
+                default_value="true",
+                description="Apply the calibrated right-L2 box and halo",
+            ),
+            DeclareLaunchArgument(
+                "use_left_artifact_filter",
+                default_value="true",
+                description="Apply the calibrated left-L2 box and halo",
+            ),
             DeclareLaunchArgument("use_inflation", default_value="false"),
             DeclareLaunchArgument("inflation_radius", default_value="0.55"),
             DeclareLaunchArgument(
@@ -154,6 +181,10 @@ def generate_launch_description():
                     " (support points/cell=",
                     LaunchConfiguration("support_min_points_per_cell"),
                     ")",
+                    "; artifact filters right=",
+                    LaunchConfiguration("use_right_artifact_filter"),
+                    " left=",
+                    LaunchConfiguration("use_left_artifact_filter"),
                     "; inflation=",
                     LaunchConfiguration("use_inflation"),
                     " (radius=",

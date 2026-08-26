@@ -76,6 +76,44 @@ class PointSupportTests(unittest.TestCase):
                 min_points_per_cell=3,
             )
 
+    def test_hard_mask_precedes_global_and_halo_support_counts(self):
+        hard_cell = np.array(
+            [[0.05, 0.05, 0.2], [0.06, 0.05, 0.2], [0.07, 0.05, 0.2]]
+        )
+        halo_cell = np.array(
+            [
+                [0.15, 0.05, 0.2],
+                [0.16, 0.05, 0.2],
+                [0.17, 0.05, 0.2],
+                [0.18, 0.05, 0.2],
+            ]
+        )
+        clear_cell = np.array(
+            [[0.35, 0.05, 0.2], [0.36, 0.05, 0.2], [0.37, 0.05, 0.2]]
+        )
+        points = np.vstack((hard_cell, halo_cell, clear_cell)).astype(np.float32)
+        hard_rejected = np.zeros(points.shape[0], dtype=bool)
+        hard_rejected[0] = True
+
+        result = filter_points_by_cell_support(
+            points,
+            np.ones(points.shape[0], dtype=bool),
+            self.config,
+            min_points_per_cell=3,
+            hard_rejected_mask=hard_rejected,
+            halo_cell_ids=np.array([51]),
+            halo_min_points_per_cell=15,
+        )
+
+        np.testing.assert_array_equal(
+            result.keep_mask,
+            [False, False, False, False, False, False, False, True, True, True],
+        )
+        self.assertEqual(result.stats.hard_rejected_points, 1)
+        self.assertEqual(result.stats.global_low_support_cells, 1)
+        self.assertEqual(result.stats.halo_low_support_cells, 1)
+        self.assertEqual(result.stats.halo_low_support_points, 4)
+
 
 if __name__ == "__main__":
     unittest.main()
