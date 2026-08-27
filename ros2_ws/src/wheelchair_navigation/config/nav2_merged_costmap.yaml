@@ -3,16 +3,16 @@ costmap:
     ros__parameters:
       use_sim_time: false
 
-      # Stock Foxy Costmap2D evaluation. This is a robot-relative obstacle
-      # view, not a persistent world map: no physical odometry is available.
+      # Stock Foxy Costmap2D evaluation. This is a merged, robot-relative
+      # obstacle view, not a persistent world map: no odometry is required.
       global_frame: base_link
       robot_base_frame: base_link
       rolling_window: false
       # Foxy declares these two parameters as integers.
-      width: 4
+      width: 5
       height: 8
       resolution: 0.1
-      origin_x: 0.0
+      origin_x: -0.6
       origin_y: -4.0
       track_unknown_space: false
       transform_tolerance: 0.1

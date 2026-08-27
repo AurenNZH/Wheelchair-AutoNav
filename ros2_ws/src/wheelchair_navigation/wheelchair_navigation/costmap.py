@@ -18,11 +18,14 @@ class LocalCostmapConfig:
 
 
 @dataclass(frozen=True)
-class FrontCostmapConfig:
-    length_m: float = 4.0
-    width_m: float = 8.0
+class SupportGridConfig:
+    """Robot-relative grid used for point-support counting."""
+
+    origin_x_m: float = -0.6
+    origin_y_m: float = -4.0
+    width_m: float = 5.0
+    height_m: float = 8.0
     resolution_m: float = 0.1
-    fov_deg: float = 180.0
 
 
 def obstacle_point_mask(
@@ -69,30 +72,30 @@ def minimum_range_rejection_mask(
         return finite & (ranges < minimum)
 
 
-def front_point_cell_ids(
+def point_cell_ids(
     points_base: np.ndarray,
-    config: FrontCostmapConfig,
+    config: SupportGridConfig,
 ) -> tuple[np.ndarray, np.ndarray, int]:
-    """Return front-grid validity, flat cell IDs, and total cell count."""
+    """Return merged-grid validity, flat cell IDs, and total cell count."""
 
-    _validate_front_config(config)
+    _validate_support_grid_config(config)
     points = _points_array(points_base)
-    width = int(np.ceil(config.length_m / config.resolution_m))
-    height = int(np.ceil(config.width_m / config.resolution_m))
-    origin_y_m = -(height * config.resolution_m) / 2.0
+    width = int(np.ceil(config.width_m / config.resolution_m))
+    height = int(np.ceil(config.height_m / config.resolution_m))
     finite_xy = np.isfinite(points[:, :2]).all(axis=1)
     cols = np.full(points.shape[0], -1, dtype=np.int32)
     rows = np.full(points.shape[0], -1, dtype=np.int32)
     finite_indices = np.flatnonzero(finite_xy)
     cols[finite_indices] = np.floor(
-        points[finite_indices, 0] / config.resolution_m
+        (points[finite_indices, 0] - config.origin_x_m)
+        / config.resolution_m
     ).astype(np.int32)
     rows[finite_indices] = np.floor(
-        (points[finite_indices, 1] - origin_y_m) / config.resolution_m
+        (points[finite_indices, 1] - config.origin_y_m)
+        / config.resolution_m
     ).astype(np.int32)
     valid = (
         finite_xy
-        & points_in_front_fov(points, config.fov_deg)
         & (cols >= 0)
         & (cols < width)
         & (rows >= 0)
@@ -101,24 +104,12 @@ def front_point_cell_ids(
     return valid, rows.astype(np.int64) * width + cols.astype(np.int64), width * height
 
 
-def points_in_front_fov(points: np.ndarray, fov_deg: float) -> np.ndarray:
-    """Return points inside a base-link-centred forward angular sector."""
-
-    points = _points_array(points)
-    if not points.size:
-        return np.zeros(points.shape[0], dtype=bool)
-    half_fov_rad = np.deg2rad(fov_deg / 2.0)
-    angles = np.arctan2(points[:, 1], points[:, 0])
-    with np.errstate(invalid="ignore"):
-        return np.abs(angles) <= half_fov_rad + 1e-7
-
-
 def validate_mapping_configs(
     config: LocalCostmapConfig,
-    front_config: FrontCostmapConfig,
+    support_grid_config: SupportGridConfig,
 ) -> None:
     _validate_config(config)
-    _validate_front_config(front_config)
+    _validate_support_grid_config(support_grid_config)
 
 
 def _points_array(points: np.ndarray) -> np.ndarray:
@@ -152,27 +143,30 @@ def _validate_config(config: LocalCostmapConfig) -> None:
         raise ValueError("invalid range limits")
 
 
-def _validate_front_config(config: FrontCostmapConfig) -> None:
+def _validate_support_grid_config(config: SupportGridConfig) -> None:
     geometry = np.asarray(
-        [config.length_m, config.width_m, config.resolution_m, config.fov_deg],
+        [
+            config.origin_x_m,
+            config.origin_y_m,
+            config.width_m,
+            config.height_m,
+            config.resolution_m,
+        ],
         dtype=np.float64,
     )
     if not np.isfinite(geometry).all():
-        raise ValueError("front-grid geometry must be finite")
-    if config.length_m <= 0.0 or config.width_m <= 0.0:
-        raise ValueError("front map dimensions must be positive")
+        raise ValueError("support-grid geometry must be finite")
+    if config.width_m <= 0.0 or config.height_m <= 0.0:
+        raise ValueError("support-grid dimensions must be positive")
     if config.resolution_m <= 0.0:
-        raise ValueError("front map resolution must be positive")
-    if config.fov_deg <= 0.0 or config.fov_deg > 180.0:
-        raise ValueError("front FOV must be in (0, 180] degrees")
+        raise ValueError("support-grid resolution must be positive")
 
 
 __all__ = [
-    "FrontCostmapConfig",
     "LocalCostmapConfig",
-    "front_point_cell_ids",
+    "SupportGridConfig",
     "minimum_range_rejection_mask",
     "obstacle_point_mask",
-    "points_in_front_fov",
+    "point_cell_ids",
     "validate_mapping_configs",
 ]

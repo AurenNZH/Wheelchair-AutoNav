@@ -6,7 +6,7 @@ right + left Unitree L2 PointCloud2 streams
 wheelchair_navigation
   independent point-support filters
   stock Nav2 ObstacleLayer with two observation sources
-  /nav2_front_costmap
+  /nav2_merged_costmap
         |
 wheelchair_shared_control + OperatorIntent
         |
@@ -34,4 +34,5 @@ sequence, peer, session, or heartbeat data is invalid or stale. The current
 supervisor source-freshness heartbeat remains right-only pending a separate
 dual-source physical-safety validation. Rear obstacle avoidance, drop-offs,
 steps, curbs, and hazards below the observed height remain outside the accepted
-scope.
+scope. The merged map extends 0.6 m behind `base_link`, but reverse and hard-turn
+obstacle intervention remain outside the current motion policy.

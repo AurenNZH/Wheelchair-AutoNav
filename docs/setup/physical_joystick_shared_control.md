@@ -3,7 +3,7 @@
 This procedure feeds the measured slot-2 physical JSM into the Jetson safety
 supervisor. Forward motion and reverse motion inside symmetric 30-degree cones
 are supported. Forward CLEAR is capped at 90 raw counts and SLOW at 60.
-Reverse is deliberately unmonitored by the front costmap and is always capped
+Reverse is deliberately unmonitored by the supervisor and is always capped
 at SLOW 65 with reason `reverse_unmonitored_slow`. Correction X scales with
 the permitted Y magnitude so the input direction is preserved. Hard turns
 stop locally and remain latched until both joystick axes return to neutral.
@@ -49,7 +49,7 @@ ros2 launch wheelchair_bringup wheelchair.launch.py \
   use_inflation:=true
 ```
 
-Confirm RViz shows a current, credible `/nav2_front_costmap` before
+Confirm RViz shows a current, credible `/nav2_merged_costmap` before
 continuing. This dual-source mapping change does not yet make physical
 enforcement acceptable: the supervisor still monitors only the right filter's
 source heartbeat. Revalidate dual-source freshness before using this procedure
@@ -136,7 +136,7 @@ source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 bag record -o /tmp/physical_shared_enforce_01 \
   /operator_intent /lidar_right/filter/source_header \
-  /nav2_front_costmap /safety_envelope /shared_control/diagnostics \
+  /nav2_merged_costmap /safety_envelope /shared_control/diagnostics \
   /shared_control/checked_corridor
 ```
 

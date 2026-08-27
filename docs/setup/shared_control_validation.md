@@ -38,7 +38,7 @@ no node publishes a physical `cmd_vel` or accesses CAN.
 ## 2. L2 and weighted Nav2 mapping acceptance
 
 With drive power physically isolated, run the dual-L2/Nav2 pipeline and inspect
-both filtered clouds and `/nav2_front_costmap` in RViz. Shared control consumes
+both filtered clouds and `/nav2_merged_costmap` in RViz. Shared control consumes
 only the robot-relative Nav2 map; raw and low-support clouds remain diagnostic
 evidence for sampling and blind rear coverage. Do not enable physical
 enforcement until the supervisor validates both source heartbeats.
@@ -148,7 +148,7 @@ configured 90-count CLEAR / 60-count SLOW caps.
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
 6. Keep side/rear obstacles outside the requested trajectory diagnostic-only;
-   the current supervisor samples `/nav2_front_costmap` only along the
+   the current supervisor samples `/nav2_merged_costmap` only along the
    straight-to-requested correction union and does not claim full-surround
    protection.
 7. Defer moving-person tests and hard-turn physical control until straight and

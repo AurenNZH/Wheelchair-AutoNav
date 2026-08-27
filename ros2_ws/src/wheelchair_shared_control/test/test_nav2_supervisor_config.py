@@ -16,7 +16,7 @@ def _parameters():
 def test_production_defaults_to_weighted_nav2_costs():
     parameters = _parameters()
 
-    assert parameters["front_costmap_topic"] == "/nav2_front_costmap"
+    assert parameters["merged_costmap_topic"] == "/nav2_merged_costmap"
     assert parameters["source_header_topic"] == (
         "/lidar_right/filter/source_header"
     )
@@ -38,8 +38,8 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     path = Path(__file__).parents[1] / "launch" / "shared_control.launch.py"
     source = path.read_text()
 
-    assert '"front_costmap_topic"' in source
-    assert 'default_value="/nav2_front_costmap"' in source
+    assert '"merged_costmap_topic"' in source
+    assert 'default_value="/nav2_merged_costmap"' in source
     assert 'default_value="/lidar_right/filter/source_header"' in source
     assert '"freshness_mode", default_value="nav2_live"' in source
     assert '"max_map_age_s", default_value="0.50"' in source
@@ -53,9 +53,10 @@ def test_replay_uses_nav2_costmap_with_map_stamp_freshness():
     path = Path(__file__).parents[1] / "launch" / "intent_replay.launch.py"
     source = path.read_text()
 
-    assert '"front_costmap_topic": "/nav2_front_costmap"' in source
+    assert '"merged_costmap_topic": "/nav2_merged_costmap"' in source
     assert '"freshness_mode": "map_stamp"' in source
     assert '"/front_costmap"' not in source
+    assert '"/nav2_front_costmap"' not in source
 
 
 def test_supervisor_retains_weighted_grid_values():

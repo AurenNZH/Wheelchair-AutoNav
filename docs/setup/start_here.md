@@ -35,7 +35,7 @@ ros2 launch wheelchair_bringup wheelchair.launch.py \
 
 Verify both `/lidar_<side>/points` and `/lidar_<side>/points_filtered` streams,
 both `/lidar_<side>/filter/source_header` heartbeats, and
-`/nav2_front_costmap` independently.
+`/nav2_merged_costmap` independently.
 No node in this launch commands the wheelchair.
 
 ## Run Gazebo before hardware

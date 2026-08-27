@@ -3,7 +3,8 @@
 The production mapping path uses both Unitree L2 sensors, one identical
 three-point support filter per sensor, and Foxy's unmodified Nav2
 `ObstacleLayer` with two observation sources. It publishes
-`/nav2_front_costmap` and never commands motion.
+`/nav2_merged_costmap` and never commands motion. The robot-relative grid spans
+`x=-0.6..4.4 m` and `y=-4.0..4.0 m` at 0.1 m resolution.
 
 ## Launch
 
@@ -32,7 +33,7 @@ ros2 topic hz /lidar_right/filter/source_header
 ros2 topic hz /lidar_left/points
 ros2 topic hz /lidar_left/points_filtered
 ros2 topic hz /lidar_left/filter/source_header
-ros2 topic hz /nav2_front_costmap
+ros2 topic hz /nav2_merged_costmap
 ros2 run wheelchair_navigation nav2_costmap_monitor
 ```
 
@@ -47,8 +48,9 @@ filtered cloud and heartbeat. Stopping Nav2 must stop the map while leaving the
 filter streams alive.
 
 Validate measured obstacle distances, thin poles, low blocks, empty scenes,
-doorways, the overlap region, and each lateral edge of the supported forward
-envelope. Test right-only, left-only, and dual-source behavior before accepting
-the combined map. The system must not depict unobserved rear, step, curb, or
-drop-off regions as safe. Record the exact launch arguments and sensor mounting
-state with every acceptance run.
+doorways, the overlap region, the `x=-0.6 m` rear boundary, and each lateral
+edge of the mapped envelope. Test right-only, left-only, and dual-source
+behavior before accepting the merged map. Rear map coverage does not enable
+reverse or hard-turn intervention. The system must not depict unobserved step,
+curb, or drop-off regions as safe. Record the exact launch arguments and sensor
+mounting state with every acceptance run.

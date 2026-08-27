@@ -90,6 +90,15 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(decision.maximum_path_cost, 0)
         self.assertTrue(decision.path_cost_valid)
 
+    def test_forward_policy_accepts_rear_extended_merged_map(self):
+        merged = self._costmap({}, width=50, origin_x=-0.6)
+
+        decision = evaluate_safety(self.intent, merged, self.enabled)
+
+        self.assertEqual(decision.decision, CLEAR)
+        self.assertEqual(decision.reason, "nav2_cost_clear")
+        self.assertTrue(decision.path_cost_valid)
+
     def test_reverse_cone_is_unmonitored_and_capped_slow(self):
         fixtures = (
             (0.0, -1.0, REVERSE, 0.0),

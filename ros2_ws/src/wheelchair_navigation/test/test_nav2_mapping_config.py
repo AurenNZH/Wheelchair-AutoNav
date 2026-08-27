@@ -4,20 +4,20 @@ import yaml
 
 
 def _parameters():
-    path = Path(__file__).parents[1] / "config" / "nav2_front_costmap.yaml"
+    path = Path(__file__).parents[1] / "config" / "nav2_merged_costmap.yaml"
     document = yaml.safe_load(path.read_text())
     return document["costmap"]["costmap"]["ros__parameters"]
 
 
-def test_stock_costmap_is_forward_base_link_grid():
+def test_stock_costmap_is_rear_extended_base_link_grid():
     parameters = _parameters()
 
     assert parameters["global_frame"] == "base_link"
     assert parameters["robot_base_frame"] == "base_link"
     assert parameters["rolling_window"] is False
-    assert parameters["width"] == 4.0
+    assert parameters["width"] == 5.0
     assert parameters["height"] == 8.0
-    assert parameters["origin_x"] == 0.0
+    assert parameters["origin_x"] == -0.6
     assert parameters["origin_y"] == -4.0
     assert parameters["resolution"] == 0.1
 
@@ -84,6 +84,13 @@ def test_launch_filters_both_l2_sources_symmetrically_before_nav2():
     assert '"diagnostic_name"' in source
     assert '"use_sim_time": LaunchConfiguration("use_sim_time")' in source
     assert '"validate_cloud_timestamps"' in source
+    assert '"support_origin_x_m": -0.6' in source
+    assert '"support_origin_y_m": -4.0' in source
+    assert '"support_width_m": 5.0' in source
+    assert '"support_height_m": 8.0' in source
+    assert '"support_resolution_m": 0.1' in source
+    assert '"costmap", "/nav2_merged_costmap"' in source
+    assert "/nav2_front_costmap" not in source
     assert "/rslidar_points" not in source
 
 
@@ -111,7 +118,7 @@ def test_l2_artifact_rules_are_independent_and_active_by_default():
 
 
 def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
-    path = Path(__file__).parents[1] / "rviz" / "nav2_front_costmap.rviz"
+    path = Path(__file__).parents[1] / "rviz" / "nav2_merged_costmap.rviz"
     document = yaml.safe_load(path.read_text())
     displays = {
         display["Name"]: display
@@ -143,6 +150,8 @@ def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
     assert displays["L2 left artifact box and halo"]["Enabled"] is True
     assert displays["L2 right hard-rejected artifacts"]["Enabled"] is False
     assert displays["L2 left hard-rejected artifacts"]["Enabled"] is False
+    merged = displays["Nav2 Merged Costmap (optional inflation)"]
+    assert merged["Topic"]["Value"] == "/nav2_merged_costmap"
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():

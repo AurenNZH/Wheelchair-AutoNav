@@ -3,11 +3,11 @@ import unittest
 import numpy as np
 
 from wheelchair_navigation.costmap import (
-    FrontCostmapConfig,
     LocalCostmapConfig,
-    front_point_cell_ids,
+    SupportGridConfig,
     minimum_range_rejection_mask,
     obstacle_point_mask,
+    point_cell_ids,
     validate_mapping_configs,
 )
 
@@ -35,29 +35,33 @@ class CostmapGeometryTests(unittest.TestCase):
         self.assertEqual(counts["finite_points"], 5)
         self.assertEqual(counts["height_range_points"], 2)
 
-    def test_front_cell_ids_match_nav2_grid_geometry(self):
-        config = FrontCostmapConfig(
-            length_m=2.0, width_m=2.0, resolution_m=0.5
+    def test_cell_ids_match_rear_extended_nav2_grid_geometry(self):
+        config = SupportGridConfig(
+            origin_x_m=-0.5,
+            origin_y_m=-1.0,
+            width_m=2.5,
+            height_m=2.0,
+            resolution_m=0.5,
         )
         points = np.array(
             [
-                [0.0, -1.0, 0.4],
-                [0.49, -0.51, 0.4],
+                [-0.5, -1.0, 0.4],
+                [-0.01, -0.51, 0.4],
                 [1.99, 0.99, 0.4],
-                [-0.01, 0.0, 0.4],
+                [-0.51, 0.0, 0.4],
                 [2.0, 0.0, 0.4],
                 [np.nan, 0.0, 0.4],
             ],
             dtype=np.float32,
         )
 
-        valid, cell_ids, cell_count = front_point_cell_ids(points, config)
+        valid, cell_ids, cell_count = point_cell_ids(points, config)
 
         np.testing.assert_array_equal(
             valid, [True, True, True, False, False, False]
         )
-        np.testing.assert_array_equal(cell_ids[:3], [0, 0, 15])
-        self.assertEqual(cell_count, 16)
+        np.testing.assert_array_equal(cell_ids[:3], [0, 0, 19])
+        self.assertEqual(cell_count, 20)
 
     def test_minimum_range_is_a_hard_exclusion_with_inclusive_boundary(self):
         points = np.array(
@@ -80,11 +84,11 @@ class CostmapGeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_mapping_configs(
                 LocalCostmapConfig(min_range_m=5.0, max_range_m=4.0),
-                FrontCostmapConfig(),
+                SupportGridConfig(),
             )
         with self.assertRaises(ValueError):
             validate_mapping_configs(
-                LocalCostmapConfig(), FrontCostmapConfig(fov_deg=181.0)
+                LocalCostmapConfig(), SupportGridConfig(height_m=0.0)
             )
 
 

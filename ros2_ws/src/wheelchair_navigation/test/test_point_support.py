@@ -3,14 +3,18 @@ import unittest
 import numpy as np
 
 from wheelchair_navigation.artifact_filter import ArtifactHaloBounds
-from wheelchair_navigation.costmap import FrontCostmapConfig
+from wheelchair_navigation.costmap import SupportGridConfig
 from wheelchair_navigation.point_support import filter_points_by_cell_support
 
 
 class PointSupportTests(unittest.TestCase):
     def setUp(self):
-        self.config = FrontCostmapConfig(
-            length_m=1.0, width_m=1.0, resolution_m=0.1
+        self.config = SupportGridConfig(
+            origin_x_m=0.0,
+            origin_y_m=-0.5,
+            width_m=1.0,
+            height_m=1.0,
+            resolution_m=0.1,
         )
 
     def test_requires_three_points_in_each_eligible_cell(self):
@@ -58,6 +62,36 @@ class PointSupportTests(unittest.TestCase):
         )
 
         np.testing.assert_array_equal(result.keep_mask, [True, True, False])
+
+    def test_three_point_rule_applies_behind_base_link(self):
+        config = SupportGridConfig(
+            origin_x_m=-0.6,
+            origin_y_m=-0.5,
+            width_m=1.6,
+            height_m=1.0,
+            resolution_m=0.1,
+        )
+        points = np.array(
+            [
+                [-0.55, 0.05, 0.20],
+                [-0.54, 0.06, 0.20],
+                [-0.35, 0.05, 0.20],
+                [-0.34, 0.06, 0.20],
+                [-0.33, 0.07, 0.20],
+            ],
+            dtype=np.float32,
+        )
+
+        result = filter_points_by_cell_support(
+            points,
+            np.ones(points.shape[0], dtype=bool),
+            config,
+            min_points_per_cell=3,
+        )
+
+        np.testing.assert_array_equal(
+            result.keep_mask, [False, False, True, True, True]
+        )
 
     def test_rejects_invalid_thresholds_and_shapes(self):
         points = np.zeros((2, 3), dtype=np.float32)

@@ -1,4 +1,4 @@
-"""RViz markers for the existing front-costmap safety corridor."""
+"""RViz markers for the existing forward safety corridor."""
 
 from __future__ import annotations
 

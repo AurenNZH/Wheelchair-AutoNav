@@ -124,17 +124,17 @@ class EnvelopeMonitorTests(unittest.TestCase):
 
     def test_map_state_reports_waiting_ready_and_stale(self):
         waiting = map_pipeline_state(
-            front_received_s=None,
+            merged_received_s=None,
             now_s=10.0,
             timeout_s=2.0,
         )
         ready = map_pipeline_state(
-            front_received_s=9.0,
+            merged_received_s=9.0,
             now_s=10.0,
             timeout_s=2.0,
         )
         stale = map_pipeline_state(
-            front_received_s=7.0,
+            merged_received_s=7.0,
             now_s=10.0,
             timeout_s=2.0,
         )
@@ -143,17 +143,17 @@ class EnvelopeMonitorTests(unittest.TestCase):
         self.assertEqual(ready.status, READY)
         self.assertEqual(stale.status, STALE)
         self.assertEqual(
-            format_map_state(waiting), "[MAP] WAITING for front_costmap"
+            format_map_state(waiting), "[MAP] WAITING for merged_costmap"
         )
         self.assertEqual(format_map_state(ready), "[MAP] READY")
-        self.assertIn("front_costmap age=3.00s", format_map_state(stale))
+        self.assertIn("merged_costmap age=3.00s", format_map_state(stale))
 
     def test_map_state_rejects_invalid_timeout(self):
         for timeout_s in (0.0, -1.0, math.inf, math.nan):
             with self.subTest(timeout_s=timeout_s):
                 with self.assertRaises(ValueError):
                     map_pipeline_state(
-                        front_received_s=None,
+                        merged_received_s=None,
                         now_s=10.0,
                         timeout_s=timeout_s,
                     )

@@ -28,8 +28,8 @@ from wheelchair_navigation.artifact_filter import (
 )
 from wheelchair_navigation.artifact_markers import build_artifact_markers
 from wheelchair_navigation.costmap import (
-    FrontCostmapConfig,
     LocalCostmapConfig,
+    SupportGridConfig,
     minimum_range_rejection_mask,
     obstacle_point_mask,
     validate_mapping_configs,
@@ -60,8 +60,10 @@ class PointSupportFilterNode(Node):
         self._artifact_halo_cell_ids = np.empty(0, dtype=np.int64)
         try:
             self._map_config = self._load_map_config()
-            self._front_config = self._load_front_config()
-            validate_mapping_configs(self._map_config, self._front_config)
+            self._support_grid_config = self._load_support_grid_config()
+            validate_mapping_configs(
+                self._map_config, self._support_grid_config
+            )
             self._load_artifact_configuration()
             if float(self.get_parameter("diagnostics_period_s").value) <= 0.0:
                 raise ValueError("diagnostics_period_s must be positive")
@@ -169,10 +171,11 @@ class PointSupportFilterNode(Node):
         self.declare_parameter("max_height_m", 1.5)
         self.declare_parameter("min_range_m", 0.45)
         self.declare_parameter("max_range_m", 4.0)
-        self.declare_parameter("front_length_m", 4.0)
-        self.declare_parameter("front_width_m", 8.0)
-        self.declare_parameter("front_resolution_m", 0.1)
-        self.declare_parameter("front_fov_deg", 180.0)
+        self.declare_parameter("support_origin_x_m", -0.6)
+        self.declare_parameter("support_origin_y_m", -4.0)
+        self.declare_parameter("support_width_m", 5.0)
+        self.declare_parameter("support_height_m", 8.0)
+        self.declare_parameter("support_resolution_m", 0.1)
         self.declare_parameter("min_points_per_cell", 3)
         self.declare_parameter("artifact_filter_enabled", False)
         self.declare_parameter("artifact_filter_frame", "base_link")
@@ -200,12 +203,19 @@ class PointSupportFilterNode(Node):
             max_range_m=float(self.get_parameter("max_range_m").value),
         )
 
-    def _load_front_config(self) -> FrontCostmapConfig:
-        return FrontCostmapConfig(
-            length_m=float(self.get_parameter("front_length_m").value),
-            width_m=float(self.get_parameter("front_width_m").value),
-            resolution_m=float(self.get_parameter("front_resolution_m").value),
-            fov_deg=float(self.get_parameter("front_fov_deg").value),
+    def _load_support_grid_config(self) -> SupportGridConfig:
+        return SupportGridConfig(
+            origin_x_m=float(
+                self.get_parameter("support_origin_x_m").value
+            ),
+            origin_y_m=float(
+                self.get_parameter("support_origin_y_m").value
+            ),
+            width_m=float(self.get_parameter("support_width_m").value),
+            height_m=float(self.get_parameter("support_height_m").value),
+            resolution_m=float(
+                self.get_parameter("support_resolution_m").value
+            ),
         )
 
     def _load_artifact_configuration(self) -> None:
@@ -229,7 +239,7 @@ class PointSupportFilterNode(Node):
         else:
             self._artifact_halo_cell_ids = artifact_halo_cell_ids(
                 self._artifact_box,
-                self._front_config,
+                self._support_grid_config,
                 float(self.get_parameter("artifact_halo_margin_m").value),
             )
         halo_minimum = self.get_parameter(
@@ -331,7 +341,7 @@ class PointSupportFilterNode(Node):
             result = filter_points_by_cell_support(
                 points_base,
                 eligible,
-                self._front_config,
+                self._support_grid_config,
                 min_points_per_cell=self.get_parameter("min_points_per_cell").value,
                 hard_rejected_mask=hard_rejected,
                 halo_cell_ids=(

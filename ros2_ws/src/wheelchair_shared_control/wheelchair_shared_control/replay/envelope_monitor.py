@@ -37,30 +37,30 @@ class MapPipelineState:
 
 def map_pipeline_state(
     *,
-    front_received_s: float | None,
+    merged_received_s: float | None,
     now_s: float,
     timeout_s: float,
 ) -> MapPipelineState:
-    """Classify front-map receipt without inspecting production timestamps."""
+    """Classify merged-map receipt without inspecting production timestamps."""
 
     if not math.isfinite(timeout_s) or timeout_s <= 0.0:
         raise ValueError("map timeout must be finite and positive")
-    if front_received_s is None:
+    if merged_received_s is None:
         return MapPipelineState(WAITING)
 
-    front_age_s = max(0.0, now_s - front_received_s)
+    merged_age_s = max(0.0, now_s - merged_received_s)
     return MapPipelineState(
-        STALE if front_age_s > timeout_s else READY,
-        front_age_s,
+        STALE if merged_age_s > timeout_s else READY,
+        merged_age_s,
     )
 
 
 def format_map_state(state: MapPipelineState) -> str:
     if state.status == WAITING:
-        return "[MAP] WAITING for front_costmap"
+        return "[MAP] WAITING for merged_costmap"
     if state.status == READY:
         return "[MAP] READY"
-    return "[MAP] STALE front_costmap age=%.2fs" % state.age_s
+    return "[MAP] STALE merged_costmap age=%.2fs" % state.age_s
 
 
 def intent_signature(msg: OperatorIntent) -> tuple[bool, int, float, float]:
@@ -152,7 +152,7 @@ class SafetyEnvelopeMonitorNode(Node):
         super().__init__("safety_envelope_monitor")
         self.declare_parameter("intent_topic", "/operator_intent")
         self.declare_parameter("envelope_topic", "/safety_envelope")
-        self.declare_parameter("front_costmap_topic", "/nav2_front_costmap")
+        self.declare_parameter("merged_costmap_topic", "/nav2_merged_costmap")
         self.declare_parameter("map_timeout_s", 2.0)
         self.declare_parameter("status_rate_hz", 5.0)
 
@@ -173,7 +173,7 @@ class SafetyEnvelopeMonitorNode(Node):
         self._last_intent_signature = None
         self._last_envelope_signature = None
         self._last_map_signature = None
-        self._front_received_s = None
+        self._merged_received_s = None
         self.create_subscription(
             OperatorIntent,
             str(self.get_parameter("intent_topic").value),
@@ -188,8 +188,8 @@ class SafetyEnvelopeMonitorNode(Node):
         )
         self.create_subscription(
             OccupancyGrid,
-            str(self.get_parameter("front_costmap_topic").value),
-            self._on_front_map,
+            str(self.get_parameter("merged_costmap_topic").value),
+            self._on_merged_map,
             1,
         )
         self.create_timer(1.0 / status_rate_hz, self._publish_map_state)
@@ -209,13 +209,13 @@ class SafetyEnvelopeMonitorNode(Node):
         self.get_logger().info(format_envelope(msg))
         self._last_envelope_signature = signature
 
-    def _on_front_map(self, _msg: OccupancyGrid) -> None:
-        self._front_received_s = time.monotonic()
+    def _on_merged_map(self, _msg: OccupancyGrid) -> None:
+        self._merged_received_s = time.monotonic()
         self._publish_map_state()
 
     def _publish_map_state(self) -> None:
         state = map_pipeline_state(
-            front_received_s=self._front_received_s,
+            merged_received_s=self._merged_received_s,
             now_s=time.monotonic(),
             timeout_s=self._map_timeout_s,
         )

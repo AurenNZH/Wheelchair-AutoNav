@@ -29,7 +29,7 @@ from wheelchair_shared_control.trajectory import (
 
 def evaluate_safety(
     intent: OperatorIntentData,
-    front_costmap: WeightedCostmap,
+    merged_costmap: WeightedCostmap,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
     """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
@@ -80,7 +80,7 @@ def evaluate_safety(
             "reverse_unmonitored_slow",
         )
 
-    summary = swept_path_costs(front_costmap, steering, config)
+    summary = swept_path_costs(merged_costmap, steering, config)
     if not summary.valid:
         return _stop_from_costs(
             summary.failure_reason or "invalid_costmap", summary

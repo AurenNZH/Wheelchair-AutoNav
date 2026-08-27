@@ -168,7 +168,7 @@ class Nav2CostmapMonitor(Node):
         super().__init__("nav2_costmap_monitor")
         self.declare_parameter("cloud_topic", "/lidar_right/points")
         self.declare_parameter("filtered_cloud_topic", "/lidar_right/points_filtered")
-        self.declare_parameter("costmap_topic", "/nav2_front_costmap")
+        self.declare_parameter("costmap_topic", "/nav2_merged_costmap")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
         self.declare_parameter("warmup_s", 10.0)
         self.declare_parameter("duration_s", 360.0)

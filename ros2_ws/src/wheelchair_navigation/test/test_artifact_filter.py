@@ -8,7 +8,7 @@ from wheelchair_navigation.artifact_filter import (
     parse_artifact_halo_bounds,
     points_in_artifact_box,
 )
-from wheelchair_navigation.costmap import FrontCostmapConfig
+from wheelchair_navigation.costmap import SupportGridConfig
 
 
 class ArtifactFilterTests(unittest.TestCase):
@@ -40,9 +40,13 @@ class ArtifactFilterTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 parse_artifact_box(values)
 
-    def test_halo_is_expanded_and_clipped_to_front_grid(self):
-        config = FrontCostmapConfig(
-            length_m=1.0, width_m=1.0, resolution_m=0.1
+    def test_halo_is_expanded_and_clipped_to_support_grid(self):
+        config = SupportGridConfig(
+            origin_x_m=0.0,
+            origin_y_m=-0.5,
+            width_m=1.0,
+            height_m=1.0,
+            resolution_m=0.1,
         )
         box = parse_artifact_box([0.0, 0.2, -0.1, 0.1, 0.3, 0.5])
 

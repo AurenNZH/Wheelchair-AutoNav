@@ -8,7 +8,7 @@ It does not publish velocity, select a route, or decide STOP/SLOW/CLEAR.
 ```text
 /lidar_right/points -> right point_support_filter -+
                                                    +-> stock Nav2 ObstacleLayer
-/lidar_left/points  -> left point_support_filter  -+-> /nav2_front_costmap
+/lidar_left/points  -> left point_support_filter  -+-> /nav2_merged_costmap
 ```
 
 Each filter transforms its cloud to `base_link`, validates its timestamp,
@@ -21,8 +21,10 @@ for Nav2 to interpret. Each successful filtered publication emits the matching
 on `/lidar_<side>/low_support_points`, while hard-rejected points are available
 on `/lidar_<side>/artifact_rejected_points` when subscribed.
 
-The Nav2 grid remains 4 m forward by 8 m wide at 0.1 m resolution. Inflation is
-disabled by default and must be enabled explicitly for weighted-cost testing.
+The Nav2 grid spans `x=-0.6..4.4 m` and `y=-4.0..4.0 m` at 0.1 m resolution.
+The same origin-aware grid makes the three-point support rule apply behind
+`base_link`. Inflation is disabled by default and must be enabled explicitly
+for weighted-cost testing.
 
 ```bash
 ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true

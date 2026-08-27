@@ -43,10 +43,11 @@ def _support_filter(side, label, artifact_config):
                 "max_height_m": 1.5,
                 "min_range_m": 0.45,
                 "max_range_m": 4.0,
-                "front_length_m": 4.0,
-                "front_width_m": 8.0,
-                "front_resolution_m": 0.1,
-                "front_fov_deg": 180.0,
+                "support_origin_x_m": -0.6,
+                "support_origin_y_m": -4.0,
+                "support_width_m": 5.0,
+                "support_height_m": 8.0,
+                "support_resolution_m": 0.1,
                 "min_points_per_cell": ParameterValue(
                     LaunchConfiguration("support_min_points_per_cell"),
                     value_type=int,
@@ -67,10 +68,10 @@ def _support_filter(side, label, artifact_config):
 def generate_launch_description():
     package_share = get_package_share_directory("wheelchair_navigation")
     parameters = os.path.join(
-        package_share, "config", "nav2_front_costmap.yaml"
+        package_share, "config", "nav2_merged_costmap.yaml"
     )
     rviz_config = os.path.join(
-        package_share, "rviz", "nav2_front_costmap.rviz"
+        package_share, "rviz", "nav2_merged_costmap.rviz"
     )
     artifact_config = os.path.join(
         package_share, "config", "l2_artifact_filters.yaml"
@@ -113,16 +114,16 @@ def generate_launch_description():
                 "/nav2_obstacle_points_left",
                 "/lidar_left/points_filtered",
             ),
-            ("costmap", "/nav2_front_costmap"),
-            ("costmap_raw", "/nav2_front_costmap_raw"),
-            ("costmap_updates", "/nav2_front_costmap_updates"),
-            ("published_footprint", "/nav2_front_costmap_footprint"),
+            ("costmap", "/nav2_merged_costmap"),
+            ("costmap_raw", "/nav2_merged_costmap_raw"),
+            ("costmap_updates", "/nav2_merged_costmap_updates"),
+            ("published_footprint", "/nav2_merged_costmap_footprint"),
         ],
     )
     lifecycle_manager = Node(
         package="nav2_lifecycle_manager",
         executable="lifecycle_manager",
-        name="nav2_front_costmap_lifecycle_manager",
+        name="nav2_merged_costmap_lifecycle_manager",
         output="screen",
         parameters=[
             {
@@ -191,7 +192,7 @@ def generate_launch_description():
                     LaunchConfiguration("inflation_radius"),
                     " m, scaling=",
                     LaunchConfiguration("cost_scaling_factor"),
-                    "); publishing /nav2_front_costmap; no supervisor or "
+                    "); publishing /nav2_merged_costmap; no supervisor or "
                     "physical command process is launched.",
                 ]
             ),

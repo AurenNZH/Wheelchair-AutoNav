@@ -16,8 +16,8 @@ def generate_launch_description():
             DeclareLaunchArgument("geometry_calibrated", default_value="false"),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument(
-                "front_costmap_topic",
-                default_value="/nav2_front_costmap",
+                "merged_costmap_topic",
+                default_value="/nav2_merged_costmap",
             ),
             DeclareLaunchArgument(
                 "source_header_topic",
@@ -57,8 +57,8 @@ def generate_launch_description():
                             "geometry_calibrated"
                         ),
                         "use_sim_time": LaunchConfiguration("use_sim_time"),
-                        "front_costmap_topic": LaunchConfiguration(
-                            "front_costmap_topic"
+                        "merged_costmap_topic": LaunchConfiguration(
+                            "merged_costmap_topic"
                         ),
                         "source_header_topic": LaunchConfiguration(
                             "source_header_topic"

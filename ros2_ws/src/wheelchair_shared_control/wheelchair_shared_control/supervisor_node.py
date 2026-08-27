@@ -53,7 +53,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("operator_intent_topic", "/operator_intent")
         self.declare_parameter("safety_envelope_topic", "/safety_envelope")
         self.declare_parameter(
-            "front_costmap_topic", "/nav2_front_costmap"
+            "merged_costmap_topic", "/nav2_merged_costmap"
         )
         self.declare_parameter(
             "source_header_topic", "/lidar_right/filter/source_header"
@@ -88,9 +88,9 @@ class SafetySupervisorNode(Node):
 
         self._config = self._load_config()
         self._intent = None
-        self._front_costmap = None
-        self._front_stamp_ns = 0
-        self._front_received_monotonic_ns = 0
+        self._merged_costmap = None
+        self._merged_stamp_ns = 0
+        self._merged_received_monotonic_ns = 0
         self._source_stamp_ns = None
         self._freshness_policy = self._load_freshness_policy()
         self._freshness_mode = self._freshness_policy.mode
@@ -122,8 +122,8 @@ class SafetySupervisorNode(Node):
         )
         self.create_subscription(
             OccupancyGrid,
-            self.get_parameter("front_costmap_topic").value,
-            self._on_front_map,
+            self.get_parameter("merged_costmap_topic").value,
+            self._on_merged_map,
             1,
         )
         self.create_subscription(
@@ -141,7 +141,7 @@ class SafetySupervisorNode(Node):
             "map=%s freshness=%s slow_cost=%d stop_cost=%d enable_motion=%s "
             "geometry_calibrated=%s"
             % (
-                self.get_parameter("front_costmap_topic").value,
+                self.get_parameter("merged_costmap_topic").value,
                 self._freshness_mode,
                 self._config.slow_cost_threshold,
                 self._config.stop_cost_threshold,
@@ -214,19 +214,19 @@ class SafetySupervisorNode(Node):
     def _on_source_header(self, msg: Header) -> None:
         self._source_stamp_ns = Time.from_msg(msg.stamp).nanoseconds
 
-    def _on_front_map(self, msg: OccupancyGrid) -> None:
+    def _on_merged_map(self, msg: OccupancyGrid) -> None:
         try:
-            self._front_costmap = self._grid_costmap(msg)
-            self._front_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
-            self._front_received_monotonic_ns = time.monotonic_ns()
+            self._merged_costmap = self._grid_costmap(msg)
+            self._merged_stamp_ns = Time.from_msg(msg.header.stamp).nanoseconds
+            self._merged_received_monotonic_ns = time.monotonic_ns()
         except ValueError as exc:
             self.get_logger().error(
-                "Rejected invalid front costmap: %s" % exc,
+                "Rejected invalid merged costmap: %s" % exc,
                 throttle_duration_sec=5.0,
             )
-            self._front_costmap = None
-            self._front_stamp_ns = 0
-            self._front_received_monotonic_ns = 0
+            self._merged_costmap = None
+            self._merged_stamp_ns = 0
+            self._merged_received_monotonic_ns = 0
 
     @staticmethod
     def _grid_costmap(msg: OccupancyGrid):
@@ -266,10 +266,10 @@ class SafetySupervisorNode(Node):
                 now_ros_ns=now_ns,
                 now_monotonic_ns=time.monotonic_ns(),
                 intent_stamp_ns=intent_stamp_ns,
-                map_available=self._front_costmap is not None,
-                map_stamp_ns=self._front_stamp_ns,
+                map_available=self._merged_costmap is not None,
+                map_stamp_ns=self._merged_stamp_ns,
                 map_received_monotonic_ns=(
-                    self._front_received_monotonic_ns
+                    self._merged_received_monotonic_ns
                 ),
                 source_stamp_ns=self._source_stamp_ns,
             ),
@@ -347,7 +347,7 @@ class SafetySupervisorNode(Node):
         )
         return evaluate_safety(
             intent,
-            self._front_costmap,
+            self._merged_costmap,
             self._config,
         )
 

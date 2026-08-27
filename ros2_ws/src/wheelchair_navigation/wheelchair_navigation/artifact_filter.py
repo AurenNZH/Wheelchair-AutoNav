@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from wheelchair_navigation.costmap import FrontCostmapConfig
+from wheelchair_navigation.costmap import SupportGridConfig
 
 
 @dataclass(frozen=True)
@@ -84,24 +84,31 @@ def points_in_artifact_box(
 
 def artifact_halo_cell_ids(
     box: ArtifactBox,
-    config: FrontCostmapConfig,
+    config: SupportGridConfig,
     margin_m: float,
 ) -> np.ndarray:
-    """Return front-grid cells intersecting the box's expanded XY footprint."""
+    """Return support-grid cells intersecting the expanded XY footprint."""
 
     margin = float(margin_m)
     if not np.isfinite(margin) or margin < 0.0:
         raise ValueError("artifact halo margin must be finite and non-negative")
     resolution = float(config.resolution_m)
-    width = int(np.ceil(config.length_m / resolution))
-    height = int(np.ceil(config.width_m / resolution))
+    width = int(np.ceil(config.width_m / resolution))
+    height = int(np.ceil(config.height_m / resolution))
     if width < 1 or height < 1 or not np.isfinite(resolution) or resolution <= 0.0:
         raise ValueError("artifact halo grid must be positive")
-    origin_y = -(height * resolution) / 2.0
-    min_col = int(np.floor((box.min_x_m - margin) / resolution))
-    max_col = int(np.floor((box.max_x_m + margin) / resolution))
-    min_row = int(np.floor((box.min_y_m - margin - origin_y) / resolution))
-    max_row = int(np.floor((box.max_y_m + margin - origin_y) / resolution))
+    min_col = int(
+        np.floor((box.min_x_m - margin - config.origin_x_m) / resolution)
+    )
+    max_col = int(
+        np.floor((box.max_x_m + margin - config.origin_x_m) / resolution)
+    )
+    min_row = int(
+        np.floor((box.min_y_m - margin - config.origin_y_m) / resolution)
+    )
+    max_row = int(
+        np.floor((box.max_y_m + margin - config.origin_y_m) / resolution)
+    )
     if max_col < 0 or min_col >= width or max_row < 0 or min_row >= height:
         return np.empty(0, dtype=np.int64)
     min_col = max(0, min(width - 1, min_col))

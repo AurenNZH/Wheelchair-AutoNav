@@ -32,9 +32,9 @@ class ReplayCostmapRestamperNode(Node):
     def __init__(self) -> None:
         super().__init__("replay_costmap_restamper")
         self.declare_parameter(
-            "input_costmap_topic", "/replay/nav2_front_costmap"
+            "input_costmap_topic", "/replay/nav2_merged_costmap"
         )
-        self.declare_parameter("output_costmap_topic", "/nav2_front_costmap")
+        self.declare_parameter("output_costmap_topic", "/nav2_merged_costmap")
 
         topics = (
             str(self.get_parameter("input_costmap_topic").value),

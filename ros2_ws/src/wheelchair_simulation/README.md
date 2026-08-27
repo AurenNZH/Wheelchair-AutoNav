@@ -2,7 +2,7 @@
 
 Gazebo Classic fixtures for the current right-L2/Nav2/shared-control pipeline.
 The simulated sensor publishes `/lidar_right/points` in `lidar_right_link`, so
-simulation uses the same point-support filter, `/nav2_front_costmap`, freshness
+simulation uses the same point-support filter, `/nav2_merged_costmap`, freshness
 heartbeat, and supervisor interfaces as physical operation. Nothing in this
 package accesses CAN; simulated motion is confined to `/sim/safe_cmd_vel`.
 

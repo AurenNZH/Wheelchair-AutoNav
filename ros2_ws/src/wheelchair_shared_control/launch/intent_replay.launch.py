@@ -30,7 +30,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "max_map_age_s",
                 default_value="2.0",
-                description="Supervisor timeout for the restamped front map",
+                description="Supervisor timeout for the restamped merged map",
             ),
             DeclareLaunchArgument(
                 "internal_log_level",
@@ -90,7 +90,7 @@ def generate_launch_description():
                     {
                         "enable_motion": True,
                         "geometry_calibrated": True,
-                        "front_costmap_topic": "/nav2_front_costmap",
+                        "merged_costmap_topic": "/nav2_merged_costmap",
                         "freshness_mode": "map_stamp",
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
@@ -112,7 +112,7 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {
-                        "front_costmap_topic": "/nav2_front_costmap",
+                        "merged_costmap_topic": "/nav2_merged_costmap",
                         "map_timeout_s": LaunchConfiguration(
                             "max_map_age_s"
                         ),

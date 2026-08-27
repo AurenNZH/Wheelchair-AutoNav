@@ -2,7 +2,7 @@
   ros__parameters:
     operator_intent_topic: /operator_intent
     safety_envelope_topic: /safety_envelope
-    front_costmap_topic: /nav2_front_costmap
+    merged_costmap_topic: /nav2_merged_costmap
     source_header_topic: /lidar_right/filter/source_header
     freshness_mode: nav2_live
     diagnostics_topic: /shared_control/diagnostics

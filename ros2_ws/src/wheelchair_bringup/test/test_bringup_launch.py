@@ -114,6 +114,8 @@ def test_dual_l2_launch_composes_both_validated_driver_launches():
     assert "Value: /lidar_left/points_filtered" in rviz_source
     assert "Value: /lidar_right/low_support_points" in rviz_source
     assert "Value: /lidar_left/low_support_points" in rviz_source
+    assert "Value: /nav2_merged_costmap" in rviz_source
+    assert "/nav2_front_costmap" not in rviz_source
 
 
 def test_right_l2_launch_restores_model_and_defined_left_mount_without_driver():

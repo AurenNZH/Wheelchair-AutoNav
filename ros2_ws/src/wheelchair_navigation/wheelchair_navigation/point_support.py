@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from wheelchair_navigation.artifact_filter import ArtifactHaloBounds
-from wheelchair_navigation.costmap import FrontCostmapConfig, front_point_cell_ids
+from wheelchair_navigation.costmap import SupportGridConfig, point_cell_ids
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class PointSupportResult:
 def filter_points_by_cell_support(
     points_base: np.ndarray,
     eligible_mask: np.ndarray,
-    config: FrontCostmapConfig,
+    config: SupportGridConfig,
     *,
     min_points_per_cell: int,
     hard_rejected_mask: np.ndarray | None = None,
@@ -68,7 +68,7 @@ def filter_points_by_cell_support(
         raise ValueError("hard_rejected_mask must have shape (N,)")
 
     eligible_indices = np.flatnonzero(eligible)
-    valid, cell_ids, cell_count = front_point_cell_ids(
+    valid, cell_ids, cell_count = point_cell_ids(
         points[eligible_indices], config
     )
     eligible_hard_rejected = hard_rejected[eligible_indices]
@@ -82,7 +82,9 @@ def filter_points_by_cell_support(
         else _validated_minimum_points(halo_min_points_per_cell)
     )
     if halo_bounds_xy is not None and halo_cell_ids is not None:
-        raise ValueError("use either explicit halo bounds or front-grid halo cells")
+        raise ValueError(
+            "use either explicit halo bounds or support-grid halo cells"
+        )
 
     eligible_global_low_support = valid & np.isin(
         cell_ids, global_low_support_cells
