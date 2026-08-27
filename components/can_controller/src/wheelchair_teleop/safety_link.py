@@ -12,8 +12,10 @@ import uuid
 
 from .operator_intent import (
     FORWARD_CLASSES,
+    LEFT_TURN,
     RELEASED,
     REVERSE_CLASSES,
+    RIGHT_TURN,
     ClassifiedIntent,
     classify_raw_axes,
     intent_label,
@@ -81,6 +83,9 @@ class SafetyLink:
         command_cap: float = 0.20,
         slow_command_cap: float | None = None,
         reverse_command_cap: float = 0.65,
+        turn_command_cap: float = 0.90,
+        slow_turn_command_cap: float = 0.60,
+        turn_longitudinal_cap: float = 0.15,
         neutral_deadzone: int = 5,
         forward_cone_half_angle_deg: float = 30.0,
         udp_socket=None,
@@ -101,6 +106,9 @@ class SafetyLink:
             else float(slow_command_cap)
         )
         self.reverse_command_cap = float(reverse_command_cap)
+        self.turn_command_cap = float(turn_command_cap)
+        self.slow_turn_command_cap = float(slow_turn_command_cap)
+        self.turn_longitudinal_cap = float(turn_longitudinal_cap)
         self.neutral_deadzone = int(neutral_deadzone)
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
@@ -150,6 +158,14 @@ class SafetyLink:
             raise ValueError("slow_command_cap must be in (0, command_cap]")
         if not 0.0 < self.reverse_command_cap <= 1.0:
             raise ValueError("reverse_command_cap must be in (0, 1]")
+        if not 0.0 < self.turn_command_cap <= 1.0:
+            raise ValueError("turn_command_cap must be in (0, 1]")
+        if not 0.0 < self.slow_turn_command_cap <= self.turn_command_cap:
+            raise ValueError(
+                "slow_turn_command_cap must be in (0, turn_command_cap]"
+            )
+        if not 0.0 <= self.turn_longitudinal_cap <= 1.0:
+            raise ValueError("turn_longitudinal_cap must be in [0, 1]")
         classify_raw_axes(
             0,
             0,
@@ -188,7 +204,9 @@ class SafetyLink:
             self._clear_count = 0
             self._reason = "operator_released"
             return 0, 0
-        if command.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
+        if command.intent_class not in (
+            FORWARD_CLASSES + REVERSE_CLASSES + (LEFT_TURN, RIGHT_TURN)
+        ):
             self._clear_count = 0
             self._reason = "%s_not_enabled" % intent_label(
                 command.intent_class
@@ -240,8 +258,13 @@ class SafetyLink:
             self._reason = "invalid_safety_envelope_limit"
             return 0, 0
 
+        is_turn = command.intent_class in (LEFT_TURN, RIGHT_TURN)
         if command.is_reverse:
             decision_cap = self.reverse_command_cap
+        elif is_turn and envelope.decision == SLOW:
+            decision_cap = self.slow_turn_command_cap
+        elif is_turn:
+            decision_cap = self.turn_command_cap
         elif envelope.decision == SLOW:
             decision_cap = self.slow_command_cap
         else:
@@ -251,6 +274,27 @@ class SafetyLink:
             decision_cap,
             abs(command.longitudinal),
         )
+        if is_turn:
+            permitted_forward = min(
+                permitted_forward,
+                self.turn_longitudinal_cap,
+            )
+            permitted_lateral = self._steering_inside_authorized_interval(
+                command.lateral,
+                envelope.permitted_steering,
+            )
+            if permitted_lateral == 0.0:
+                self._reason = "turn_direction_not_authorized"
+                return 0, 0
+            permitted_lateral = math.copysign(
+                min(abs(permitted_lateral), decision_cap),
+                permitted_lateral,
+            )
+            output_y = int(round(permitted_forward * 100.0))
+            if command.longitudinal < 0.0:
+                output_y = -output_y
+            self._reason = envelope.reason
+            return ros_steering_to_pi_x(permitted_lateral), output_y
         permitted_steering = self._steering_inside_authorized_interval(
             command.steering_ratio,
             envelope.permitted_steering,
@@ -273,6 +317,8 @@ class SafetyLink:
             return "forward_cone"
         if intent_class in REVERSE_CLASSES:
             return "reverse_cone"
+        if intent_class in (LEFT_TURN, RIGHT_TURN):
+            return "turn_disc"
         return "unsupported"
 
     @staticmethod
@@ -308,6 +354,9 @@ class SafetyLink:
         ) or (
             sent_command.is_reverse
             and current_command.is_reverse
+        ) or (
+            sent_command.intent_class in (LEFT_TURN, RIGHT_TURN)
+            and sent_command.intent_class == current_command.intent_class
         )
 
     @staticmethod
@@ -317,6 +366,18 @@ class SafetyLink:
     ) -> bool:
         if envelope.permitted_forward > abs(sent_command.longitudinal) + 1e-6:
             return False
+        if sent_command.intent_class in (LEFT_TURN, RIGHT_TURN):
+            permitted = envelope.permitted_steering
+            requested = sent_command.lateral
+            if permitted == 0.0:
+                return True
+            if requested == 0.0:
+                return False
+            return (
+                math.copysign(1.0, permitted)
+                == math.copysign(1.0, requested)
+                and abs(permitted) <= abs(requested) + 1e-6
+            )
         requested = sent_command.steering_ratio
         permitted = envelope.permitted_steering
         if permitted == 0.0:

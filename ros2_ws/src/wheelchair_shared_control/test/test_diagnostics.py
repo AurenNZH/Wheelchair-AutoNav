@@ -55,6 +55,11 @@ class SafetyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(values["freshness_mode"], NAV2_LIVE)
         self.assertEqual(values["map_age_basis"], "receipt_time")
         self.assertEqual(values["source_age_ms"], "none")
+        self.assertEqual(values["left_source_age_ms"], "none")
+        self.assertEqual(values["turn_clearance_radius_m"], "0.550")
+        self.assertEqual(values["clear_turn_limit"], "0.900")
+        self.assertEqual(values["slow_turn_limit"], "0.600")
+        self.assertEqual(values["turn_longitudinal_limit"], "0.150")
 
     def test_status_metadata_and_levels_remain_stable(self):
         warning = build_safety_diagnostic_status(

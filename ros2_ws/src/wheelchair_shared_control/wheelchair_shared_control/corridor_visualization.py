@@ -15,7 +15,11 @@ from wheelchair_shared_control.models import (
     SafetyConfig,
     SafetyDecision,
 )
-from wheelchair_shared_control.operator_intent import classify_normalized_axes
+from wheelchair_shared_control.operator_intent import (
+    LEFT_TURN,
+    RIGHT_TURN,
+    classify_normalized_axes,
+)
 from wheelchair_shared_control.trajectory import trajectory_points
 
 
@@ -25,6 +29,7 @@ class CorridorIntentView:
 
     requested_steering: float | None
     label: str
+    turn_disc_requested: bool = False
 
 
 def corridor_intent_view(
@@ -62,7 +67,11 @@ def corridor_intent_view(
         return CorridorIntentView(classified.steering_ratio, label)
     if classified.is_reverse:
         label += " unmonitored"
-    return CorridorIntentView(None, label)
+    return CorridorIntentView(
+        None,
+        label,
+        classified.intent_class in (LEFT_TURN, RIGHT_TURN),
+    )
 
 
 def _color(decision: int, alpha: float) -> ColorRGBA:
@@ -80,6 +89,7 @@ def build_checked_corridor_markers(
     requested_steering: float | None,
     config: SafetyConfig,
     label: str,
+    turn_disc_requested: bool = False,
 ) -> MarkerArray:
     """Build the requested path and color-coded decision label."""
 
@@ -103,6 +113,28 @@ def build_checked_corridor_markers(
             for x_m, y_m in trajectory_points(requested_steering, config)
         ]
         markers.append(boundary)
+
+    if turn_disc_requested:
+        disc = Marker()
+        disc.header = header
+        disc.ns = "requested_turn_disc"
+        disc.id = 2
+        disc.type = Marker.LINE_STRIP
+        disc.action = Marker.ADD
+        disc.pose.orientation.w = 1.0
+        disc.scale.x = 0.035
+        disc.color = _color(decision.decision, 0.95)
+        segments = 48
+        radius = float(config.turn_clearance_radius_m)
+        disc.points = [
+            Point(
+                x=radius * math.cos(2.0 * math.pi * index / segments),
+                y=radius * math.sin(2.0 * math.pi * index / segments),
+                z=0.06,
+            )
+            for index in range(segments + 1)
+        ]
+        markers.append(disc)
 
     text = Marker()
     text.header = header

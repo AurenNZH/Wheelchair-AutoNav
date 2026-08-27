@@ -32,6 +32,8 @@ class FreshnessInputs:
     map_stamp_ns: int
     map_received_monotonic_ns: int
     source_stamp_ns: int | None
+    left_source_stamp_ns: int | None = None
+    require_left_source: bool = False
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class FreshnessStatus:
     intent_age_s: float = 0.0
     map_age_s: float = 0.0
     source_age_s: float | None = None
+    left_source_age_s: float | None = None
     failure_reason: str | None = None
     map_age_basis: str = "receipt_time"
 
@@ -186,11 +189,52 @@ def evaluate_freshness(
             failure_reason="stale_source",
             map_age_basis=basis,
         )
+    left_source_age_s = None
+    if inputs.require_left_source:
+        if inputs.left_source_stamp_ns is None:
+            return FreshnessStatus(
+                intent_age_s=intent_age_s,
+                map_age_s=map_age_s,
+                source_age_s=source_age_s,
+                failure_reason="missing_left_source_heartbeat",
+                map_age_basis=basis,
+            )
+        if inputs.left_source_stamp_ns <= 0:
+            return FreshnessStatus(
+                intent_age_s=intent_age_s,
+                map_age_s=map_age_s,
+                source_age_s=source_age_s,
+                failure_reason="invalid_left_source_timestamp",
+                map_age_basis=basis,
+            )
+        left_source_age_s = (
+            inputs.now_ros_ns - inputs.left_source_stamp_ns
+        ) / 1e9
+        if left_source_age_s < -policy.max_future_source_offset_s:
+            return FreshnessStatus(
+                intent_age_s=intent_age_s,
+                map_age_s=map_age_s,
+                source_age_s=source_age_s,
+                left_source_age_s=left_source_age_s,
+                failure_reason="future_left_source_timestamp",
+                map_age_basis=basis,
+            )
+        left_source_age_s = max(0.0, left_source_age_s)
+        if left_source_age_s > policy.max_source_age_s:
+            return FreshnessStatus(
+                intent_age_s=intent_age_s,
+                map_age_s=map_age_s,
+                source_age_s=source_age_s,
+                left_source_age_s=left_source_age_s,
+                failure_reason="stale_left_source",
+                map_age_basis=basis,
+            )
     if map_age_s > policy.max_map_age_s:
         return FreshnessStatus(
             intent_age_s=intent_age_s,
             map_age_s=map_age_s,
             source_age_s=source_age_s,
+            left_source_age_s=left_source_age_s,
             failure_reason="stale_map",
             map_age_basis=basis,
         )
@@ -198,6 +242,7 @@ def evaluate_freshness(
         intent_age_s=intent_age_s,
         map_age_s=map_age_s,
         source_age_s=source_age_s,
+        left_source_age_s=left_source_age_s,
         map_age_basis=basis,
     )
 

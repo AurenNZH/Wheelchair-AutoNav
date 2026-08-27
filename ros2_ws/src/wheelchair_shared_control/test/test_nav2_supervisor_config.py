@@ -20,6 +20,9 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["source_header_topic"] == (
         "/lidar_right/filter/source_header"
     )
+    assert parameters["left_source_header_topic"] == (
+        "/lidar_left/filter/source_header"
+    )
     assert parameters["freshness_mode"] == NAV2_LIVE
     assert parameters["max_map_age_s"] == 0.5
     assert parameters["max_source_age_s"] == 0.5
@@ -27,6 +30,10 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["stop_cost_threshold"] == 99
     assert parameters["slow_forward_limit"] == 0.60
     assert parameters["reverse_limit"] == 0.65
+    assert parameters["turn_clearance_radius_m"] == 0.55
+    assert parameters["clear_turn_limit"] == 0.90
+    assert parameters["slow_turn_limit"] == 0.60
+    assert parameters["turn_longitudinal_limit"] == 0.15
     assert parameters["min_steering"] == -0.577350269
     assert parameters["max_steering"] == 0.577350269
     assert parameters["forward_cone_half_angle_deg"] == 30.0
@@ -41,12 +48,16 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"merged_costmap_topic"' in source
     assert 'default_value="/nav2_merged_costmap"' in source
     assert 'default_value="/lidar_right/filter/source_header"' in source
+    assert 'default_value="/lidar_left/filter/source_header"' in source
     assert '"freshness_mode", default_value="nav2_live"' in source
     assert '"max_map_age_s", default_value="0.50"' in source
     assert '"max_source_age_s", default_value="0.50"' in source
     assert '"slow_cost_threshold", default_value="1"' in source
     assert '"stop_cost_threshold", default_value="99"' in source
     assert '"forward_cone_half_angle_deg", default_value="30.0"' in source
+    assert '"turn_clearance_radius_m", default_value="0.55"' in source
+    assert '"clear_turn_limit", default_value="0.90"' in source
+    assert '"slow_turn_limit", default_value="0.60"' in source
 
 
 def test_replay_uses_nav2_costmap_with_map_stamp_freshness():

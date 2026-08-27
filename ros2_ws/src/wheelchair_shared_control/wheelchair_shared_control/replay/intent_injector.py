@@ -15,13 +15,17 @@ from wheelchair_msgs.msg import OperatorIntent
 
 from wheelchair_shared_control.operator_intent import (
     FORWARD as FORWARD_INTENT,
+    LEFT_TURN as LEFT_TURN_INTENT,
     RELEASED as RELEASED_INTENT,
+    RIGHT_TURN as RIGHT_TURN_INTENT,
 )
 
 
 RELEASED = "released"
 FORWARD = "forward"
-COMMANDS = (RELEASED, FORWARD)
+LEFT_TURN = "left_turn"
+RIGHT_TURN = "right_turn"
+COMMANDS = (RELEASED, FORWARD, LEFT_TURN, RIGHT_TURN)
 
 
 @dataclass(frozen=True)
@@ -32,7 +36,11 @@ class InjectedCommand:
     deadman: bool
 
 
-def command_for_preset(name: str, forward_request: float) -> InjectedCommand:
+def command_for_preset(
+    name: str,
+    forward_request: float,
+    turn_request: float = 0.5,
+) -> InjectedCommand:
     """Return the normalized intent represented by one operator preset."""
 
     validate_injector_config(
@@ -40,9 +48,18 @@ def command_for_preset(name: str, forward_request: float) -> InjectedCommand:
         forward_request=forward_request,
         publish_rate_hz=1.0,
         motion_timeout_s=1.0,
+        turn_request=turn_request,
     )
     if name == RELEASED:
         return InjectedCommand(0.0, 0.0, RELEASED_INTENT, False)
+    if name == LEFT_TURN:
+        return InjectedCommand(
+            float(turn_request), 0.0, LEFT_TURN_INTENT, True
+        )
+    if name == RIGHT_TURN:
+        return InjectedCommand(
+            -float(turn_request), 0.0, RIGHT_TURN_INTENT, True
+        )
     return InjectedCommand(
         0.0,
         float(forward_request),
@@ -57,6 +74,7 @@ def validate_injector_config(
     forward_request: float,
     publish_rate_hz: float,
     motion_timeout_s: float,
+    turn_request: float = 0.5,
 ) -> None:
     """Validate startup values without depending on a running ROS graph."""
 
@@ -68,6 +86,8 @@ def validate_injector_config(
         raise ValueError("publish_rate_hz must be finite and positive")
     if not math.isfinite(motion_timeout_s) or motion_timeout_s <= 0.0:
         raise ValueError("motion_timeout_s must be finite and positive")
+    if not math.isfinite(turn_request) or not 0.0 < turn_request <= 1.0:
+        raise ValueError("turn_request must be finite and in (0, 1]")
 
 
 def motion_lease_expired(
@@ -94,6 +114,7 @@ class OperatorIntentInjectorNode(Node):
         self.declare_parameter("frame_id", "base_link")
         self.declare_parameter("command", RELEASED)
         self.declare_parameter("forward_request", 0.5)
+        self.declare_parameter("turn_request", 0.5)
         self.declare_parameter("publish_rate_hz", 20.0)
         self.declare_parameter("motion_timeout_s", 30.0)
 
@@ -104,6 +125,7 @@ class OperatorIntentInjectorNode(Node):
         self._publish_rate_hz = float(
             self.get_parameter("publish_rate_hz").value
         )
+        self._turn_request = float(self.get_parameter("turn_request").value)
         self._motion_timeout_s = float(
             self.get_parameter("motion_timeout_s").value
         )
@@ -112,6 +134,7 @@ class OperatorIntentInjectorNode(Node):
             forward_request=self._forward_request,
             publish_rate_hz=self._publish_rate_hz,
             motion_timeout_s=self._motion_timeout_s,
+            turn_request=self._turn_request,
         )
 
         self._publisher = self.create_publisher(
@@ -150,6 +173,7 @@ class OperatorIntentInjectorNode(Node):
                 "intent_topic",
                 "frame_id",
                 "forward_request",
+                "turn_request",
                 "publish_rate_hz",
                 "motion_timeout_s",
             ):
@@ -191,7 +215,11 @@ class OperatorIntentInjectorNode(Node):
         self._publish_current()
 
     def _publish_current(self) -> None:
-        command = command_for_preset(self._command, self._forward_request)
+        command = command_for_preset(
+            self._command,
+            self._forward_request,
+            self._turn_request,
+        )
         self._sequence += 1
         msg = OperatorIntent()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -207,8 +235,14 @@ class OperatorIntentInjectorNode(Node):
         self._publisher.publish(msg)
         if self._command != self._last_published_command:
             self.get_logger().info(
-                "Injected operator command: %s (forward=%.3f deadman=%s)"
-                % (self._command, command.longitudinal, command.deadman)
+                "Injected operator command: %s "
+                "(lateral=%.3f longitudinal=%.3f deadman=%s)"
+                % (
+                    self._command,
+                    command.lateral,
+                    command.longitudinal,
+                    command.deadman,
+                )
             )
             self._last_published_command = self._command
 

@@ -61,17 +61,14 @@ class StraightPhysicalJsmControlTests(unittest.TestCase):
         self.assertEqual(control.transform(sample(4, 80)), (0, 20))
         self.assertEqual(link.calls[-1], (4, 80, True))
 
-    def test_hard_turn_latches_stop_until_both_axes_return_neutral(self):
-        link = FakeSafetyLink(safe_output=(0, 20))
+    def test_hard_turn_is_supervised_without_local_latch(self):
+        link = FakeSafetyLink(safe_output=(60, 15))
         control = StraightPhysicalJsmControl(link, mode="enforce", neutral_deadzone=5)
 
-        self.assertEqual(control.transform(sample(90, 20)), (0, 0))
-        self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
-        self.assertEqual(control.transform(sample(0, 80)), (0, 0))
-        self.assertEqual(control.last_result.reason, "local_stop_latched")
-        self.assertEqual(control.transform(sample(0, 0)), (0, 0))
+        self.assertEqual(control.transform(sample(90, 20)), (60, 15))
+        self.assertEqual(link.calls[-1], (90, 20, True))
+        self.assertEqual(control.last_result.intent_label, "right_turn")
         self.assertFalse(control.last_result.local_stop_latched)
-        self.assertEqual(control.transform(sample(0, 80)), (0, 20))
 
     def test_forward_correction_is_supervised_without_local_latch(self):
         link = FakeSafetyLink(safe_output=(-3, 20))
@@ -97,18 +94,18 @@ class StraightPhysicalJsmControlTests(unittest.TestCase):
         )
         self.assertFalse(control.last_result.local_stop_latched)
 
-    def test_hard_reverse_turn_remains_locally_stopped_and_latched(self):
-        link = FakeSafetyLink()
+    def test_hard_turn_with_reverse_adjustment_is_supervised(self):
+        link = FakeSafetyLink(safe_output=(60, -15))
         control = StraightPhysicalJsmControl(link, mode="enforce")
 
-        self.assertEqual(control.transform(sample(100, -20)), (0, 0))
-        self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
-        self.assertTrue(control.last_result.local_stop_latched)
+        self.assertEqual(control.transform(sample(100, -20)), (60, -15))
+        self.assertEqual(link.calls[-1], (100, -20, True))
+        self.assertFalse(control.last_result.local_stop_latched)
 
     def test_pure_lateral_input_is_not_treated_as_release(self):
-        link = FakeSafetyLink()
+        link = FakeSafetyLink(safe_output=(60, 0))
         control = StraightPhysicalJsmControl(link, mode="enforce")
 
-        self.assertEqual(control.transform(sample(100, 0)), (0, 0))
-        self.assertEqual(control.last_result.reason, "right_turn_not_enabled")
+        self.assertEqual(control.transform(sample(100, 0)), (60, 0))
+        self.assertEqual(control.last_result.intent_label, "right_turn")
         self.assertEqual(link.calls[-1], (100, 0, True))

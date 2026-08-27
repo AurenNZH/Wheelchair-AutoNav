@@ -25,6 +25,13 @@ class SafetyConfigValidationTests(unittest.TestCase):
             SafetyConfig(slow_forward_limit=1.01),
             SafetyConfig(reverse_limit=0.0),
             SafetyConfig(reverse_limit=1.01),
+            SafetyConfig(turn_clearance_radius_m=0.0),
+            SafetyConfig(clear_turn_limit=0.0),
+            SafetyConfig(clear_turn_limit=1.01),
+            SafetyConfig(slow_turn_limit=0.0),
+            SafetyConfig(slow_turn_limit=0.91, clear_turn_limit=0.90),
+            SafetyConfig(turn_longitudinal_limit=-0.01),
+            SafetyConfig(turn_longitudinal_limit=1.01),
         )
         for config in invalid:
             with self.subTest(config=config), self.assertRaises(ValueError):

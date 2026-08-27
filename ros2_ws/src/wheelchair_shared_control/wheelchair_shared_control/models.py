@@ -34,6 +34,10 @@ class SafetyConfig:
     max_steering: float = 0.577350269
     slow_forward_limit: float = 0.60
     reverse_limit: float = 0.65
+    turn_clearance_radius_m: float = 0.55
+    clear_turn_limit: float = 0.90
+    slow_turn_limit: float = 0.60
+    turn_longitudinal_limit: float = 0.15
     path_sample_step_m: float = 0.05
     steering_sample_step: float = 0.05
     neutral_deadzone: float = 0.05
@@ -126,6 +130,7 @@ def validate_safety_config(config: SafetyConfig) -> None:
         config.min_turn_radius_m,
         config.stop_distance_m,
         config.slow_distance_m,
+        config.turn_clearance_radius_m,
     )
     if not all(
         math.isfinite(value) and value > 0.0 for value in finite_positive
@@ -143,6 +148,21 @@ def validate_safety_config(config: SafetyConfig) -> None:
         and 0.0 < config.reverse_limit <= 1.0
     ):
         raise ValueError("reverse limit must be in (0, 1]")
+    if not (
+        math.isfinite(config.clear_turn_limit)
+        and 0.0 < config.clear_turn_limit <= 1.0
+    ):
+        raise ValueError("clear turn limit must be in (0, 1]")
+    if not (
+        math.isfinite(config.slow_turn_limit)
+        and 0.0 < config.slow_turn_limit <= config.clear_turn_limit
+    ):
+        raise ValueError("slow turn limit must be in (0, clear turn limit]")
+    if not (
+        math.isfinite(config.turn_longitudinal_limit)
+        and 0.0 <= config.turn_longitudinal_limit <= 1.0
+    ):
+        raise ValueError("turn longitudinal limit must be in [0, 1]")
     if not (
         1
         <= config.slow_cost_threshold

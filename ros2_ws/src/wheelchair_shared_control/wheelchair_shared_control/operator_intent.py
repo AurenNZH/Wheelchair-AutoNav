@@ -121,6 +121,34 @@ def intent_label(intent_class: int) -> str:
         raise ValueError("unknown intent class") from exc
 
 
+def is_valid_hard_turn(
+    lateral: float,
+    longitudinal: float,
+    intent_class: int,
+    deadman: bool,
+    *,
+    neutral_deadzone: float = 0.05,
+    forward_cone_half_angle_deg: float = 30.0,
+) -> bool:
+    """Return whether fields consistently describe an active hard turn."""
+
+    if not deadman:
+        return False
+    try:
+        classified = classify_normalized_axes(
+            lateral,
+            longitudinal,
+            neutral_deadzone=neutral_deadzone,
+            forward_cone_half_angle_deg=forward_cone_half_angle_deg,
+        )
+    except ValueError:
+        return False
+    return (
+        int(intent_class) == classified.intent_class
+        and classified.intent_class in (LEFT_TURN, RIGHT_TURN)
+    )
+
+
 __all__ = [
     "ClassifiedIntent",
     "FORWARD",
@@ -137,5 +165,6 @@ __all__ = [
     "REVERSE_RIGHT",
     "RIGHT_TURN",
     "classify_normalized_axes",
+    "is_valid_hard_turn",
     "intent_label",
 ]

@@ -402,6 +402,64 @@ class SafetyLinkTests(unittest.TestCase):
         )
         self.assertTrue(link.get_status()["stop_latched"])
 
+    def test_turn_envelope_uses_direct_lateral_and_local_caps(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            turn_command_cap=0.90,
+            slow_turn_command_cap=0.60,
+            turn_longitudinal_cap=0.15,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        self.assertEqual(link.apply(-100, 30, True), (0, 0))
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 0.15,
+                        0.90, "nav2_turn_cost_clear", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(-100, 30, True), (-90, 15))
+
+    def test_turn_envelope_cannot_reverse_lateral_direction(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(-100, 0, True)
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 0.0,
+                        -0.90, "wrong_turn_direction", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(-100, 0, True), (0, 0))
+        self.assertTrue(link.get_status()["stop_latched"])
+
     def test_direction_family_change_requires_five_new_envelopes(self):
         udp = FakeSocket()
         clock = FakeClock()

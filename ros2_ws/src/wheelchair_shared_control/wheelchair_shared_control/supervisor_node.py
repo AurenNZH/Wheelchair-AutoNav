@@ -42,7 +42,10 @@ from wheelchair_shared_control.safety_policy import (
     motion_configuration_decision,
     stop_decision,
 )
-from wheelchair_shared_control.operator_intent import classify_normalized_axes
+from wheelchair_shared_control.operator_intent import (
+    classify_normalized_axes,
+    is_valid_hard_turn,
+)
 
 
 class SafetySupervisorNode(Node):
@@ -57,6 +60,9 @@ class SafetySupervisorNode(Node):
         )
         self.declare_parameter(
             "source_header_topic", "/lidar_right/filter/source_header"
+        )
+        self.declare_parameter(
+            "left_source_header_topic", "/lidar_left/filter/source_header"
         )
         self.declare_parameter("freshness_mode", NAV2_LIVE)
         self.declare_parameter(
@@ -76,6 +82,10 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("max_steering", 0.577350269)
         self.declare_parameter("slow_forward_limit", 0.60)
         self.declare_parameter("reverse_limit", 0.65)
+        self.declare_parameter("turn_clearance_radius_m", 0.55)
+        self.declare_parameter("clear_turn_limit", 0.90)
+        self.declare_parameter("slow_turn_limit", 0.60)
+        self.declare_parameter("turn_longitudinal_limit", 0.15)
         self.declare_parameter("path_sample_step_m", 0.05)
         self.declare_parameter("steering_sample_step", 0.05)
         self.declare_parameter("neutral_deadzone", 0.05)
@@ -92,6 +102,7 @@ class SafetySupervisorNode(Node):
         self._merged_stamp_ns = 0
         self._merged_received_monotonic_ns = 0
         self._source_stamp_ns = None
+        self._left_source_stamp_ns = None
         self._freshness_policy = self._load_freshness_policy()
         self._freshness_mode = self._freshness_policy.mode
         self._last_reason = None
@@ -132,6 +143,12 @@ class SafetySupervisorNode(Node):
             self._on_source_header,
             10,
         )
+        self.create_subscription(
+            Header,
+            self.get_parameter("left_source_header_topic").value,
+            self._on_left_source_header,
+            10,
+        )
         rate_hz = float(self.get_parameter("decision_rate_hz").value)
         if rate_hz <= 0.0:
             raise ValueError("decision_rate_hz must be positive")
@@ -167,6 +184,18 @@ class SafetySupervisorNode(Node):
                 self.get_parameter("slow_forward_limit").value
             ),
             reverse_limit=float(self.get_parameter("reverse_limit").value),
+            turn_clearance_radius_m=float(
+                self.get_parameter("turn_clearance_radius_m").value
+            ),
+            clear_turn_limit=float(
+                self.get_parameter("clear_turn_limit").value
+            ),
+            slow_turn_limit=float(
+                self.get_parameter("slow_turn_limit").value
+            ),
+            turn_longitudinal_limit=float(
+                self.get_parameter("turn_longitudinal_limit").value
+            ),
             path_sample_step_m=float(
                 self.get_parameter("path_sample_step_m").value
             ),
@@ -213,6 +242,9 @@ class SafetySupervisorNode(Node):
 
     def _on_source_header(self, msg: Header) -> None:
         self._source_stamp_ns = Time.from_msg(msg.stamp).nanoseconds
+
+    def _on_left_source_header(self, msg: Header) -> None:
+        self._left_source_stamp_ns = Time.from_msg(msg.stamp).nanoseconds
 
     def _on_merged_map(self, msg: OccupancyGrid) -> None:
         try:
@@ -272,6 +304,8 @@ class SafetySupervisorNode(Node):
                     self._merged_received_monotonic_ns
                 ),
                 source_stamp_ns=self._source_stamp_ns,
+                left_source_stamp_ns=self._left_source_stamp_ns,
+                require_left_source=self._turn_intent_requested(),
             ),
             self._freshness_policy,
         )
@@ -308,8 +342,29 @@ class SafetySupervisorNode(Node):
                 if freshness.source_age_s is None
                 else max(0.0, freshness.source_age_s * 1000.0)
             ),
+            (
+                None
+                if freshness.left_source_age_s is None
+                else max(0.0, freshness.left_source_age_s * 1000.0)
+            ),
         )
         self._publish_checked_corridor(decision, envelope.header)
+
+    def _turn_intent_requested(self) -> bool:
+        """Require dual-source freshness only for a valid hard-turn intent."""
+
+        if self._intent is None or not bool(self._intent.deadman):
+            return False
+        return is_valid_hard_turn(
+            float(self._intent.lateral),
+            float(self._intent.longitudinal),
+            int(self._intent.intent_class),
+            bool(self._intent.deadman),
+            neutral_deadzone=self._config.neutral_deadzone,
+            forward_cone_half_angle_deg=(
+                self._config.forward_cone_half_angle_deg
+            ),
+        )
 
     def _evaluate_intent(self) -> SafetyDecision:
         lateral = float(self._intent.lateral)
@@ -357,6 +412,7 @@ class SafetySupervisorNode(Node):
         header: Header,
     ) -> None:
         requested_steering = None
+        turn_disc_requested = False
         label = "waiting"
         if self._intent is not None:
             view = corridor_intent_view(
@@ -367,11 +423,13 @@ class SafetySupervisorNode(Node):
                 config=self._config,
             )
             requested_steering = view.requested_steering
+            turn_disc_requested = view.turn_disc_requested
             label = view.label
         markers = build_checked_corridor_markers(
             header=header,
             decision=decision,
             requested_steering=requested_steering,
+            turn_disc_requested=turn_disc_requested,
             config=self._config,
             label=label,
         )
@@ -384,6 +442,7 @@ class SafetySupervisorNode(Node):
         processing_ms: float,
         map_age_basis: str,
         source_age_ms: float | None,
+        left_source_age_ms: float | None,
     ) -> None:
         snapshot = SafetyDiagnosticSnapshot(
             decision=decision,
@@ -393,6 +452,7 @@ class SafetySupervisorNode(Node):
             freshness_mode=self._freshness_mode,
             map_age_basis=map_age_basis,
             source_age_ms=source_age_ms,
+            left_source_age_ms=left_source_age_ms,
         )
         diagnostics = DiagnosticArray()
         diagnostics.header.stamp = self.get_clock().now().to_msg()

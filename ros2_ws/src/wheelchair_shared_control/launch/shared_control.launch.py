@@ -24,6 +24,10 @@ def generate_launch_description():
                 default_value="/lidar_right/filter/source_header",
             ),
             DeclareLaunchArgument(
+                "left_source_header_topic",
+                default_value="/lidar_left/filter/source_header",
+            ),
+            DeclareLaunchArgument(
                 "freshness_mode", default_value="nav2_live"
             ),
             DeclareLaunchArgument("max_map_age_s", default_value="0.50"),
@@ -35,6 +39,14 @@ def generate_launch_description():
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.60"),
             DeclareLaunchArgument("reverse_limit", default_value="0.65"),
+            DeclareLaunchArgument(
+                "turn_clearance_radius_m", default_value="0.55"
+            ),
+            DeclareLaunchArgument("clear_turn_limit", default_value="0.90"),
+            DeclareLaunchArgument("slow_turn_limit", default_value="0.60"),
+            DeclareLaunchArgument(
+                "turn_longitudinal_limit", default_value="0.15"
+            ),
             DeclareLaunchArgument("min_steering", default_value="-0.577350269"),
             DeclareLaunchArgument("max_steering", default_value="0.577350269"),
             DeclareLaunchArgument(
@@ -63,6 +75,9 @@ def generate_launch_description():
                         "source_header_topic": LaunchConfiguration(
                             "source_header_topic"
                         ),
+                        "left_source_header_topic": LaunchConfiguration(
+                            "left_source_header_topic"
+                        ),
                         "freshness_mode": LaunchConfiguration(
                             "freshness_mode"
                         ),
@@ -79,6 +94,18 @@ def generate_launch_description():
                             "slow_forward_limit"
                         ),
                         "reverse_limit": LaunchConfiguration("reverse_limit"),
+                        "turn_clearance_radius_m": LaunchConfiguration(
+                            "turn_clearance_radius_m"
+                        ),
+                        "clear_turn_limit": LaunchConfiguration(
+                            "clear_turn_limit"
+                        ),
+                        "slow_turn_limit": LaunchConfiguration(
+                            "slow_turn_limit"
+                        ),
+                        "turn_longitudinal_limit": LaunchConfiguration(
+                            "turn_longitudinal_limit"
+                        ),
                         "min_steering": LaunchConfiguration("min_steering"),
                         "max_steering": LaunchConfiguration("max_steering"),
                         "forward_cone_half_angle_deg": LaunchConfiguration(

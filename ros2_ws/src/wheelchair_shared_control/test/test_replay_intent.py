@@ -18,7 +18,9 @@ from wheelchair_shared_control.replay.envelope_monitor import (
 )
 from wheelchair_shared_control.replay.intent_injector import (
     FORWARD,
+    LEFT_TURN,
     RELEASED,
+    RIGHT_TURN,
     command_for_preset,
     motion_lease_expired,
     validate_injector_config,
@@ -45,6 +47,21 @@ class IntentInjectorTests(unittest.TestCase):
         self.assertEqual(forward.intent_class, OperatorIntent.FORWARD)
         self.assertTrue(forward.deadman)
 
+    def test_left_and_right_turn_presets_are_symmetric(self):
+        left = command_for_preset(LEFT_TURN, 0.5, 0.7)
+        right = command_for_preset(RIGHT_TURN, 0.5, 0.7)
+
+        self.assertEqual(
+            (left.lateral, left.longitudinal, left.intent_class),
+            (0.7, 0.0, OperatorIntent.LEFT_TURN),
+        )
+        self.assertEqual(
+            (right.lateral, right.longitudinal, right.intent_class),
+            (-0.7, 0.0, OperatorIntent.RIGHT_TURN),
+        )
+        self.assertTrue(left.deadman)
+        self.assertTrue(right.deadman)
+
     def test_invalid_startup_values_are_rejected(self):
         common = {
             "command": RELEASED,
@@ -59,6 +76,8 @@ class IntentInjectorTests(unittest.TestCase):
             dict(common, forward_request=math.nan),
             dict(common, publish_rate_hz=0.0),
             dict(common, motion_timeout_s=0.0),
+            dict(common, turn_request=0.0),
+            dict(common, turn_request=1.01),
         )
         for parameters in invalid:
             with self.subTest(parameters=parameters):

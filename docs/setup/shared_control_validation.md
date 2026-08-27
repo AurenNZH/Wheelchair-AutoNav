@@ -1,9 +1,10 @@
 # Shared-Control Validation Gates
 
 This checklist validates supervised, low-speed forward motion inside the
-configured correction cone. It does not validate autonomous navigation, hard
-turns, reverse assistance, stairs/drop-offs, curbs, outdoor/public operation,
-or operation without an attendant and tested physical power cutoff.
+configured correction cone and hard turns inside the base-centred clearance
+disc. It does not validate autonomous navigation, reverse assistance,
+stairs/drop-offs, curbs, outdoor/public operation, or operation without an
+attendant and tested physical power cutoff.
 
 Keep all three live gates off until their preceding stages pass:
 
@@ -58,8 +59,8 @@ Pass only if all of the following hold:
   and cloud-age p95 are below 150 ms, no repeating spike occurs, and no queue
   grows.
 - Both `/lidar_<side>/filter/source_header` topics advance after every
-  successfully filtered cloud. Supervisor diagnostics currently validate only
-  the right heartbeat; extending that gate is required before enforcement.
+  successfully filtered cloud. Forward motion retains the right-source gate;
+  hard turns require both sources to remain fresh.
 - Stopping the filter produces `stale_source`; stopping Nav2 while the filter
   remains live produces `stale_map`. Each transition must occur within the
   configured 0.50-second limit.
@@ -141,18 +142,19 @@ configured 90-count CLEAR / 60-count SLOW caps.
 1. Empty corridor: no false intervention.
 2. Large static foam/cardboard obstacle: SLOW then STOP before the measured
    boundary.
-3. Every hard-turn request must remain stopped. Reverse corrections inside the
-   validated 30-degree cone may proceed only at the fixed 65-count reverse cap;
-   maintain open rear clearance because no rear obstacle map is consulted.
+3. In a clear disc, left/right turn requests may proceed only within the
+   90-count CLEAR or 60-count SLOW lateral cap and 15-count longitudinal cap.
+   A cost of 99 or greater anywhere in the checked disc must latch STOP until
+   release. Reverse corrections may proceed only at the fixed 65-count reverse
+   cap; maintain open rear clearance because reverse is unmonitored.
 4. Doorway: reject openings below the measured chair envelope plus margin;
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
-6. Keep side/rear obstacles outside the requested trajectory diagnostic-only;
-   the current supervisor samples `/nav2_merged_costmap` only along the
-   straight-to-requested correction union and does not claim full-surround
-   protection.
-7. Defer moving-person tests and hard-turn physical control until straight and
-   shallow-correction CLEAR/SLOW/STOP gates pass repeatably.
+6. Side/rear obstacles outside the forward trajectory remain diagnostic-only;
+   hard turns inspect only the 0.55 m pixelated disc and do not claim general
+   full-surround protection.
+7. Defer moving-person tests until forward, shallow-correction, and hard-turn
+   CLEAR/SLOW/STOP gates pass repeatably.
 
 Any collision, missed detection, oscillating permit/stop behavior, timeout
 violation, or unexplained map dropout is a failed gate.

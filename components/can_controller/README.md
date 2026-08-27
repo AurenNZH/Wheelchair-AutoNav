@@ -75,8 +75,9 @@ CLEAR is locally capped at 90 raw forward counts and forward SLOW at 60.
 Reverse requests in the matching 30-degree cone are intentionally unmonitored
 by the front map and
 fixed to SLOW 65. Lateral output scales with the permitted longitudinal
-magnitude so the joystick direction is preserved. Hard turns, every STOP, and
-every link failure are centred.
+magnitude so the joystick direction is preserved. Hard turns use the Jetson's
+merged-costmap disc decision, with local CLEAR/SLOW lateral caps of 90/60 and a
+15-count longitudinal cap. Every STOP and every link failure is centred.
 
 ```bash
 python scripts/supervise_physical_joystick.py \

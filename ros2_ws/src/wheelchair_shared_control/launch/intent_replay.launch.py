@@ -15,12 +15,20 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "command",
                 default_value="released",
-                description="Initial injector preset: released or forward",
+                description=(
+                    "Initial injector preset: released, forward, left_turn, "
+                    "or right_turn"
+                ),
             ),
             DeclareLaunchArgument(
                 "forward_request",
                 default_value="0.5",
                 description="Normalized forward intent in (0, 1]",
+            ),
+            DeclareLaunchArgument(
+                "turn_request",
+                default_value="0.5",
+                description="Normalized hard-turn lateral intent in (0, 1]",
             ),
             DeclareLaunchArgument(
                 "motion_timeout_s",
@@ -54,6 +62,7 @@ def generate_launch_description():
                         "forward_request": LaunchConfiguration(
                             "forward_request"
                         ),
+                        "turn_request": LaunchConfiguration("turn_request"),
                         "motion_timeout_s": LaunchConfiguration(
                             "motion_timeout_s"
                         ),

@@ -51,6 +51,7 @@ Validate measured obstacle distances, thin poles, low blocks, empty scenes,
 doorways, the overlap region, the `x=-0.6 m` rear boundary, and each lateral
 edge of the mapped envelope. Test right-only, left-only, and dual-source
 behavior before accepting the merged map. Rear map coverage does not enable
-reverse or hard-turn intervention. The system must not depict unobserved step,
-curb, or drop-off regions as safe. Record the exact launch arguments and sensor
-mounting state with every acceptance run.
+reverse intervention. Hard turns use only the 0.55 m base-centred pixelated
+disc and require both filter heartbeats. The system must not depict unobserved
+step, curb, or drop-off regions as safe. Record the exact launch arguments and
+sensor mounting state with every acceptance run.

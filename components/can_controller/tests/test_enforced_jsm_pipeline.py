@@ -249,6 +249,57 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
         self.assertEqual(axes, (13, -65))
         self.assertEqual(trailing, b"safety")
 
+    def test_clear_left_turn_caps_lateral_and_longitudinal_axes(self):
+        pipeline = EnforcedJsmPipeline(
+            (jsm_frame(-100, 30), jsm_frame(-100, 30))
+        )
+
+        pipeline.forward_once()
+        pipeline.queue_envelope(
+            CLEAR,
+            0.15,
+            0.90,
+            "nav2_turn_cost_clear",
+        )
+        pipeline.clock.advance(0.01)
+
+        _, _, axes, _ = pipeline.forward_once()
+        self.assertEqual(axes, (-90, 15))
+
+    def test_slow_right_turn_preserves_reverse_adjustment_sign(self):
+        pipeline = EnforcedJsmPipeline(
+            (jsm_frame(100, -30), jsm_frame(100, -30))
+        )
+
+        pipeline.forward_once()
+        pipeline.queue_envelope(
+            SLOW,
+            0.15,
+            -0.60,
+            "nav2_turn_cost_slow",
+        )
+        pipeline.clock.advance(0.01)
+
+        _, _, axes, _ = pipeline.forward_once()
+        self.assertEqual(axes, (60, -15))
+
+    def test_pure_right_turn_does_not_require_longitudinal_motion(self):
+        pipeline = EnforcedJsmPipeline(
+            (jsm_frame(100, 0), jsm_frame(100, 0))
+        )
+
+        pipeline.forward_once()
+        pipeline.queue_envelope(
+            CLEAR,
+            0.0,
+            -0.90,
+            "nav2_turn_cost_clear",
+        )
+        pipeline.clock.advance(0.01)
+
+        _, _, axes, _ = pipeline.forward_once()
+        self.assertEqual(axes, (90, 0))
+
     def test_wrong_sender_and_expired_envelope_never_forward_raw_motion(self):
         pipeline = EnforcedJsmPipeline(
             (

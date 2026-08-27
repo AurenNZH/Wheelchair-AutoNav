@@ -6,7 +6,9 @@ are supported. Forward CLEAR is capped at 90 raw counts and SLOW at 60.
 Reverse is deliberately unmonitored by the supervisor and is always capped
 at SLOW 65 with reason `reverse_unmonitored_slow`. Correction X scales with
 the permitted Y magnitude so the input direction is preserved. Hard turns
-stop locally and remain latched until both joystick axes return to neutral.
+check a 0.55 m base-centred costmap disc and require both L2 filter heartbeats.
+Their CLEAR/SLOW lateral caps are 90/60, with longitudinal adjustment capped
+at 15. Every supervisor STOP remains latched until joystick release.
 
 The Pi and Jetson use lockstep UDP protocol v2 over the isolated Ethernet
 router. Deploy and rebuild both sides before testing; a mixed v1/v2 enforce
@@ -49,11 +51,9 @@ ros2 launch wheelchair_bringup wheelchair.launch.py \
   use_inflation:=true
 ```
 
-Confirm RViz shows a current, credible `/nav2_merged_costmap` before
-continuing. This dual-source mapping change does not yet make physical
-enforcement acceptable: the supervisor still monitors only the right filter's
-source heartbeat. Revalidate dual-source freshness before using this procedure
-for motion.
+Confirm RViz shows a current, credible `/nav2_merged_costmap` and both filtered
+clouds before continuing. Hard turns fail closed unless both source-heartbeat
+topics are current.
 
 ## 2. Jetson supervisor and UDP bridge
 
@@ -69,6 +69,8 @@ ros2 launch wheelchair_shared_control shared_control.launch.py \
   bind_address:=192.168.0.102 \
   pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101 \
   slow_forward_limit:=0.60 reverse_limit:=0.65 \
+  turn_clearance_radius_m:=0.55 clear_turn_limit:=0.90 \
+  slow_turn_limit:=0.60 turn_longitudinal_limit:=0.15 \
   slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
 
@@ -136,6 +138,7 @@ source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 bag record -o /tmp/physical_shared_enforce_01 \
   /operator_intent /lidar_right/filter/source_header \
+  /lidar_left/filter/source_header \
   /nav2_merged_costmap /safety_envelope /shared_control/diagnostics \
   /shared_control/checked_corridor
 ```
@@ -151,6 +154,8 @@ python3 supervise_physical_joystick.py \
   --jetson-address 192.168.0.102 \
   --allowed-jetson-address 192.168.0.102 \
   --clear-cap 90 --slow-cap 60 --reverse-cap 65 \
+  --turn-clear-cap 90 --turn-slow-cap 60 \
+  --turn-longitudinal-cap 15 \
   --deadzone 4 --forward-cone-deg 30 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
   --csv /tmp/physical_shared_enforce_01.csv
@@ -170,8 +175,13 @@ Validate in this order:
 6. Confirm straight and shallow-correction reverse requests never exceed a
    magnitude of 65 and report `reverse_unmonitored_slow`. Rear obstacles are
    not observed in this scope; use open rear clearance and the physical cutoff.
-   Hard turns must remain zero; centre both axes before re-arming.
-7. At the capped CLEAR speed, stop the point-support filter, Jetson supervisor, and
+7. In open clearance, request pure left and right turns. The displayed disc,
+   supervisor decision, and sent axes must agree; lateral output must remain
+   within 90/60 and longitudinal output within 15.
+8. Place a soft obstacle inside the disc and confirm a hard-turn request sends
+   `(0,0)` and remains latched until release. Stop either L2 filter separately;
+   hard turns must also fail closed within the source timeout.
+9. At the capped CLEAR speed, stop the point-support filter, Jetson supervisor, and
    network separately. Each must centre output within the 200 ms envelope
    timeout. Restart the full pipeline and return to neutral between drills.
 
@@ -183,7 +193,8 @@ than counting that approach as a CLEAR/SLOW pass.
 
 The run passes only when RViz, the Jetson decision, Pi `safe`/`sent` fields,
 and physical response agree for all three states; the sent command never
-exceeds the operator request or its 90/60 forward cap or 65 reverse cap;
+exceeds the operator request, its 90/60 forward or turn cap, the 15-count turn
+longitudinal cap, or the 65 reverse cap;
 failure drills centre within
 200 ms; both forwarding counters continue increasing; and `errors=0` for the
 entire capture.

@@ -105,6 +105,38 @@ class FreshnessTests(unittest.TestCase):
         self.assertIsNone(stale_map.input_failure_reason)
         self.assertEqual(stale_map.map_age_failure_reason, "stale_map")
 
+    def test_left_source_is_required_only_when_requested(self):
+        unchanged = self.evaluate(left_source_stamp_ns=None)
+        missing = self.evaluate(
+            require_left_source=True,
+            left_source_stamp_ns=None,
+        )
+        fresh = self.evaluate(
+            require_left_source=True,
+            left_source_stamp_ns=9_800_000_000,
+        )
+
+        self.assertIsNone(unchanged.failure_reason)
+        self.assertEqual(
+            missing.failure_reason, "missing_left_source_heartbeat"
+        )
+        self.assertIsNone(fresh.failure_reason)
+        self.assertEqual(fresh.left_source_age_s, 0.2)
+
+    def test_required_left_source_timestamp_errors_fail_closed(self):
+        fixtures = (
+            (0, "invalid_left_source_timestamp"),
+            (10_200_000_000, "future_left_source_timestamp"),
+            (9_400_000_000, "stale_left_source"),
+        )
+        for stamp_ns, expected in fixtures:
+            with self.subTest(stamp_ns=stamp_ns):
+                status = self.evaluate(
+                    require_left_source=True,
+                    left_source_stamp_ns=stamp_ns,
+                )
+                self.assertEqual(status.failure_reason, expected)
+
     def test_map_stamp_mode_uses_map_header_semantics(self):
         policy = replace(self.policy, mode=MAP_STAMP)
         invalid = self.evaluate(policy=policy)

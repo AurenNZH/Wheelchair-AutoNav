@@ -11,6 +11,7 @@ from wheelchair_shared_control.operator_intent import (
     REVERSE_RIGHT,
     RIGHT_TURN,
     classify_normalized_axes,
+    is_valid_hard_turn,
 )
 
 
@@ -70,6 +71,13 @@ class OperatorIntentClassificationTests(unittest.TestCase):
         self.assertTrue(right.is_reverse)
         self.assertAlmostEqual(left.steering_ratio, 0.2)
         self.assertAlmostEqual(right.steering_ratio, -0.2)
+
+    def test_only_consistent_active_hard_turns_request_disc_support(self):
+        self.assertTrue(is_valid_hard_turn(0.8, 0.0, LEFT_TURN, True))
+        self.assertTrue(is_valid_hard_turn(-0.8, 0.0, RIGHT_TURN, True))
+        self.assertFalse(is_valid_hard_turn(0.0, 0.8, FORWARD, True))
+        self.assertFalse(is_valid_hard_turn(0.8, 0.0, FORWARD_LEFT, True))
+        self.assertFalse(is_valid_hard_turn(0.8, 0.0, LEFT_TURN, False))
 
 
 if __name__ == "__main__":

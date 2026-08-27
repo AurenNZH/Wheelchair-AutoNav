@@ -7,7 +7,11 @@ from typing import Optional
 
 from .jsm_observer import JsmSample
 from .operator_intent import (
+    FORWARD_CLASSES,
+    LEFT_TURN,
     RELEASED,
+    REVERSE_CLASSES,
+    RIGHT_TURN,
     classify_raw_axes,
     intent_label,
 )
@@ -92,7 +96,11 @@ class PhysicalJsmSharedControl:
                 # Neutral is an unconditional local stop even if a malformed
                 # or stale safety-link implementation returned motion.
                 would_x, would_y = 0, 0
-            elif not (intent.is_forward or intent.is_reverse):
+            elif intent.intent_class not in (
+                FORWARD_CLASSES
+                + REVERSE_CLASSES
+                + (LEFT_TURN, RIGHT_TURN)
+            ):
                 self._local_stop_latched = True
                 self.safety_link.apply(input_x, input_y, True)
                 would_x, would_y = 0, 0

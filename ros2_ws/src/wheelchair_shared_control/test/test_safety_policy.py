@@ -246,24 +246,60 @@ class SafetyPolicyTests(unittest.TestCase):
         self.assertEqual(outside.reason, "trajectory_outside_costmap")
         self.assertFalse(outside.path_cost_valid)
 
-    def test_hard_left_and_right_turns_are_vetoed(self):
+    def test_hard_left_and_right_turns_are_disc_checked_and_capped(self):
+        merged = self._costmap({}, width=50, origin_x=-0.6)
         left = evaluate_safety(
             OperatorIntentData(
-                "session", 5, 0.96, 0.12, LEFT_TURN, True
+                "session", 5, 0.96, 0.30, LEFT_TURN, True
             ),
-            self.empty,
+            merged,
             self.enabled,
         )
         right = evaluate_safety(
             OperatorIntentData(
-                "session", 6, -1.0, 0.0, RIGHT_TURN, True
+                "session", 6, -1.0, -0.20, RIGHT_TURN, True
             ),
-            self.empty,
+            merged,
             self.enabled,
         )
 
-        self.assertEqual(left.reason, "left_turn_not_enabled")
-        self.assertEqual(right.reason, "right_turn_not_enabled")
+        self.assertEqual(left.decision, CLEAR)
+        self.assertEqual(right.decision, CLEAR)
+        self.assertEqual(left.reason, "nav2_turn_cost_clear")
+        self.assertEqual(right.reason, "nav2_turn_cost_clear")
+        self.assertAlmostEqual(left.permitted_forward, 0.15)
+        self.assertAlmostEqual(right.permitted_forward, 0.15)
+        self.assertAlmostEqual(left.permitted_steering, 0.90)
+        self.assertAlmostEqual(right.permitted_steering, -0.90)
+
+    def test_turn_disc_costs_produce_stop_slow_and_clear(self):
+        intent = OperatorIntentData(
+            "session", 5, 0.8, 0.0, LEFT_TURN, True
+        )
+        clear = evaluate_safety(
+            intent,
+            self._costmap({(12, 40): 100}, width=50, origin_x=-0.6),
+            self.enabled,
+        )
+        slow = evaluate_safety(
+            intent,
+            self._costmap({(10, 40): 50}, width=50, origin_x=-0.6),
+            self.enabled,
+        )
+        stop = evaluate_safety(
+            intent,
+            self._costmap({(6, 40): 99}, width=50, origin_x=-0.6),
+            self.enabled,
+        )
+
+        self.assertEqual(clear.reason, "nav2_turn_cost_clear")
+        self.assertAlmostEqual(clear.permitted_steering, 0.8)
+        self.assertEqual(slow.decision, SLOW)
+        self.assertEqual(slow.reason, "nav2_turn_cost_slow")
+        self.assertAlmostEqual(slow.permitted_steering, 0.60)
+        self.assertEqual(stop.decision, STOP)
+        self.assertEqual(stop.reason, "nav2_turn_cost_stop")
+        self.assertEqual(stop.permitted_steering, 0.0)
 
     def test_intent_class_mismatch_is_stopped(self):
         mismatch = evaluate_safety(

@@ -30,9 +30,9 @@ base_link -> lidar_right_link: 0.330 -0.220 0.320 0.479965544 0 0
 ```
 
 Motion fails closed when required intent, map receipt, source timestamp,
-sequence, peer, session, or heartbeat data is invalid or stale. The current
-supervisor source-freshness heartbeat remains right-only pending a separate
-dual-source physical-safety validation. Rear obstacle avoidance, drop-offs,
-steps, curbs, and hazards below the observed height remain outside the accepted
-scope. The merged map extends 0.6 m behind `base_link`, but reverse and hard-turn
-obstacle intervention remain outside the current motion policy.
+sequence, peer, session, or heartbeat data is invalid or stale. Forward motion
+retains the right-source freshness gate. Hard left/right turns additionally
+require a fresh left-source heartbeat and evaluate a 0.55 m pixelated disc
+centred on `base_link`. Rear obstacle avoidance, drop-offs, steps, curbs, and
+hazards below the observed height remain outside the accepted scope. Reverse
+remains unmonitored and locally capped.

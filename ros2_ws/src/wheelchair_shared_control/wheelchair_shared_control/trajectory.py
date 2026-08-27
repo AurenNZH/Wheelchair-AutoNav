@@ -61,6 +61,70 @@ def swept_path_costs(
     )
 
 
+def turn_disc_costs(
+    costmap: WeightedCostmap,
+    config: SafetyConfig,
+) -> PathCostSummary:
+    """Sample cells whose centres lie in the base-centred turn disc."""
+
+    validate_safety_config(config)
+    radius = float(config.turn_clearance_radius_m)
+    map_min_x = float(costmap.origin_x_m)
+    map_min_y = float(costmap.origin_y_m)
+    map_max_x = map_min_x + costmap.width * costmap.resolution_m
+    map_max_y = map_min_y + costmap.height * costmap.resolution_m
+    tolerance = 1e-9
+    if (
+        map_min_x > -radius + tolerance
+        or map_max_x < radius - tolerance
+        or map_min_y > -radius + tolerance
+        or map_max_y < radius - tolerance
+    ):
+        return PathCostSummary(
+            valid=False,
+            failure_reason="turn_disc_outside_costmap",
+        )
+
+    xs = costmap.origin_x_m + (
+        np.arange(costmap.width, dtype=np.float64) + 0.5
+    ) * costmap.resolution_m
+    ys = costmap.origin_y_m + (
+        np.arange(costmap.height, dtype=np.float64) + 0.5
+    ) * costmap.resolution_m
+    squared_distances = ys[:, None] ** 2 + xs[None, :] ** 2
+    checked = squared_distances <= radius ** 2 + tolerance
+    checked_costs = costmap.costs[checked]
+    if checked_costs.size == 0:
+        return PathCostSummary(
+            valid=False,
+            failure_reason="empty_turn_disc",
+        )
+    if np.any(checked_costs < 0):
+        return PathCostSummary(
+            maximum_cost=int(np.max(checked_costs)),
+            valid=False,
+            failure_reason="unknown_nav2_turn_cost",
+        )
+
+    checked_distances = np.sqrt(squared_distances[checked])
+    slow_mask = checked_costs >= config.slow_cost_threshold
+    stop_mask = checked_costs >= config.stop_cost_threshold
+    return PathCostSummary(
+        maximum_cost=int(np.max(checked_costs)),
+        nearest_slow_distance_m=(
+            float(np.min(checked_distances[slow_mask]))
+            if np.any(slow_mask)
+            else None
+        ),
+        nearest_stop_distance_m=(
+            float(np.min(checked_distances[stop_mask]))
+            if np.any(stop_mask)
+            else None
+        ),
+        valid=True,
+    )
+
+
 def _costs_for_steering(
     costmap: WeightedCostmap,
     steering: float,
@@ -157,4 +221,9 @@ def _maximum(first: int | None, second: int | None) -> int | None:
     return max(first, second)
 
 
-__all__ = ["PathCostSummary", "swept_path_costs", "trajectory_points"]
+__all__ = [
+    "PathCostSummary",
+    "swept_path_costs",
+    "trajectory_points",
+    "turn_disc_costs",
+]

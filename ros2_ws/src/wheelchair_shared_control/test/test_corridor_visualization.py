@@ -12,6 +12,7 @@ from wheelchair_shared_control.models import (
     CLEAR,
     OperatorIntentData,
     SafetyConfig,
+    SafetyDecision,
     weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.safety_policy import evaluate_safety
@@ -98,3 +99,41 @@ def test_invalid_intent_view_remains_non_visualized():
 
     assert view.requested_steering is None
     assert view.label == "invalid_intent"
+
+
+def test_hard_turn_view_draws_disc_without_checked_cell_cubes():
+    config = SafetyConfig(
+        enable_motion=True,
+        geometry_calibrated=True,
+    )
+    view = corridor_intent_view(
+        lateral=0.8,
+        longitudinal=0.0,
+        legacy_forward=0.0,
+        legacy_steering=0.0,
+        config=config,
+    )
+    decision = SafetyDecision(
+        CLEAR,
+        0.0,
+        0.8,
+        "nav2_turn_cost_clear",
+        path_cost_valid=True,
+    )
+    markers = build_checked_corridor_markers(
+        header=Header(frame_id="base_link"),
+        decision=decision,
+        requested_steering=view.requested_steering,
+        turn_disc_requested=view.turn_disc_requested,
+        config=config,
+        label=view.label,
+    ).markers
+
+    assert view.label.startswith("left_turn ")
+    assert view.turn_disc_requested
+    disc = next(
+        marker for marker in markers if marker.ns == "requested_turn_disc"
+    )
+    assert disc.type == Marker.LINE_STRIP
+    assert len(disc.points) == 49
+    assert all(marker.type != Marker.CUBE_LIST for marker in markers)

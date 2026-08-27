@@ -25,6 +25,7 @@ class SafetyDiagnosticSnapshot:
     freshness_mode: str = NAV2_LIVE
     map_age_basis: str = "receipt_time"
     source_age_ms: float | None = None
+    left_source_age_ms: float | None = None
 
 
 def safety_diagnostic_values(
@@ -36,6 +37,7 @@ def safety_diagnostic_values(
     freshness_mode: str = NAV2_LIVE,
     map_age_basis: str = "receipt_time",
     source_age_ms: float | None = None,
+    left_source_age_ms: float | None = None,
 ) -> list[KeyValue]:
     """Build stable, machine-readable evidence for one decision."""
 
@@ -49,6 +51,14 @@ def safety_diagnostic_values(
                 "none" if source_age_ms is None else "%.3f" % source_age_ms
             ),
         ),
+        KeyValue(
+            key="left_source_age_ms",
+            value=(
+                "none"
+                if left_source_age_ms is None
+                else "%.3f" % left_source_age_ms
+            ),
+        ),
         KeyValue(key="processing_ms", value="%.3f" % processing_ms),
         KeyValue(key="enable_motion", value=str(config.enable_motion)),
         KeyValue(
@@ -57,6 +67,22 @@ def safety_diagnostic_values(
         ),
         KeyValue(key="min_steering", value="%.3f" % config.min_steering),
         KeyValue(key="max_steering", value="%.3f" % config.max_steering),
+        KeyValue(
+            key="turn_clearance_radius_m",
+            value="%.3f" % config.turn_clearance_radius_m,
+        ),
+        KeyValue(
+            key="clear_turn_limit",
+            value="%.3f" % config.clear_turn_limit,
+        ),
+        KeyValue(
+            key="slow_turn_limit",
+            value="%.3f" % config.slow_turn_limit,
+        ),
+        KeyValue(
+            key="turn_longitudinal_limit",
+            value="%.3f" % config.turn_longitudinal_limit,
+        ),
         KeyValue(
             key="nearest_path_distance_m",
             value=(
@@ -126,6 +152,7 @@ def build_safety_diagnostic_status(
         freshness_mode=snapshot.freshness_mode,
         map_age_basis=snapshot.map_age_basis,
         source_age_ms=snapshot.source_age_ms,
+        left_source_age_ms=snapshot.left_source_age_ms,
     )
     return status
 

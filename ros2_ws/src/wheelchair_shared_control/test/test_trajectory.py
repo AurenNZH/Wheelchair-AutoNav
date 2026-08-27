@@ -9,6 +9,7 @@ from wheelchair_shared_control.models import (
 from wheelchair_shared_control.trajectory import (
     swept_path_costs,
     trajectory_points,
+    turn_disc_costs,
 )
 
 
@@ -22,7 +23,7 @@ class TrajectoryTests(unittest.TestCase):
         )
 
     @staticmethod
-    def costmap(cells, *, width=40, height=80):
+    def costmap(cells, *, width=40, height=80, origin_x=0.0):
         values = np.zeros(width * height, dtype=np.int16)
         for (col, row), cost in cells.items():
             values[row * width + col] = cost
@@ -32,7 +33,7 @@ class TrajectoryTests(unittest.TestCase):
             width=width,
             height=height,
             resolution_m=0.1,
-            origin_x_m=0.0,
+            origin_x_m=origin_x,
             origin_y_m=-4.0,
             origin_orientation_xyzw=(0.0, 0.0, 0.0, 1.0),
         )
@@ -79,6 +80,39 @@ class TrajectoryTests(unittest.TestCase):
         self.assertEqual(
             outside.failure_reason,
             "trajectory_outside_costmap",
+        )
+
+    def test_turn_disc_uses_cell_centres_and_weighted_costs(self):
+        summary = turn_disc_costs(
+            self.costmap(
+                {
+                    (10, 40): 50,  # Centre (0.45, 0.05), inside 0.55 m.
+                    (12, 40): 100,  # Centre (0.65, 0.05), outside.
+                },
+                width=50,
+                origin_x=-0.6,
+            ),
+            self.config,
+        )
+
+        self.assertTrue(summary.valid)
+        self.assertEqual(summary.maximum_cost, 50)
+        self.assertIsNotNone(summary.nearest_slow_distance_m)
+        self.assertIsNone(summary.nearest_stop_distance_m)
+
+    def test_turn_disc_unknown_and_map_coverage_fail_closed(self):
+        unknown = turn_disc_costs(
+            self.costmap({(6, 40): -1}, width=50, origin_x=-0.6),
+            self.config,
+        )
+        outside = turn_disc_costs(self.costmap({}), self.config)
+
+        self.assertFalse(unknown.valid)
+        self.assertEqual(unknown.failure_reason, "unknown_nav2_turn_cost")
+        self.assertFalse(outside.valid)
+        self.assertEqual(
+            outside.failure_reason,
+            "turn_disc_outside_costmap",
         )
 
 

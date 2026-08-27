@@ -4,6 +4,7 @@
     safety_envelope_topic: /safety_envelope
     merged_costmap_topic: /nav2_merged_costmap
     source_header_topic: /lidar_right/filter/source_header
+    left_source_header_topic: /lidar_left/filter/source_header
     freshness_mode: nav2_live
     diagnostics_topic: /shared_control/diagnostics
     checked_corridor_topic: /shared_control/checked_corridor
@@ -23,6 +24,11 @@
     max_steering: 0.577350269
     slow_forward_limit: 0.60
     reverse_limit: 0.65
+    # Hard turns use a base-centred pixelated disc in the merged costmap.
+    turn_clearance_radius_m: 0.55
+    clear_turn_limit: 0.90
+    slow_turn_limit: 0.60
+    turn_longitudinal_limit: 0.15
     path_sample_step_m: 0.05
     steering_sample_step: 0.05
     neutral_deadzone: 0.05

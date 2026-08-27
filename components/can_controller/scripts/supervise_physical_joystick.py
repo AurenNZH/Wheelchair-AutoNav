@@ -139,6 +139,24 @@ def _arguments(argv=None):
         help="local reverse ceiling in raw JSM counts (default: 65)",
     )
     parser.add_argument(
+        "--turn-clear-cap",
+        type=_positive_integer,
+        default=90,
+        help="local hard-turn CLEAR ceiling in raw counts (default: 90)",
+    )
+    parser.add_argument(
+        "--turn-slow-cap",
+        type=_positive_integer,
+        default=60,
+        help="local hard-turn SLOW ceiling in raw counts (default: 60)",
+    )
+    parser.add_argument(
+        "--turn-longitudinal-cap",
+        type=_nonnegative_integer,
+        default=15,
+        help="hard-turn longitudinal ceiling in raw counts (default: 15)",
+    )
+    parser.add_argument(
         "--deadzone",
         type=_nonnegative_integer,
         default=5,
@@ -192,6 +210,12 @@ def main(argv=None) -> int:
             raise ValueError("slow-cap must not exceed clear-cap")
         if args.reverse_cap > 100:
             raise ValueError("reverse-cap must be in [1, 100]")
+        if args.turn_clear_cap > 100:
+            raise ValueError("turn-clear-cap must be in [1, 100]")
+        if args.turn_slow_cap > args.turn_clear_cap:
+            raise ValueError("turn-slow-cap must not exceed turn-clear-cap")
+        if args.turn_longitudinal_cap > 100:
+            raise ValueError("turn-longitudinal-cap must be in [0, 100]")
         if args.forward_cone_deg >= 90.0:
             raise ValueError("forward-cone-deg must be less than 90")
     except ValueError as exc:
@@ -222,6 +246,9 @@ def main(argv=None) -> int:
             command_cap=args.clear_cap / 100.0,
             slow_command_cap=args.slow_cap / 100.0,
             reverse_command_cap=args.reverse_cap / 100.0,
+            turn_command_cap=args.turn_clear_cap / 100.0,
+            slow_turn_command_cap=args.turn_slow_cap / 100.0,
+            turn_longitudinal_cap=args.turn_longitudinal_cap / 100.0,
             neutral_deadzone=args.deadzone,
             forward_cone_half_angle_deg=args.forward_cone_deg,
         )
@@ -264,8 +291,16 @@ def main(argv=None) -> int:
         )
     else:
         print(
-            "ENFORCE: forward cone=+/-%.1fdeg CLEAR<=%d SLOW<=%d STOP=0."
-            % (args.forward_cone_deg, args.clear_cap, args.slow_cap),
+            "ENFORCE: forward cone=+/-%.1fdeg CLEAR<=%d SLOW<=%d; "
+            "turn CLEAR<=%d SLOW<=%d longitudinal<=%d; STOP=0."
+            % (
+                args.forward_cone_deg,
+                args.clear_cap,
+                args.slow_cap,
+                args.turn_clear_cap,
+                args.turn_slow_cap,
+                args.turn_longitudinal_cap,
+            ),
             flush=True,
         )
     print(

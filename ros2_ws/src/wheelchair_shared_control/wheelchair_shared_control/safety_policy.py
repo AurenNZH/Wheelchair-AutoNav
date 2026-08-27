@@ -24,6 +24,7 @@ from wheelchair_shared_control.models import (
 from wheelchair_shared_control.trajectory import (
     PathCostSummary,
     swept_path_costs,
+    turn_disc_costs,
 )
 
 
@@ -32,7 +33,7 @@ def evaluate_safety(
     merged_costmap: WeightedCostmap,
     config: SafetyConfig = SafetyConfig(),
 ) -> SafetyDecision:
-    """Limit forward motion by Nav2 costs and cap unmonitored reverse."""
+    """Limit forward/turn motion by Nav2 costs and cap reverse."""
 
     config_decision = motion_configuration_decision(config)
     if config_decision is not None:
@@ -59,10 +60,8 @@ def evaluate_safety(
         return stop_decision("intent_class_mismatch")
     if not intent.deadman or intent.intent_class == RELEASED:
         return stop_decision("deadman_released")
-    if intent.intent_class == LEFT_TURN:
-        return stop_decision("left_turn_not_enabled")
-    if intent.intent_class == RIGHT_TURN:
-        return stop_decision("right_turn_not_enabled")
+    if intent.intent_class in (LEFT_TURN, RIGHT_TURN):
+        return _turn_decision(intent, merged_costmap, config)
     if intent.intent_class not in FORWARD_CLASSES + REVERSE_CLASSES:
         return stop_decision("unsupported_intent")
 
@@ -118,6 +117,56 @@ def evaluate_safety(
     )
 
 
+def _turn_decision(
+    intent: OperatorIntentData,
+    merged_costmap: WeightedCostmap,
+    config: SafetyConfig,
+) -> SafetyDecision:
+    """Authorize a side-dominant command from the pixelated turn disc."""
+
+    summary = turn_disc_costs(merged_costmap, config)
+    if not summary.valid:
+        return _stop_from_costs(
+            summary.failure_reason or "invalid_turn_disc", summary
+        )
+    if summary.nearest_stop_distance_m is not None:
+        return _stop_from_costs("nav2_turn_cost_stop", summary)
+
+    permitted_forward = min(
+        abs(float(intent.longitudinal)),
+        config.turn_longitudinal_limit,
+    )
+    if summary.nearest_slow_distance_m is not None:
+        return SafetyDecision(
+            SLOW,
+            permitted_forward,
+            math.copysign(
+                min(abs(float(intent.lateral)), config.slow_turn_limit),
+                float(intent.lateral),
+            ),
+            "nav2_turn_cost_slow",
+            summary.nearest_slow_distance_m,
+            summary.maximum_cost,
+            summary.nearest_slow_distance_m,
+            summary.nearest_stop_distance_m,
+            True,
+        )
+    return SafetyDecision(
+        CLEAR,
+        permitted_forward,
+        math.copysign(
+            min(abs(float(intent.lateral)), config.clear_turn_limit),
+            float(intent.lateral),
+        ),
+        "nav2_turn_cost_clear",
+        None,
+        summary.maximum_cost,
+        None,
+        None,
+        True,
+    )
+
+
 def motion_configuration_decision(
     config: SafetyConfig,
 ) -> SafetyDecision | None:
@@ -144,7 +193,7 @@ def _stop_from_costs(
 ) -> SafetyDecision:
     nearest = (
         summary.nearest_stop_distance_m
-        if reason == "nav2_cost_stop"
+        if reason in ("nav2_cost_stop", "nav2_turn_cost_stop")
         else summary.nearest_slow_distance_m
     )
     return SafetyDecision(
