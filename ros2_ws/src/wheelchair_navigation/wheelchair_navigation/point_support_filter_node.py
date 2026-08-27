@@ -23,12 +23,14 @@ from visualization_msgs.msg import MarkerArray
 from wheelchair_navigation.artifact_filter import (
     artifact_halo_cell_ids,
     parse_artifact_box,
+    parse_artifact_halo_bounds,
     points_in_artifact_box,
 )
 from wheelchair_navigation.artifact_markers import build_artifact_markers
 from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     LocalCostmapConfig,
+    minimum_range_rejection_mask,
     obstacle_point_mask,
     validate_mapping_configs,
 )
@@ -54,6 +56,7 @@ class PointSupportFilterNode(Node):
         self._declare_parameters()
         self._configuration_error = None
         self._artifact_box = None
+        self._artifact_halo_bounds = None
         self._artifact_halo_cell_ids = np.empty(0, dtype=np.int64)
         try:
             self._map_config = self._load_map_config()
@@ -174,6 +177,7 @@ class PointSupportFilterNode(Node):
         self.declare_parameter("artifact_filter_enabled", False)
         self.declare_parameter("artifact_filter_frame", "base_link")
         self.declare_parameter("artifact_box", [])
+        self.declare_parameter("artifact_halo_bounds_xy", [])
         self.declare_parameter("artifact_halo_margin_m", 0.10)
         self.declare_parameter("artifact_halo_min_points_per_cell", 15)
         self.declare_parameter("artifact_marker_namespace", "lidar_right")
@@ -217,11 +221,17 @@ class PointSupportFilterNode(Node):
         self._artifact_box = parse_artifact_box(
             self.get_parameter("artifact_box").value
         )
-        self._artifact_halo_cell_ids = artifact_halo_cell_ids(
-            self._artifact_box,
-            self._front_config,
-            float(self.get_parameter("artifact_halo_margin_m").value),
-        )
+        explicit_halo = self.get_parameter("artifact_halo_bounds_xy").value
+        if explicit_halo:
+            self._artifact_halo_bounds = parse_artifact_halo_bounds(
+                explicit_halo
+            )
+        else:
+            self._artifact_halo_cell_ids = artifact_halo_cell_ids(
+                self._artifact_box,
+                self._front_config,
+                float(self.get_parameter("artifact_halo_margin_m").value),
+            )
         halo_minimum = self.get_parameter(
             "artifact_halo_min_points_per_cell"
         ).value
@@ -242,6 +252,7 @@ class PointSupportFilterNode(Node):
                 self._artifact_box,
                 float(self.get_parameter("artifact_halo_margin_m").value),
                 str(self.get_parameter("artifact_marker_namespace").value),
+                self._artifact_halo_bounds,
             )
         )
 
@@ -308,18 +319,27 @@ class PointSupportFilterNode(Node):
         try:
             stage_started = time.perf_counter()
             eligible, _ = obstacle_point_mask(points_base, self._map_config)
+            minimum_range_rejected = minimum_range_rejection_mask(
+                points_base, self._map_config.min_range_m
+            )
             artifact_rejected = (
                 points_in_artifact_box(points_base, self._artifact_box)
                 if self._artifact_box is not None
                 else np.zeros(points_base.shape[0], dtype=bool)
             )
+            hard_rejected = minimum_range_rejected | artifact_rejected
             result = filter_points_by_cell_support(
                 points_base,
                 eligible,
                 self._front_config,
                 min_points_per_cell=self.get_parameter("min_points_per_cell").value,
-                hard_rejected_mask=artifact_rejected,
-                halo_cell_ids=self._artifact_halo_cell_ids,
+                hard_rejected_mask=hard_rejected,
+                halo_cell_ids=(
+                    self._artifact_halo_cell_ids
+                    if self._artifact_halo_bounds is None
+                    else None
+                ),
+                halo_bounds_xy=self._artifact_halo_bounds,
                 halo_min_points_per_cell=self.get_parameter(
                     "artifact_halo_min_points_per_cell"
                 ).value,
@@ -345,9 +365,7 @@ class PointSupportFilterNode(Node):
             )
         if self._artifact_rejected_pub.get_subscription_count() > 0:
             self._artifact_rejected_pub.publish(
-                xyz_to_point_cloud(
-                    cloud.xyz[result.hard_rejected_mask], msg.header
-                )
+                xyz_to_point_cloud(cloud.xyz[artifact_rejected], msg.header)
             )
         stage_ms["publish_ms"] = (time.perf_counter() - stage_started) * 1000.0
         self._published_clouds += 1
@@ -376,6 +394,12 @@ class PointSupportFilterNode(Node):
                 input_points=int(cloud.xyz.shape[0]),
                 output_points=int(np.count_nonzero(result.keep_mask)),
                 stage_ms=stage_ms,
+                artifact_rejected_points=int(
+                    np.count_nonzero(artifact_rejected)
+                ),
+                minimum_range_rejected_points=int(
+                    np.count_nonzero(minimum_range_rejected)
+                ),
             )
 
     def _reject(self, reason: str, started: float) -> None:
@@ -394,6 +418,8 @@ class PointSupportFilterNode(Node):
         input_points: int = 0,
         output_points: int = 0,
         stage_ms: dict[str, float] | None = None,
+        artifact_rejected_points: int = 0,
+        minimum_range_rejected_points: int = 0,
     ) -> None:
         level = DiagnosticStatus.OK
         message = reason
@@ -426,6 +452,10 @@ class PointSupportFilterNode(Node):
                     "low_support_cells": result.stats.low_support_cells,
                     "low_support_points": result.stats.low_support_points,
                     "hard_rejected_points": result.stats.hard_rejected_points,
+                    "artifact_rejected_points": artifact_rejected_points,
+                    "minimum_range_rejected_points": (
+                        minimum_range_rejected_points
+                    ),
                     "global_low_support_cells": (
                         result.stats.global_low_support_cells
                     ),
@@ -453,6 +483,17 @@ class PointSupportFilterNode(Node):
                     "artifact_halo_margin_m": self.get_parameter(
                         "artifact_halo_margin_m"
                     ).value,
+                    "artifact_halo_bounds_xy": (
+                        "%.3f,%.3f,%.3f,%.3f"
+                        % (
+                            self._artifact_halo_bounds.min_x_m,
+                            self._artifact_halo_bounds.max_x_m,
+                            self._artifact_halo_bounds.min_y_m,
+                            self._artifact_halo_bounds.max_y_m,
+                        )
+                        if self._artifact_halo_bounds is not None
+                        else "margin_fallback"
+                    ),
                     "artifact_halo_min_points_per_cell": self.get_parameter(
                         "artifact_halo_min_points_per_cell"
                     ).value,

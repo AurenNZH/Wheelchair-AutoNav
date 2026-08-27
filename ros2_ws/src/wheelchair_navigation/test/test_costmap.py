@@ -6,6 +6,7 @@ from wheelchair_navigation.costmap import (
     FrontCostmapConfig,
     LocalCostmapConfig,
     front_point_cell_ids,
+    minimum_range_rejection_mask,
     obstacle_point_mask,
     validate_mapping_configs,
 )
@@ -57,6 +58,23 @@ class CostmapGeometryTests(unittest.TestCase):
         )
         np.testing.assert_array_equal(cell_ids[:3], [0, 0, 15])
         self.assertEqual(cell_count, 16)
+
+    def test_minimum_range_is_a_hard_exclusion_with_inclusive_boundary(self):
+        points = np.array(
+            [
+                [0.44, 0.0, 0.4],
+                [0.45, 0.0, 0.4],
+                [0.0, -0.46, 0.4],
+                [np.nan, 0.0, 0.4],
+            ],
+            dtype=np.float32,
+        )
+
+        rejected = minimum_range_rejection_mask(points, 0.45)
+
+        np.testing.assert_array_equal(rejected, [True, False, False, False])
+        with self.assertRaises(ValueError):
+            minimum_range_rejection_mask(points, -0.1)
 
     def test_invalid_geometry_is_rejected(self):
         with self.assertRaises(ValueError):

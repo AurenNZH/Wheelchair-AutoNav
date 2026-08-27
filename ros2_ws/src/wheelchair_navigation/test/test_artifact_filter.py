@@ -5,6 +5,7 @@ import numpy as np
 from wheelchair_navigation.artifact_filter import (
     artifact_halo_cell_ids,
     parse_artifact_box,
+    parse_artifact_halo_bounds,
     points_in_artifact_box,
 )
 from wheelchair_navigation.costmap import FrontCostmapConfig
@@ -55,6 +56,20 @@ class ArtifactFilterTests(unittest.TestCase):
         self.assertEqual(artifact_halo_cell_ids(outside, config, 0.1).size, 0)
         with self.assertRaises(ValueError):
             artifact_halo_cell_ids(box, config, -0.1)
+
+    def test_explicit_halo_bounds_allow_signed_base_link_geometry(self):
+        halo = parse_artifact_halo_bounds([-0.30, 0.77, -0.70, 0.61])
+
+        self.assertEqual(halo.min_x_m, -0.30)
+        self.assertEqual(halo.max_y_m, 0.61)
+        for values in (
+            [],
+            [-0.3, 0.7, -0.7],
+            [0.7, -0.3, -0.7, 0.6],
+            [-0.3, 0.7, np.nan, 0.6],
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                parse_artifact_halo_bounds(values)
 
 
 if __name__ == "__main__":

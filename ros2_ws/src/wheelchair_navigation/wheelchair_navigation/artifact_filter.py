@@ -21,6 +21,16 @@ class ArtifactBox:
     max_z_m: float
 
 
+@dataclass(frozen=True)
+class ArtifactHaloBounds:
+    """Inclusive XY bounds for a base-link-aligned support halo."""
+
+    min_x_m: float
+    max_x_m: float
+    min_y_m: float
+    max_y_m: float
+
+
 def parse_artifact_box(values) -> ArtifactBox:
     """Parse and validate six XYZ bounds."""
 
@@ -37,6 +47,20 @@ def parse_artifact_box(values) -> ArtifactBox:
     ):
         raise ValueError("artifact box minimums must be below maximums")
     return box
+
+
+def parse_artifact_halo_bounds(values) -> ArtifactHaloBounds:
+    """Parse and validate four explicit XY halo bounds."""
+
+    if values is None or len(values) != 4:
+        raise ValueError("artifact_halo_bounds_xy must contain four XY bounds")
+    bounds = np.asarray(values, dtype=np.float64)
+    if not np.isfinite(bounds).all():
+        raise ValueError("artifact halo bounds must be finite")
+    halo = ArtifactHaloBounds(*[float(value) for value in bounds])
+    if halo.min_x_m >= halo.max_x_m or halo.min_y_m >= halo.max_y_m:
+        raise ValueError("artifact halo minimums must be below maximums")
+    return halo
 
 
 def points_in_artifact_box(
@@ -107,7 +131,9 @@ def _points_array(points: np.ndarray) -> np.ndarray:
 
 __all__ = [
     "ArtifactBox",
+    "ArtifactHaloBounds",
     "artifact_halo_cell_ids",
     "parse_artifact_box",
+    "parse_artifact_halo_bounds",
     "points_in_artifact_box",
 ]

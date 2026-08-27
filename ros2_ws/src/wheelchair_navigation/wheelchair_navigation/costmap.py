@@ -50,6 +50,25 @@ def obstacle_point_mask(
     }
 
 
+def minimum_range_rejection_mask(
+    points_base: np.ndarray,
+    min_range_m: float,
+) -> np.ndarray:
+    """Return finite points strictly inside a horizontal minimum range.
+
+    A point exactly on the configured boundary remains eligible.
+    """
+
+    minimum = float(min_range_m)
+    if not np.isfinite(minimum) or minimum < 0.0:
+        raise ValueError("minimum range must be finite and non-negative")
+    points = _points_array(points_base)
+    finite = np.isfinite(points).all(axis=1)
+    ranges = np.linalg.norm(points[:, :2], axis=1)
+    with np.errstate(invalid="ignore"):
+        return finite & (ranges < minimum)
+
+
 def front_point_cell_ids(
     points_base: np.ndarray,
     config: FrontCostmapConfig,
@@ -152,6 +171,7 @@ __all__ = [
     "FrontCostmapConfig",
     "LocalCostmapConfig",
     "front_point_cell_ids",
+    "minimum_range_rejection_mask",
     "obstacle_point_mask",
     "points_in_front_fov",
     "validate_mapping_configs",

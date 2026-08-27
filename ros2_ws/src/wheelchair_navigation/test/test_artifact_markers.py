@@ -3,7 +3,7 @@ import unittest
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
 
-from wheelchair_navigation.artifact_filter import ArtifactBox
+from wheelchair_navigation.artifact_filter import ArtifactBox, ArtifactHaloBounds
 from wheelchair_navigation.artifact_markers import build_artifact_markers
 
 
@@ -27,6 +27,23 @@ class ArtifactMarkerTests(unittest.TestCase):
         self.assertEqual(len(halo.points), 8)
         self.assertTrue(hard_box.frame_locked)
         self.assertTrue(halo.frame_locked)
+
+    def test_explicit_halo_geometry_overrides_box_margin(self):
+        header = Header()
+        header.frame_id = "base_link"
+        box = ArtifactBox(0.1, 0.5, -0.3, 0.2, 0.4, 0.7)
+        bounds = ArtifactHaloBounds(-0.3, 0.77, -0.7, 0.61)
+
+        result = build_artifact_markers(
+            header, box, 99.0, "lidar_right", bounds
+        )
+
+        halo = result.markers[2]
+        coordinates = {(point.x, point.y) for point in halo.points}
+        self.assertEqual(
+            coordinates,
+            {(-0.3, -0.7), (0.77, -0.7), (0.77, 0.61), (-0.3, 0.61)},
+        )
 
 
 if __name__ == "__main__":

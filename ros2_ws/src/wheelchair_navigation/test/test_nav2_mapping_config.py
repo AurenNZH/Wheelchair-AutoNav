@@ -99,6 +99,9 @@ def test_l2_artifact_rules_are_independent_and_active_by_default():
     assert right["artifact_filter_frame"] == "base_link"
     assert left["artifact_filter_frame"] == "base_link"
     assert right["artifact_box"] != left["artifact_box"]
+    assert right["artifact_box"] == [-0.20, 0.67, -0.60, 0.14, 0.61, 0.77]
+    assert right["artifact_halo_bounds_xy"] == [-0.30, 0.77, -0.70, 0.61]
+    assert left["artifact_halo_bounds_xy"] == right["artifact_halo_bounds_xy"]
     assert right["artifact_halo_margin_m"] == 0.10
     assert left["artifact_halo_margin_m"] == 0.10
     assert right["artifact_halo_min_points_per_cell"] == 15

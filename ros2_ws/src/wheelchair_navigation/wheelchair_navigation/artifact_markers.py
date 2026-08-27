@@ -6,7 +6,7 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 
-from wheelchair_navigation.artifact_filter import ArtifactBox
+from wheelchair_navigation.artifact_filter import ArtifactBox, ArtifactHaloBounds
 
 
 def build_artifact_markers(
@@ -14,6 +14,7 @@ def build_artifact_markers(
     box: ArtifactBox,
     halo_margin_m: float,
     namespace: str,
+    halo_bounds_xy: ArtifactHaloBounds | None = None,
 ) -> MarkerArray:
     """Build a translucent hard box and a green halo outline."""
 
@@ -56,10 +57,26 @@ def build_artifact_markers(
     halo.color.b = 0.20
     halo.color.a = 1.0
     halo.frame_locked = True
-    min_x = box.min_x_m - halo_margin_m
-    max_x = box.max_x_m + halo_margin_m
-    min_y = box.min_y_m - halo_margin_m
-    max_y = box.max_y_m + halo_margin_m
+    min_x = (
+        halo_bounds_xy.min_x_m
+        if halo_bounds_xy is not None
+        else box.min_x_m - halo_margin_m
+    )
+    max_x = (
+        halo_bounds_xy.max_x_m
+        if halo_bounds_xy is not None
+        else box.max_x_m + halo_margin_m
+    )
+    min_y = (
+        halo_bounds_xy.min_y_m
+        if halo_bounds_xy is not None
+        else box.min_y_m - halo_margin_m
+    )
+    max_y = (
+        halo_bounds_xy.max_y_m
+        if halo_bounds_xy is not None
+        else box.max_y_m + halo_margin_m
+    )
     z_m = box.max_z_m + 0.025
     corners = (
         (min_x, min_y),

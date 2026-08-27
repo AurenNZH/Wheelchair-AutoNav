@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 
+from wheelchair_navigation.artifact_filter import ArtifactHaloBounds
 from wheelchair_navigation.costmap import FrontCostmapConfig
 from wheelchair_navigation.point_support import filter_points_by_cell_support
 
@@ -113,6 +114,46 @@ class PointSupportTests(unittest.TestCase):
         self.assertEqual(result.stats.global_low_support_cells, 1)
         self.assertEqual(result.stats.halo_low_support_cells, 1)
         self.assertEqual(result.stats.halo_low_support_points, 4)
+
+    def test_explicit_halo_thresholds_signed_cells_behind_base_link(self):
+        points = np.array(
+            [
+                [-0.15, -0.15, 0.2],
+                [-0.14, -0.14, 0.2],
+                [-0.13, -0.13, 0.2],
+                [0.45, 0.35, 0.2],
+                [0.46, 0.36, 0.2],
+                [0.47, 0.37, 0.2],
+            ],
+            dtype=np.float32,
+        )
+
+        result = filter_points_by_cell_support(
+            points,
+            np.ones(points.shape[0], dtype=bool),
+            self.config,
+            min_points_per_cell=3,
+            halo_bounds_xy=ArtifactHaloBounds(-0.3, 0.7, -0.3, 0.5),
+            halo_min_points_per_cell=4,
+        )
+
+        np.testing.assert_array_equal(
+            result.keep_mask, [False, False, False, False, False, False]
+        )
+        self.assertEqual(result.stats.halo_low_support_cells, 2)
+        self.assertEqual(result.stats.halo_low_support_points, 6)
+        self.assertEqual(result.stats.low_support_cells, 2)
+
+    def test_explicit_halo_and_legacy_cells_are_mutually_exclusive(self):
+        with self.assertRaises(ValueError):
+            filter_points_by_cell_support(
+                np.array([[0.1, 0.0, 0.2]], dtype=np.float32),
+                np.ones(1, dtype=bool),
+                self.config,
+                min_points_per_cell=1,
+                halo_cell_ids=np.array([50]),
+                halo_bounds_xy=ArtifactHaloBounds(-0.3, 0.7, -0.3, 0.5),
+            )
 
 
 if __name__ == "__main__":
