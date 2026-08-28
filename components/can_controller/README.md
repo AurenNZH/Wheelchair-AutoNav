@@ -291,7 +291,7 @@ python3 teleoperate_keyboard.py
 
 ```bash
 # From the Jetson or another host on the isolated router LAN
-ssh raspberrywheelchair@192.168.0.101
+ssh raspberrywheelchair@192.168.0.100
 
 # On Pi (in SSH session)
 ./teleoperate_keyboard.py
@@ -578,7 +578,7 @@ sudo ip link set can0 up type can bitrate 125000
 ```bash
 # Add to ~/.ssh/config on your PC
 Host raspberry_pi
-    HostName 192.168.0.101
+    HostName 192.168.0.100
     User raspberrywheelchair
     ServerAliveInterval 60    # Keep-alive every 60 seconds
     ServerAliveCountMax 10
@@ -593,7 +593,7 @@ Host raspberry_pi
 ./teleoperate_keyboard.py --log-level DEBUG
 
 # If using over SSH, ensure terminal is not buffered
-ssh -t raspberrywheelchair@192.168.0.101 \
+ssh -t raspberrywheelchair@192.168.0.100 \
   'cd /home/raspberrywheelchair/Wheelchair-AutoNav-control/components/can_controller/scripts && python3 teleoperate_keyboard.py --can-interface can1'
 ```
 
