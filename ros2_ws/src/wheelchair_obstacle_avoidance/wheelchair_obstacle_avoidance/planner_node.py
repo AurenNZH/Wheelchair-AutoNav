@@ -26,6 +26,12 @@ from wheelchair_obstacle_avoidance.planning import (
     validate_config,
     validate_path,
 )
+from wheelchair_obstacle_avoidance.result_handling import (
+    completed_result_failure_reason,
+    duration_to_milliseconds,
+    optional_milliseconds_text,
+    planner_action_status_name,
+)
 
 
 @dataclass(frozen=True)
@@ -181,7 +187,12 @@ class LocalAvoidancePlannerNode(Node):
         if key == self._last_submitted_key:
             return
         if not self._planner.server_is_ready():
-            self._publish_invalid(intent, "planner_unavailable", 0.0)
+            self._publish_invalid(
+                intent,
+                "planner_unavailable",
+                0.0,
+                planner_action_status="unavailable",
+            )
             return
         try:
             goal_x, goal_y, heading = temporary_goal(
@@ -190,7 +201,12 @@ class LocalAvoidancePlannerNode(Node):
                 self._config.goal_distance_m,
             )
         except ValueError:
-            self._publish_invalid(intent, "invalid_intent", 0.0)
+            self._publish_invalid(
+                intent,
+                "invalid_intent",
+                0.0,
+                planner_action_status="not_requested",
+            )
             return
         pose = PoseStamped()
         pose.header.stamp = self.get_clock().now().to_msg()
@@ -216,12 +232,22 @@ class LocalAvoidancePlannerNode(Node):
             goal_handle = future.result()
         except Exception as exc:  # rclpy futures propagate action transport errors
             self._in_flight = False
-            self._publish_invalid(intent, "planner_request_error", self._elapsed_ms(started))
+            self._publish_invalid(
+                intent,
+                "planner_request_error",
+                self._elapsed_ms(started),
+                planner_action_status="request_error",
+            )
             self.get_logger().warning("Planner request failed: %s" % exc)
             return
         if goal_handle is None or not goal_handle.accepted:
             self._in_flight = False
-            self._publish_invalid(intent, "planner_rejected", self._elapsed_ms(started))
+            self._publish_invalid(
+                intent,
+                "planner_rejected",
+                self._elapsed_ms(started),
+                planner_action_status="rejected",
+            )
             return
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(
@@ -233,16 +259,36 @@ class LocalAvoidancePlannerNode(Node):
         elapsed_ms = self._elapsed_ms(started)
         try:
             wrapped = future.result()
-            path = wrapped.result.path
+            result = wrapped.result
+            path = result.path
+            action_status = planner_action_status_name(wrapped.status)
+            nav2_planning_time_ms = duration_to_milliseconds(
+                result.planning_time
+            )
         except Exception as exc:
-            self._publish_invalid(intent, "planner_result_error", elapsed_ms)
+            self._publish_invalid(
+                intent,
+                "planner_result_error",
+                elapsed_ms,
+                planner_action_status="result_error",
+            )
             self.get_logger().warning("Planner result failed: %s" % exc)
             return
-        if elapsed_ms > self._discard_after_ms:
-            self._publish_invalid(intent, "planner_late", elapsed_ms)
-            return
-        if str(path.header.frame_id) != "base_link":
-            self._publish_invalid(intent, "path_frame_mismatch", elapsed_ms)
+        failure_reason = completed_result_failure_reason(
+            status=wrapped.status,
+            pose_count=len(path.poses),
+            frame_id=str(path.header.frame_id),
+            elapsed_ms=elapsed_ms,
+            discard_after_ms=self._discard_after_ms,
+        )
+        if failure_reason is not None:
+            self._publish_invalid(
+                intent,
+                failure_reason,
+                elapsed_ms,
+                nav2_planning_time_ms=nav2_planning_time_ms,
+                planner_action_status=action_status,
+            )
             return
         points = tuple(
             (float(item.pose.position.x), float(item.pose.position.y))
@@ -253,7 +299,13 @@ class LocalAvoidancePlannerNode(Node):
         )
         validation = validate_path(points, goal, self._config)
         if not validation.valid:
-            self._publish_invalid(intent, validation.reason, elapsed_ms)
+            self._publish_invalid(
+                intent,
+                validation.reason,
+                elapsed_ms,
+                nav2_planning_time_ms=nav2_planning_time_ms,
+                planner_action_status=action_status,
+            )
             return
         try:
             planned = path_steering(points, self._config)
@@ -268,19 +320,45 @@ class LocalAvoidancePlannerNode(Node):
                 self._config,
             )
         except ValueError:
-            self._publish_invalid(intent, "invalid_path_steering", elapsed_ms)
+            self._publish_invalid(
+                intent,
+                "invalid_path_steering",
+                elapsed_ms,
+                nav2_planning_time_ms=nav2_planning_time_ms,
+                planner_action_status=action_status,
+            )
             return
         if intent.intent_class == FORWARD:
             assisted, confirmed = self._side_hysteresis.filter(assisted)
             if not confirmed:
-                self._publish_invalid(intent, "side_switch_confirmation", elapsed_ms)
+                self._publish_invalid(
+                    intent,
+                    "side_switch_confirmation",
+                    elapsed_ms,
+                    nav2_planning_time_ms=nav2_planning_time_ms,
+                    planner_action_status=action_status,
+                )
                 return
         else:
             self._side_hysteresis.reset()
         if reason != "assisted":
-            self._publish_invalid(intent, reason, elapsed_ms)
+            self._publish_invalid(
+                intent,
+                reason,
+                elapsed_ms,
+                nav2_planning_time_ms=nav2_planning_time_ms,
+                planner_action_status=action_status,
+            )
             return
-        self._publish_suggestion(intent, assisted, True, "accepted", elapsed_ms)
+        self._publish_suggestion(
+            intent,
+            assisted,
+            True,
+            "accepted",
+            elapsed_ms,
+            nav2_planning_time_ms=nav2_planning_time_ms,
+            planner_action_status=action_status,
+        )
         self._path_pub.publish(path)
 
     @staticmethod
@@ -288,10 +366,22 @@ class LocalAvoidancePlannerNode(Node):
         return (time.monotonic() - started) * 1000.0
 
     def _publish_invalid(
-        self, intent: _IntentSnapshot, reason: str, elapsed_ms: float
+        self,
+        intent: _IntentSnapshot,
+        reason: str,
+        elapsed_ms: float,
+        *,
+        nav2_planning_time_ms: float | None = None,
+        planner_action_status: str = "unavailable",
     ) -> None:
         self._publish_suggestion(
-            intent, intent.source_steering, False, reason, elapsed_ms
+            intent,
+            intent.source_steering,
+            False,
+            reason,
+            elapsed_ms,
+            nav2_planning_time_ms=nav2_planning_time_ms,
+            planner_action_status=planner_action_status,
         )
 
     def _publish_suggestion(
@@ -301,6 +391,9 @@ class LocalAvoidancePlannerNode(Node):
         valid: bool,
         reason: str,
         elapsed_ms: float,
+        *,
+        nav2_planning_time_ms: float | None = None,
+        planner_action_status: str = "unavailable",
     ) -> None:
         now = self.get_clock().now().to_msg()
         suggestion = AvoidanceSuggestion()
@@ -327,6 +420,14 @@ class LocalAvoidancePlannerNode(Node):
             KeyValue(key="session_id", value=intent.session_id),
             KeyValue(key="intent_sequence", value=str(intent.sequence)),
             KeyValue(key="planning_time_ms", value="%.3f" % elapsed_ms),
+            KeyValue(
+                key="nav2_planning_time_ms",
+                value=optional_milliseconds_text(nav2_planning_time_ms),
+            ),
+            KeyValue(
+                key="planner_action_status",
+                value=planner_action_status,
+            ),
             KeyValue(key="source_steering", value="%.4f" % intent.source_steering),
             KeyValue(key="suggested_steering", value="%.4f" % steering),
         ]

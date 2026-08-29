@@ -23,6 +23,16 @@ ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
   avoidance_mode:=shadow discard_after_ms:=300.0
 ```
 
+Planner result diagnostics distinguish total ROS action latency from Nav2's
+reported computation time. `planning_time_ms` remains the monotonic interval
+from request submission to result receipt, while `nav2_planning_time_ms` is
+read from `ComputePathToPose.Result.planning_time` and is `none` when no result
+was returned. `planner_action_status` records the terminal action state.
+Aborted and cancelled actions, successful empty paths, and true frame errors
+are reported respectively as `planner_aborted`, `planner_canceled`,
+`planner_empty_path`, and `path_frame_mismatch`; an aborted default path is not
+misreported as a frame error.
+
 The operator gateway must advertise non-zero authority before enforcement can
 alter steering. Forward-left and forward-right assistance may only reduce the
 requested correction toward straight by the advertised amount. Straight intent

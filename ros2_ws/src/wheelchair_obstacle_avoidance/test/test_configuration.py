@@ -80,3 +80,12 @@ def test_shadow_validation_accepts_results_up_to_300_ms():
     assert 'LaunchConfiguration("discard_after_ms")' in launch_source
     assert 'default_value="300.0"' in launch_source
     assert 'declare_parameter("discard_after_ms", 300.0)' in node_source
+
+
+def test_planner_diagnostics_separate_nav2_and_round_trip_timings():
+    node_source = (
+        PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
+    ).read_text()
+    assert 'key="planning_time_ms"' in node_source
+    assert 'key="nav2_planning_time_ms"' in node_source
+    assert 'key="planner_action_status"' in node_source
