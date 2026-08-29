@@ -45,6 +45,32 @@ class ArtifactMarkerTests(unittest.TestCase):
             {(-0.3, -0.7), (0.77, -0.7), (0.77, 0.61), (-0.3, 0.61)},
         )
 
+    def test_additional_hard_box_is_a_distinct_cube(self):
+        header = Header()
+        header.frame_id = "base_link"
+        box = ArtifactBox(-0.2, 0.67, -0.6, 0.14, 0.61, 0.77)
+        joystick = ArtifactBox(0.5, 0.6, -0.3, -0.2, 0.77, 0.87)
+
+        result = build_artifact_markers(
+            header,
+            box,
+            0.1,
+            "lidar_right",
+            additional_boxes=(joystick,),
+        )
+
+        self.assertEqual(len(result.markers), 4)
+        marker = result.markers[3]
+        self.assertEqual(marker.type, Marker.CUBE)
+        self.assertEqual(marker.ns, "lidar_right/additional_hard_box")
+        self.assertAlmostEqual(marker.pose.position.x, 0.55)
+        self.assertAlmostEqual(marker.pose.position.y, -0.25)
+        self.assertAlmostEqual(marker.pose.position.z, 0.82)
+        self.assertAlmostEqual(marker.scale.x, 0.10)
+        self.assertAlmostEqual(marker.scale.y, 0.10)
+        self.assertAlmostEqual(marker.scale.z, 0.10)
+        self.assertTrue(marker.frame_locked)
+
 
 if __name__ == "__main__":
     unittest.main()

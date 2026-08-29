@@ -5,8 +5,10 @@ import numpy as np
 from wheelchair_navigation.artifact_filter import (
     artifact_halo_cell_ids,
     parse_artifact_box,
+    parse_artifact_boxes,
     parse_artifact_halo_bounds,
     points_in_artifact_box,
+    points_in_artifact_boxes,
 )
 from wheelchair_navigation.costmap import SupportGridConfig
 
@@ -39,6 +41,32 @@ class ArtifactFilterTests(unittest.TestCase):
         ):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 parse_artifact_box(values)
+
+    def test_additional_boxes_parse_flat_groups_and_reject_their_union(self):
+        boxes = parse_artifact_boxes(
+            [
+                0.50, 0.60, -0.30, -0.20, 0.77, 0.87,
+                -0.10, 0.00, 0.10, 0.20, 0.30, 0.40,
+            ]
+        )
+        points = np.asarray(
+            [
+                [0.55, -0.25, 0.82],
+                [-0.05, 0.15, 0.35],
+                [0.55, -0.25, 0.88],
+                [0.61, -0.25, 0.82],
+            ],
+            dtype=np.float32,
+        )
+
+        self.assertEqual(len(boxes), 2)
+        np.testing.assert_array_equal(
+            points_in_artifact_boxes(points, boxes),
+            [True, True, False, False],
+        )
+        self.assertEqual(parse_artifact_boxes([]), ())
+        with self.assertRaises(ValueError):
+            parse_artifact_boxes([0.0] * 7)
 
     def test_halo_is_expanded_and_clipped_to_support_grid(self):
         config = SupportGridConfig(

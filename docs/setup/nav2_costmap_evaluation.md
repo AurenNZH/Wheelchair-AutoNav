@@ -37,7 +37,8 @@ ros2 topic hz /nav2_merged_costmap
 ros2 run wheelchair_navigation nav2_costmap_monitor
 ```
 
-RViz exposes each static hard box and halo. The optional rejected-point topics
+RViz exposes each static hard box, any additional hard-removal cubes, and the
+halo. The optional rejected-point topics
 are `/lidar_<side>/artifact_rejected_points`; enable them only while diagnosing
 or calibrating to avoid unnecessary debug-cloud construction.
 

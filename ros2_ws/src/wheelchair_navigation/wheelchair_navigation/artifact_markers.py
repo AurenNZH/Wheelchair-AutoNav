@@ -1,4 +1,4 @@
-"""Static RViz markers for one L2 artifact box and its XY halo."""
+"""Static RViz markers for L2 artifact boxes and their XY halo."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ def build_artifact_markers(
     halo_margin_m: float,
     namespace: str,
     halo_bounds_xy: ArtifactHaloBounds | None = None,
+    additional_boxes: tuple[ArtifactBox, ...] = (),
 ) -> MarkerArray:
     """Build a translucent hard box and a green halo outline."""
 
@@ -92,6 +93,33 @@ def build_artifact_markers(
             point.z = z_m
             halo.points.append(point)
     result.markers.append(halo)
+
+    for index, additional_box in enumerate(additional_boxes, start=2):
+        marker = Marker()
+        marker.header = header
+        marker.ns = namespace + "/additional_hard_box"
+        marker.id = index
+        marker.type = Marker.CUBE
+        marker.action = Marker.ADD
+        marker.pose.position.x = (
+            additional_box.min_x_m + additional_box.max_x_m
+        ) / 2.0
+        marker.pose.position.y = (
+            additional_box.min_y_m + additional_box.max_y_m
+        ) / 2.0
+        marker.pose.position.z = (
+            additional_box.min_z_m + additional_box.max_z_m
+        ) / 2.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = additional_box.max_x_m - additional_box.min_x_m
+        marker.scale.y = additional_box.max_y_m - additional_box.min_y_m
+        marker.scale.z = additional_box.max_z_m - additional_box.min_z_m
+        marker.color.r = 1.0
+        marker.color.g = 0.45
+        marker.color.b = 0.05
+        marker.color.a = 0.42
+        marker.frame_locked = True
+        result.markers.append(marker)
     return result
 
 

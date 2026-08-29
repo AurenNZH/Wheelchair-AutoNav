@@ -8,9 +8,11 @@ short-lived steering suggestion.
 
 The planner uses the current 5 m by 8 m `base_link` costmap (4,000 cells), a
 Dubins forward-only model, 1.2 m minimum turning radius, 36 heading bins, and a
-30 ms search budget. Results arriving after 50 ms are discarded. Paths must
-stay within 0.8 m of the joystick ray, be no longer than 1.25 times the direct
-route, make no reverse progress, and finish within 0.2 m of the goal.
+30 ms search budget. For initial shadow validation, end-to-end planner results
+arriving after 300 ms are discarded; this is a validation tolerance rather
+than the latency target. Paths must stay within 0.8 m of the joystick ray, be
+no longer than 1.25 times the direct route, make no reverse progress, and
+finish within 0.2 m of the goal.
 
 Shared-control modes are `disabled` (default), `shadow`, and `enforce`. Start a
 shadow stack with:
@@ -18,7 +20,7 @@ shadow stack with:
 ```bash
 sudo apt-get install ros-foxy-nav2-planner ros-foxy-smac-planner
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  avoidance_mode:=shadow
+  avoidance_mode:=shadow discard_after_ms:=300.0
 ```
 
 The operator gateway must advertise non-zero authority before enforcement can

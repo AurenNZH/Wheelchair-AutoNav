@@ -23,8 +23,10 @@ from visualization_msgs.msg import MarkerArray
 from wheelchair_navigation.artifact_filter import (
     artifact_halo_cell_ids,
     parse_artifact_box,
+    parse_artifact_boxes,
     parse_artifact_halo_bounds,
     points_in_artifact_box,
+    points_in_artifact_boxes,
 )
 from wheelchair_navigation.artifact_markers import build_artifact_markers
 from wheelchair_navigation.costmap import (
@@ -56,6 +58,7 @@ class PointSupportFilterNode(Node):
         self._declare_parameters()
         self._configuration_error = None
         self._artifact_box = None
+        self._artifact_additional_boxes = ()
         self._artifact_halo_bounds = None
         self._artifact_halo_cell_ids = np.empty(0, dtype=np.int64)
         try:
@@ -180,6 +183,7 @@ class PointSupportFilterNode(Node):
         self.declare_parameter("artifact_filter_enabled", False)
         self.declare_parameter("artifact_filter_frame", "base_link")
         self.declare_parameter("artifact_box", [])
+        self.declare_parameter("artifact_additional_boxes", [])
         self.declare_parameter("artifact_halo_bounds_xy", [])
         self.declare_parameter("artifact_halo_margin_m", 0.10)
         self.declare_parameter("artifact_halo_min_points_per_cell", 15)
@@ -231,6 +235,9 @@ class PointSupportFilterNode(Node):
         self._artifact_box = parse_artifact_box(
             self.get_parameter("artifact_box").value
         )
+        self._artifact_additional_boxes = parse_artifact_boxes(
+            self.get_parameter("artifact_additional_boxes").value
+        )
         explicit_halo = self.get_parameter("artifact_halo_bounds_xy").value
         if explicit_halo:
             self._artifact_halo_bounds = parse_artifact_halo_bounds(
@@ -263,6 +270,7 @@ class PointSupportFilterNode(Node):
                 float(self.get_parameter("artifact_halo_margin_m").value),
                 str(self.get_parameter("artifact_marker_namespace").value),
                 self._artifact_halo_bounds,
+                self._artifact_additional_boxes,
             )
         )
 
@@ -336,6 +344,9 @@ class PointSupportFilterNode(Node):
                 points_in_artifact_box(points_base, self._artifact_box)
                 if self._artifact_box is not None
                 else np.zeros(points_base.shape[0], dtype=bool)
+            )
+            artifact_rejected |= points_in_artifact_boxes(
+                points_base, self._artifact_additional_boxes
             )
             hard_rejected = minimum_range_rejected | artifact_rejected
             result = filter_points_by_cell_support(

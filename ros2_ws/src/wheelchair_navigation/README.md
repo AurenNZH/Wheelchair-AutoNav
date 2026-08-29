@@ -12,7 +12,7 @@ It does not publish velocity, select a route, or decide STOP/SLOW/CLEAR.
 ```
 
 Each filter transforms its cloud to `base_link`, validates its timestamp,
-applies its independently calibrated chassis-artifact box, and removes cells
+applies its independently calibrated chassis-artifact boxes, and removes cells
 with insufficient support. The global threshold remains three points; cells
 inside each box's 0.10 m XY halo require fifteen points. Complete PointCloud2
 records are preserved, and finite points outside Nav2's marking window remain
@@ -20,6 +20,10 @@ for Nav2 to interpret. Each successful filtered publication emits the matching
 `/lidar_<side>/filter/source_header`; rejected low-support points are available
 on `/lidar_<side>/low_support_points`, while hard-rejected points are available
 on `/lidar_<side>/artifact_rejected_points` when subscribed.
+
+The right-L2 rule includes a separate `0.10 m` cube at
+`x=0.50..0.60`, `y=-0.30..-0.20`, `z=0.77..0.87` to remove the measured
+physical-JSM return without extending the full chassis box upward.
 
 The Nav2 grid spans `x=-0.6..4.4 m` and `y=-4.0..4.0 m` at 0.1 m resolution.
 The same origin-aware grid makes the three-point support rule apply behind

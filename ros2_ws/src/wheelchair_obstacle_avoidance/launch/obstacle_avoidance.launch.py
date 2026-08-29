@@ -74,11 +74,14 @@ def generate_launch_description():
         remappings=[
             ("/nav2_obstacle_points_right", "/lidar_right/points_filtered"),
             ("/nav2_obstacle_points_left", "/lidar_left/points_filtered"),
-            ("global_costmap/costmap", "/nav2_merged_costmap"),
-            ("global_costmap/costmap_raw", "/nav2_merged_costmap_raw"),
-            ("global_costmap/costmap_updates", "/nav2_merged_costmap_updates"),
+            ("/global_costmap/costmap", "/nav2_merged_costmap"),
+            ("/global_costmap/costmap_raw", "/nav2_merged_costmap_raw"),
             (
-                "global_costmap/published_footprint",
+                "/global_costmap/costmap_updates",
+                "/nav2_merged_costmap_updates",
+            ),
+            (
+                "/global_costmap/published_footprint",
                 "/nav2_merged_costmap_footprint",
             ),
         ],
@@ -109,6 +112,9 @@ def generate_launch_description():
                 "maximum_assist": ParameterValue(
                     LaunchConfiguration("maximum_assist"), value_type=float
                 ),
+                "discard_after_ms": ParameterValue(
+                    LaunchConfiguration("discard_after_ms"), value_type=float
+                ),
             }
         ],
         condition=enabled,
@@ -124,6 +130,13 @@ def generate_launch_description():
                 description="disabled, shadow, or enforce",
             ),
             DeclareLaunchArgument("maximum_assist", default_value="0.15"),
+            DeclareLaunchArgument(
+                "discard_after_ms",
+                default_value="300.0",
+                description=(
+                    "Discard planner results older than this many milliseconds"
+                ),
+            ),
             DeclareLaunchArgument("enable_motion", default_value="false"),
             DeclareLaunchArgument(
                 "geometry_calibrated", default_value="false"

@@ -63,7 +63,7 @@ class LocalAvoidancePlannerNode(Node):
         self.declare_parameter("minimum_correction", 0.02)
         self.declare_parameter("maximum_steering", 0.577350269)
         self.declare_parameter("maximum_assist", 0.15)
-        self.declare_parameter("discard_after_ms", 50.0)
+        self.declare_parameter("discard_after_ms", 300.0)
 
         self._config = PlanningConfig(
             goal_distance_m=float(self.get_parameter("goal_distance_m").value),

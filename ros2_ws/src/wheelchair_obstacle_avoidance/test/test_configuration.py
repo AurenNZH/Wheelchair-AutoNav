@@ -52,3 +52,31 @@ def test_planner_costmap_is_small_robot_relative_and_inflated():
     assert costmap["inflation_layer"]["enabled"] is True
     assert costmap["inflation_layer"]["inflation_radius"] == 0.55
     assert costmap["inflation_layer"]["cost_scaling_factor"] == 3.0
+
+
+def test_planner_owned_costmap_outputs_use_absolute_remaps():
+    source = (PACKAGE / "launch" / "obstacle_avoidance.launch.py").read_text()
+    expected = {
+        '("/global_costmap/costmap", "/nav2_merged_costmap")',
+        '("/global_costmap/costmap_raw", "/nav2_merged_costmap_raw")',
+        '"/global_costmap/costmap_updates"',
+        '"/global_costmap/published_footprint"',
+    }
+    for remap in expected:
+        assert remap in source
+
+    # Relative spellings do not match the embedded planner costmap in Foxy.
+    assert '("global_costmap/costmap",' not in source
+    assert '("global_costmap/costmap_raw",' not in source
+
+
+def test_shadow_validation_accepts_results_up_to_300_ms():
+    launch_source = (
+        PACKAGE / "launch" / "obstacle_avoidance.launch.py"
+    ).read_text()
+    node_source = (
+        PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
+    ).read_text()
+    assert 'LaunchConfiguration("discard_after_ms")' in launch_source
+    assert 'default_value="300.0"' in launch_source
+    assert 'declare_parameter("discard_after_ms", 300.0)' in node_source

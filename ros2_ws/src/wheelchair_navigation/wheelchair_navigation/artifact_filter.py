@@ -1,4 +1,4 @@
-"""Pure geometry for one calibrated chassis-artifact rule per lidar."""
+"""Pure geometry for calibrated chassis-artifact rules per lidar."""
 
 from __future__ import annotations
 
@@ -49,6 +49,21 @@ def parse_artifact_box(values) -> ArtifactBox:
     return box
 
 
+def parse_artifact_boxes(values) -> tuple[ArtifactBox, ...]:
+    """Parse zero or more flat groups of six XYZ bounds."""
+
+    if values is None:
+        return ()
+    if len(values) % 6 != 0:
+        raise ValueError(
+            "artifact_additional_boxes must contain groups of six XYZ bounds"
+        )
+    return tuple(
+        parse_artifact_box(values[index:index + 6])
+        for index in range(0, len(values), 6)
+    )
+
+
 def parse_artifact_halo_bounds(values) -> ArtifactHaloBounds:
     """Parse and validate four explicit XY halo bounds."""
 
@@ -80,6 +95,19 @@ def points_in_artifact_box(
             & (points[:, 2] >= box.min_z_m)
             & (points[:, 2] <= box.max_z_m)
         )
+
+
+def points_in_artifact_boxes(
+    points_base: np.ndarray,
+    boxes: tuple[ArtifactBox, ...],
+) -> np.ndarray:
+    """Return membership in the union of all supplied hard-removal boxes."""
+
+    points = _points_array(points_base)
+    rejected = np.zeros(points.shape[0], dtype=bool)
+    for box in boxes:
+        rejected |= points_in_artifact_box(points, box)
+    return rejected
 
 
 def artifact_halo_cell_ids(
@@ -141,6 +169,8 @@ __all__ = [
     "ArtifactHaloBounds",
     "artifact_halo_cell_ids",
     "parse_artifact_box",
+    "parse_artifact_boxes",
     "parse_artifact_halo_bounds",
     "points_in_artifact_box",
+    "points_in_artifact_boxes",
 ]
