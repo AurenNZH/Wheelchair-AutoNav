@@ -28,6 +28,9 @@ MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
 CLEAR = 2
+RECOVERABLE_OBSTACLE_STOP_REASONS = frozenset(
+    ("nav2_cost_stop", "nav2_turn_cost_stop")
+)
 
 
 def pi_x_to_ros_steering(x_pos: int | float) -> float:
@@ -88,6 +91,7 @@ class SafetyLink:
         turn_longitudinal_cap: float = 0.15,
         neutral_deadzone: int = 5,
         forward_cone_half_angle_deg: float = 30.0,
+        auto_resume_obstacle_stops: bool = False,
         udp_socket=None,
         monotonic_clock=time.monotonic,
     ):
@@ -113,6 +117,7 @@ class SafetyLink:
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
         )
+        self.auto_resume_obstacle_stops = bool(auto_resume_obstacle_stops)
         self.session_id = str(uuid.uuid4())
         self._socket = udp_socket
         self._owns_socket = udp_socket is None
@@ -234,7 +239,10 @@ class SafetyLink:
             self._reason = "envelope_does_not_match_current_intent"
             return 0, 0
         if envelope.decision == STOP:
-            self._stop_latched = True
+            self._stop_latched = not (
+                self.auto_resume_obstacle_stops
+                and envelope.reason in RECOVERABLE_OBSTACLE_STOP_REASONS
+            )
             self._clear_count = 0
             self._last_counted_intent_sequence = envelope.intent_sequence
             self._reason = envelope.reason
@@ -534,6 +542,7 @@ __all__ = [
     "CLEAR",
     "Envelope",
     "ProtocolError",
+    "RECOVERABLE_OBSTACLE_STOP_REASONS",
     "SLOW",
     "STOP",
     "SafetyLink",

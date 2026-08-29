@@ -108,20 +108,27 @@ def forwarded_axes(frame):
 
 
 class EnforcedJsmPipeline:
-    def __init__(self, frames):
+    def __init__(
+        self,
+        frames,
+        *,
+        required_clear_envelopes=1,
+        auto_resume_obstacle_stops=False,
+    ):
         self.clock = FakeClock()
         self.udp = FakeUdpSocket()
         self.link = SafetyLink(
             enabled=True,
             jetson_address=JETSON_ADDRESS,
             allowed_jetson_address=JETSON_ADDRESS,
-            required_clear_envelopes=1,
+            required_clear_envelopes=required_clear_envelopes,
             command_cap=0.90,
             slow_command_cap=0.60,
             reverse_command_cap=0.65,
             heartbeat_hz=20.0,
             envelope_timeout_s=0.20,
             neutral_deadzone=4,
+            auto_resume_obstacle_stops=auto_resume_obstacle_stops,
             udp_socket=self.udp,
             monotonic_clock=self.clock,
         )
@@ -307,7 +314,8 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
                 jsm_frame(0, 80),
                 jsm_frame(0, 80),
                 jsm_frame(0, 80),
-            )
+            ),
+            auto_resume_obstacle_stops=True,
         )
 
         pipeline.forward_once()
@@ -356,6 +364,30 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
         pipeline.clock.advance(0.01)
         _, _, unarmed_axes, _ = pipeline.forward_once()
         self.assertEqual(unarmed_axes, (0, 0))
+
+    def test_physical_obstacle_stop_resumes_after_five_enforced_envelopes(self):
+        pipeline = EnforcedJsmPipeline(
+            tuple(jsm_frame(0, 80) for _ in range(12)),
+            required_clear_envelopes=5,
+            auto_resume_obstacle_stops=True,
+        )
+
+        _, _, waiting_axes, _ = pipeline.forward_once()
+        self.assertEqual(waiting_axes, (0, 0))
+        pipeline.queue_envelope(STOP, 0.0, 0.0, "nav2_cost_stop")
+        pipeline.clock.advance(0.01)
+        _, _, stopped_axes, _ = pipeline.forward_once()
+        self.assertEqual(stopped_axes, (0, 0))
+        self.assertFalse(pipeline.link.get_status()["stop_latched"])
+
+        for index in range(5):
+            pipeline.clock.advance(0.05)
+            _, _, pre_envelope_axes, _ = pipeline.forward_once()
+            self.assertEqual(pre_envelope_axes, (0, 0))
+            pipeline.queue_envelope(SLOW, 0.60, 0.0, "nav2_cost_slow")
+            pipeline.clock.advance(0.01)
+            _, _, axes, _ = pipeline.forward_once()
+            self.assertEqual(axes, (0, 60) if index == 4 else (0, 0))
 
 
 if __name__ == "__main__":

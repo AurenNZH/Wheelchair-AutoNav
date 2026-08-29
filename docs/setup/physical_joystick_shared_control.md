@@ -8,7 +8,9 @@ at SLOW 65 with reason `reverse_unmonitored_slow`. Correction X scales with
 the permitted Y magnitude so the input direction is preserved. Hard turns
 check a 0.55 m base-centred costmap disc and require both L2 filter heartbeats.
 Their CLEAR/SLOW lateral caps are 90/60, with longitudinal adjustment capped
-at 15. Every supervisor STOP remains latched until joystick release.
+at 15. The two obstacle STOP reasons can automatically resume held physical
+input after five fresh matching non-STOP envelopes; every other supervisor
+STOP remains latched until joystick release.
 
 The Pi and Jetson use lockstep UDP protocol v2 over the isolated Ethernet
 router. Deploy and rebuild both sides before testing; a mixed v1/v2 enforce
@@ -119,6 +121,12 @@ the semantic intent, angle, and safe command but forwards the physical command
 unchanged. Pass this gate only when both forwarding counters rise, the
 recorded forward corrections remain inside the cone, hard left/right and
 reverse labels are correct, and clear/slow/stop decisions agree with RViz.
+The banner reports whether obstacle auto-resume is enabled. By default,
+`nav2_cost_stop` and `nav2_turn_cost_stop` may recover without joystick release,
+but only after five fresh, distinct, matching SLOW or CLEAR envelopes; any
+intervening STOP resets that count. All other STOP reasons remain latched until
+release. Use `--require-release-after-obstacle-stop` for the previous behavior
+where obstacle STOP also requires release.
 The four-count Pi deadzone is a temporary compatibility setting for the
 known float32 boundary mismatch; it must stay explicit until that issue is
 fixed on both machines.
@@ -165,24 +173,30 @@ python3 supervise_physical_joystick.py \
 
 Validate in this order:
 
-1. STOP obstacle: held forward input must transmit `(0,0)`.
-2. Return to neutral, place the obstacle in the SLOW region, and request
-   forward motion. Transmitted Y must not exceed 60 and X must scale with it.
-3. Return to neutral and establish a clear lane. Five fresh envelopes are
-   required before transmitted Y may rise, and it must never exceed 90.
+1. STOP obstacle: held forward input must transmit `(0,0)`. Remove the soft
+   obstacle from outside the wheelchair path without releasing the joystick;
+   output must remain zero for four fresh matching SLOW/CLEAR envelopes and
+   may resume on the fifth.
+2. Repeat the held-input recovery into SLOW. Transmitted Y must not exceed 60,
+   X must scale with the current joystick position, and a new STOP during the
+   count must restart all five envelopes.
+3. Repeat into CLEAR. The fifth fresh envelope may permit motion, which must
+   use the current joystick position and never exceed 90.
 4. Repeat shallow corrections on both sides; neither may create a local latch,
    and the reduced X/Y ratio must preserve the requested direction.
 5. Make one straight approach to the soft obstacle and observe transmitted Y
-   change in order from CLEAR `<=90`, to SLOW `<=60`, to latched STOP `0`.
+   change in order from CLEAR `<=90`, to SLOW `<=60`, to STOP `0`, then recover
+   only after five fresh matching SLOW/CLEAR envelopes.
 6. Confirm straight and shallow-correction reverse requests never exceed a
    magnitude of 65 and report `reverse_unmonitored_slow`. Rear obstacles are
    not observed in this scope; use open rear clearance and the physical cutoff.
 7. In open clearance, request pure left and right turns. The displayed disc,
    supervisor decision, and sent axes must agree; lateral output must remain
    within 90/60 and longitudinal output within 15.
-8. Place a soft obstacle inside the disc and confirm a hard-turn request sends
-   `(0,0)` and remains latched until release. Stop either L2 filter separately;
-   hard turns must also fail closed within the source timeout.
+8. Place a soft obstacle inside the disc and confirm held left and right turn
+   requests send `(0,0)`, then resume only after five fresh matching SLOW/CLEAR
+   envelopes when the disc clears. Stop either L2 filter separately; hard turns
+   must fail closed and remain latched until joystick release.
 9. At the capped CLEAR speed, stop the point-support filter, Jetson supervisor, and
    network separately. Each must centre output within the 200 ms envelope
    timeout. Restart the full pipeline and return to neutral between drills.

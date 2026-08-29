@@ -121,6 +121,16 @@ def _arguments(argv=None):
         "--required-clear-envelopes", type=_positive_integer, default=5
     )
     parser.add_argument(
+        "--require-release-after-obstacle-stop",
+        dest="auto_resume_obstacle_stops",
+        action="store_false",
+        default=True,
+        help=(
+            "latch obstacle STOP decisions until joystick release instead of "
+            "automatically resuming after fresh non-STOP envelopes"
+        ),
+    )
+    parser.add_argument(
         "--clear-cap",
         type=_positive_integer,
         default=90,
@@ -251,6 +261,7 @@ def main(argv=None) -> int:
             turn_longitudinal_cap=args.turn_longitudinal_cap / 100.0,
             neutral_deadzone=args.deadzone,
             forward_cone_half_angle_deg=args.forward_cone_deg,
+            auto_resume_obstacle_stops=args.auto_resume_obstacle_stops,
         )
         control = StraightPhysicalJsmControl(
             safety_link,
@@ -275,15 +286,27 @@ def main(argv=None) -> int:
 
     print(
         "Physical shared control active: mode=%s JSM=%s controller=%s "
-        "frame=%08X#XxYy"
+        "frame=%08X#XxYy obstacle_auto_resume=%s"
         % (
             args.mode.upper(),
             args.gateway_interface,
             args.can_interface,
             expected_id,
+            (
+                "disabled (release required)"
+                if not args.auto_resume_obstacle_stops
+                else "enabled"
+            ),
         ),
         flush=True,
     )
+    if args.auto_resume_obstacle_stops:
+        print(
+            "Obstacle STOP recovery requires %d fresh, distinct, matching "
+            "SLOW/CLEAR envelopes; any STOP restarts the count."
+            % args.required_clear_envelopes,
+            flush=True,
+        )
     if args.mode == "shadow":
         print(
             "SHADOW: physical commands pass unchanged; safe output is diagnostic only.",

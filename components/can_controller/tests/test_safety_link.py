@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 import sys
 import unittest
@@ -60,6 +61,34 @@ class FakeClock:
 
     def advance(self, seconds):
         self.now += seconds
+
+
+def queue_latest_envelope(
+    udp,
+    link,
+    decision,
+    permitted_forward,
+    permitted_steering,
+    reason,
+):
+    intent = json.loads(udp.sent[-1][0].decode())
+    udp.received.append(
+        (
+            encode_envelope(
+                EnvelopePacket(
+                    intent["session"],
+                    intent["seq"],
+                    decision,
+                    permitted_forward,
+                    permitted_steering,
+                    reason,
+                    10.0,
+                )
+            ),
+            ("192.0.2.10", 45451),
+        )
+    )
+    return intent
 
 
 class SafetyLinkTests(unittest.TestCase):
@@ -214,6 +243,7 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
+            auto_resume_obstacle_stops=True,
             udp_socket=udp,
         )
         link.emergency_stop()
@@ -221,6 +251,243 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertTrue(link.get_status()["stop_latched"])
         self.assertEqual(link.apply(0, 0, False), (0, 0))
         self.assertFalse(link.get_status()["stop_latched"])
+
+    def test_obstacle_stop_auto_resumes_held_forward_after_five_envelopes(self):
+        for decision, reason, permitted, expected in (
+            (1, "nav2_cost_slow", 0.75, (0, 60)),
+            (2, "nav2_cost_clear", 1.00, (0, 90)),
+        ):
+            with self.subTest(decision=decision):
+                udp = FakeSocket()
+                clock = FakeClock()
+                link = SafetyLink(
+                    enabled=True,
+                    jetson_address="192.0.2.10",
+                    required_clear_envelopes=5,
+                    command_cap=0.90,
+                    slow_command_cap=0.60,
+                    heartbeat_hz=20.0,
+                    auto_resume_obstacle_stops=True,
+                    udp_socket=udp,
+                    monotonic_clock=clock,
+                )
+
+                self.assertEqual(link.apply(0, 100, True), (0, 0))
+                queue_latest_envelope(
+                    udp, link, 0, 0.0, 0.0, "nav2_cost_stop"
+                )
+                clock.advance(0.01)
+                self.assertEqual(link.apply(0, 100, True), (0, 0))
+                self.assertFalse(link.get_status()["stop_latched"])
+
+                for index in range(5):
+                    clock.advance(0.05)
+                    self.assertEqual(link.apply(0, 100, True), (0, 0))
+                    queue_latest_envelope(
+                        udp, link, decision, permitted, 0.0, reason
+                    )
+                    clock.advance(0.01)
+                    output = link.apply(0, 100, True)
+                    self.assertEqual(output, expected if index == 4 else (0, 0))
+
+                self.assertEqual(link.get_status()["clear_count"], 5)
+
+    def test_obstacle_stop_resets_auto_resume_progress(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=5,
+            command_cap=0.90,
+            heartbeat_hz=20.0,
+            auto_resume_obstacle_stops=True,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+
+        link.apply(0, 100, True)
+        queue_latest_envelope(udp, link, 0, 0.0, 0.0, "nav2_cost_stop")
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 100, True), (0, 0))
+
+        for _ in range(3):
+            clock.advance(0.05)
+            link.apply(0, 100, True)
+            queue_latest_envelope(
+                udp, link, 2, 1.0, 0.0, "nav2_cost_clear"
+            )
+            clock.advance(0.01)
+            self.assertEqual(link.apply(0, 100, True), (0, 0))
+        self.assertEqual(link.get_status()["clear_count"], 3)
+
+        clock.advance(0.05)
+        link.apply(0, 100, True)
+        queue_latest_envelope(udp, link, 0, 0.0, 0.0, "nav2_cost_stop")
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 100, True), (0, 0))
+        self.assertEqual(link.get_status()["clear_count"], 0)
+
+        for index in range(5):
+            clock.advance(0.05)
+            self.assertEqual(link.apply(0, 100, True), (0, 0))
+            queue_latest_envelope(
+                udp, link, 2, 1.0, 0.0, "nav2_cost_clear"
+            )
+            clock.advance(0.01)
+            output = link.apply(0, 100, True)
+            self.assertEqual(output, (0, 90) if index == 4 else (0, 0))
+
+    def test_obstacle_resume_uses_current_forward_input_and_slow_caps(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=5,
+            command_cap=0.90,
+            slow_command_cap=0.60,
+            heartbeat_hz=20.0,
+            auto_resume_obstacle_stops=True,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+
+        link.apply(0, 100, True)
+        queue_latest_envelope(udp, link, 0, 0.0, 0.0, "nav2_cost_stop")
+        clock.advance(0.01)
+        link.apply(-14, 80, True)
+
+        for index in range(5):
+            clock.advance(0.05)
+            self.assertEqual(link.apply(-14, 80, True), (0, 0))
+            intent = json.loads(udp.sent[-1][0].decode())
+            self.assertAlmostEqual(intent["longitudinal"], 0.80)
+            steering_ratio = intent["lateral"] / intent["longitudinal"]
+            queue_latest_envelope(
+                udp,
+                link,
+                1,
+                0.80,
+                steering_ratio,
+                "nav2_cost_slow",
+            )
+            clock.advance(0.01)
+            output = link.apply(-14, 80, True)
+            self.assertEqual(output, (-11, 60) if index == 4 else (0, 0))
+
+    def test_left_and_right_turn_obstacle_stops_auto_resume_with_caps(self):
+        for x_pos, steering in ((-100, 1.0), (100, -1.0)):
+            for decision, permitted_steering, expected_x in (
+                (1, 0.80 * steering, 60),
+                (2, 1.00 * steering, 90),
+            ):
+                with self.subTest(x_pos=x_pos, decision=decision):
+                    udp = FakeSocket()
+                    clock = FakeClock()
+                    link = SafetyLink(
+                        enabled=True,
+                        jetson_address="192.0.2.10",
+                        required_clear_envelopes=5,
+                        turn_command_cap=0.90,
+                        slow_turn_command_cap=0.60,
+                        turn_longitudinal_cap=0.15,
+                        heartbeat_hz=20.0,
+                        auto_resume_obstacle_stops=True,
+                        udp_socket=udp,
+                        monotonic_clock=clock,
+                    )
+
+                    link.apply(x_pos, 30, True)
+                    queue_latest_envelope(
+                        udp,
+                        link,
+                        0,
+                        0.0,
+                        0.0,
+                        "nav2_turn_cost_stop",
+                    )
+                    clock.advance(0.01)
+                    self.assertEqual(link.apply(x_pos, 30, True), (0, 0))
+                    self.assertFalse(link.get_status()["stop_latched"])
+
+                    for index in range(5):
+                        clock.advance(0.05)
+                        self.assertEqual(link.apply(x_pos, 30, True), (0, 0))
+                        queue_latest_envelope(
+                            udp,
+                            link,
+                            decision,
+                            0.30,
+                            permitted_steering,
+                            (
+                                "nav2_turn_cost_slow"
+                                if decision == 1
+                                else "nav2_turn_cost_clear"
+                            ),
+                        )
+                        clock.advance(0.01)
+                        output = link.apply(x_pos, 30, True)
+                        expected = (
+                            int(math.copysign(expected_x, x_pos)),
+                            15,
+                        )
+                        self.assertEqual(
+                            output, expected if index == 4 else (0, 0)
+                        )
+
+    def test_auto_resume_allowlist_keeps_other_stops_latched(self):
+        for reason in (
+            "stale_source",
+            "missing_intent",
+            "invalid_intent",
+            "intent_class_mismatch",
+            "unsupported_intent",
+        ):
+            with self.subTest(reason=reason):
+                udp = FakeSocket()
+                clock = FakeClock()
+                link = SafetyLink(
+                    enabled=True,
+                    jetson_address="192.0.2.10",
+                    required_clear_envelopes=1,
+                    auto_resume_obstacle_stops=True,
+                    udp_socket=udp,
+                    monotonic_clock=clock,
+                )
+                link.apply(0, 50, True)
+                queue_latest_envelope(udp, link, 0, 0.0, 0.0, reason)
+                clock.advance(0.01)
+                self.assertEqual(link.apply(0, 50, True), (0, 0))
+                self.assertTrue(link.get_status()["stop_latched"])
+
+                clock.advance(0.05)
+                link.apply(0, 50, True)
+                queue_latest_envelope(
+                    udp, link, 2, 0.50, 0.0, "nav2_cost_clear"
+                )
+                clock.advance(0.01)
+                self.assertEqual(link.apply(0, 50, True), (0, 0))
+                self.assertTrue(link.get_status()["stop_latched"])
+                self.assertEqual(link.apply(0, 0, False), (0, 0))
+                self.assertFalse(link.get_status()["stop_latched"])
+
+    def test_disabled_auto_resume_requires_release_for_keyboard_and_rollback(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            auto_resume_obstacle_stops=False,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, 50, True)
+        queue_latest_envelope(udp, link, 0, 0.0, 0.0, "nav2_cost_stop")
+        clock.advance(0.01)
+        self.assertEqual(link.apply(0, 50, True), (0, 0))
+        self.assertTrue(link.get_status()["stop_latched"])
 
     def test_slow_has_distinct_local_cap(self):
         udp = FakeSocket()
@@ -432,13 +699,14 @@ class SafetyLinkTests(unittest.TestCase):
 
         self.assertEqual(link.apply(-100, 30, True), (-90, 15))
 
-    def test_turn_envelope_cannot_reverse_lateral_direction(self):
+    def test_invalid_turn_envelope_stays_latched_with_auto_resume(self):
         udp = FakeSocket()
         clock = FakeClock()
         link = SafetyLink(
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
+            auto_resume_obstacle_stops=True,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -459,6 +727,9 @@ class SafetyLinkTests(unittest.TestCase):
 
         self.assertEqual(link.apply(-100, 0, True), (0, 0))
         self.assertTrue(link.get_status()["stop_latched"])
+        self.assertEqual(
+            link.get_status()["reason"], "invalid_safety_envelope_limit"
+        )
 
     def test_direction_family_change_requires_five_new_envelopes(self):
         udp = FakeSocket()
