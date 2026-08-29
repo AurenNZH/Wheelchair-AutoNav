@@ -102,6 +102,7 @@ def generate_launch_description():
         package="nav2_costmap_2d",
         executable="nav2_costmap_2d",
         output="screen",
+        condition=IfCondition(LaunchConfiguration("start_costmap")),
         # Rewrite the exact node section. Foxy gives it precedence over the
         # wildcard parameter files produced by a launch dictionary.
         parameters=[configured_parameters],
@@ -125,6 +126,7 @@ def generate_launch_description():
         executable="lifecycle_manager",
         name="nav2_merged_costmap_lifecycle_manager",
         output="screen",
+        condition=IfCondition(LaunchConfiguration("start_costmap")),
         parameters=[
             {
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
@@ -147,6 +149,14 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "start_costmap",
+                default_value="true",
+                description=(
+                    "Start the standalone costmap. Set false when the Nav2 "
+                    "planner server owns the same merged costmap."
+                ),
+            ),
             DeclareLaunchArgument(
                 "validate_cloud_timestamps", default_value="true"
             ),

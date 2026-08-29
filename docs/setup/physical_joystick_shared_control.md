@@ -12,8 +12,8 @@ at 15. The two obstacle STOP reasons can automatically resume held physical
 input after five fresh matching non-STOP envelopes; every other supervisor
 STOP remains latched until joystick release.
 
-The Pi and Jetson use lockstep UDP protocol v2 over the isolated Ethernet
-router. Deploy and rebuild both sides before testing; a mixed v1/v2 enforce
+The Pi and Jetson use lockstep UDP protocol v3 over the isolated Ethernet
+router. Deploy and rebuild both sides before testing; a mixed v2/v3 enforce
 setup intentionally fails closed. The validated control addresses are
 `192.168.0.100` for the Pi and `192.168.0.102` for the Jetson. The separate
 `192.168.1.0/24` addresses remain dedicated to the dual-L2 path. The Pi's
@@ -81,6 +81,23 @@ ros2 launch wheelchair_shared_control shared_control.launch.py \
 Both motion gates and UDP are explicit; they remain disabled in the normal
 launch defaults.
 
+For Nav2 route-assistance shadow validation, replace the separate mapping and
+supervisor launches with the package-level launch below. It starts the same L2
+support filters, a planner-owned 5 m by 8 m inflated costmap, Smac Hybrid-A*,
+the suggestion node, and shared control. `disabled` remains the default mode.
+
+```bash
+ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
+  avoidance_mode:=shadow enable_udp:=true \
+  bind_address:=192.168.0.102 \
+  pi_address:=192.168.0.100 allowed_pi_address:=192.168.0.100
+```
+
+Do not enable motion during the shadow capture. Inspect
+`/local_avoidance/path`, `/local_avoidance/goal`,
+`/local_avoidance/diagnostics`, and
+`/shared_control/avoidance_suggestion` for latency and route-gate results.
+
 ## 3. Pi CAN preparation
 
 With the wheelchair powered off, bring both in-line interfaces up and verify
@@ -113,6 +130,7 @@ python3 supervise_physical_joystick.py \
   --jetson-address 192.168.0.102 \
   --allowed-jetson-address 192.168.0.102 \
   --deadzone 4 --forward-cone-deg 30 \
+  --max-assist-ratio 0 \
   --csv /tmp/physical_shared_shadow_01.csv
 ```
 
@@ -130,6 +148,12 @@ where obstacle STOP also requires release.
 The four-count Pi deadzone is a temporary compatibility setting for the
 known float32 boundary mismatch; it must stay explicit until that issue is
 fixed on both machines.
+
+After shadow results pass, an unoccupied obstacle-avoidance enforce test uses
+`avoidance_mode:=enforce` on the Jetson and explicitly delegates at most 0.15
+on the physical gateway with `--max-assist-ratio 0.15`. Omitting that flag (or
+setting it to zero) prevents planner steering even if the Jetson is in enforce
+mode. Reverse and hard turns retain the direct policy.
 
 ## 5. Low-speed enforcement
 
@@ -150,7 +174,8 @@ ros2 bag record -o /tmp/physical_shared_enforce_01 \
   /operator_intent /lidar_right/filter/source_header \
   /lidar_left/filter/source_header \
   /nav2_merged_costmap /safety_envelope /shared_control/diagnostics \
-  /shared_control/checked_corridor
+  /shared_control/checked_corridor /shared_control/avoidance_suggestion \
+  /local_avoidance/path /local_avoidance/diagnostics
 ```
 
 Stop the shadow gateway, power-cycle the wheelchair if required by the R-Net
@@ -167,6 +192,7 @@ python3 supervise_physical_joystick.py \
   --turn-clear-cap 90 --turn-slow-cap 60 \
   --turn-longitudinal-cap 15 \
   --deadzone 4 --forward-cone-deg 30 \
+  --max-assist-ratio 0.15 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
   --csv /tmp/physical_shared_enforce_01.csv
 ```

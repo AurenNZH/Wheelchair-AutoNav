@@ -1,0 +1,9 @@
+std_msgs/Header header
+string session_id
+uint64 intent_sequence
+uint8 intent_class
+float32 source_steering
+float32 suggested_steering
+bool valid
+string reason
+float32 planning_time_ms

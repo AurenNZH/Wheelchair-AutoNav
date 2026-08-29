@@ -60,6 +60,8 @@ class SafetyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(values["clear_turn_limit"], "0.900")
         self.assertEqual(values["slow_turn_limit"], "0.600")
         self.assertEqual(values["turn_longitudinal_limit"], "0.150")
+        self.assertEqual(values["avoidance_mode"], "disabled")
+        self.assertEqual(values["avoidance_status"], "disabled")
 
     def test_status_metadata_and_levels_remain_stable(self):
         warning = build_safety_diagnostic_status(

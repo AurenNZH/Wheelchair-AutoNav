@@ -34,10 +34,15 @@ class PhysicalJoystickArgumentsTests(unittest.TestCase):
     def test_obstacle_auto_resume_is_enabled_by_default(self):
         args = self._parse()
         self.assertTrue(args.auto_resume_obstacle_stops)
+        self.assertEqual(args.max_assist_ratio, 0.0)
 
     def test_rollback_flag_requires_joystick_release(self):
         args = self._parse("--require-release-after-obstacle-stop")
         self.assertFalse(args.auto_resume_obstacle_stops)
+
+    def test_assist_ratio_is_explicit(self):
+        args = self._parse("--max-assist-ratio", "0.15")
+        self.assertEqual(args.max_assist_ratio, 0.15)
 
 
 if __name__ == "__main__":

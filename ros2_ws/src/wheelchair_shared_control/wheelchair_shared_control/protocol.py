@@ -9,7 +9,7 @@ import math
 from wheelchair_shared_control.operator_intent import INTENT_CLASSES, RELEASED
 
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 MAX_PACKET_BYTES = 1024
 
 
@@ -25,6 +25,7 @@ class IntentPacket:
     longitudinal: float
     intent_class: int
     deadman: bool
+    max_steering_assist: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ def encode_intent(packet: IntentPacket) -> bytes:
             "seq": packet.sequence,
             "lateral": packet.lateral,
             "longitudinal": packet.longitudinal,
+            "max_steering_assist": packet.max_steering_assist,
             "intent_class": packet.intent_class,
             "deadman": packet.deadman,
         }
@@ -61,6 +63,7 @@ def decode_intent(data: bytes) -> IntentPacket:
         sequence=_integer(payload, "seq"),
         lateral=_number(payload, "lateral"),
         longitudinal=_number(payload, "longitudinal"),
+        max_steering_assist=_number(payload, "max_steering_assist"),
         intent_class=_integer(payload, "intent_class"),
         deadman=_boolean(payload, "deadman"),
     )
@@ -134,6 +137,10 @@ def _validate_intent(packet: IntentPacket) -> None:
         packet.longitudinal
     ):
         raise ProtocolError("non-finite intent")
+    if not math.isfinite(packet.max_steering_assist) or not (
+        0.0 <= packet.max_steering_assist <= 1.0
+    ):
+        raise ProtocolError("max_steering_assist outside [0, 1]")
     if packet.intent_class not in INTENT_CLASSES:
         raise ProtocolError("unknown intent class")
     if not isinstance(packet.deadman, bool):

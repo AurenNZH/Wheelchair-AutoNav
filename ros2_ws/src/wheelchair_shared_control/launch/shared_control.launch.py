@@ -37,6 +37,12 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
+            DeclareLaunchArgument(
+                "avoidance_mode", default_value="disabled"
+            ),
+            DeclareLaunchArgument(
+                "maximum_steering_assist", default_value="0.15"
+            ),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.60"),
             DeclareLaunchArgument("reverse_limit", default_value="0.65"),
             DeclareLaunchArgument(
@@ -116,6 +122,12 @@ def generate_launch_description():
                         ),
                         "stop_cost_threshold": LaunchConfiguration(
                             "stop_cost_threshold"
+                        ),
+                        "avoidance_mode": LaunchConfiguration(
+                            "avoidance_mode"
+                        ),
+                        "maximum_steering_assist": LaunchConfiguration(
+                            "maximum_steering_assist"
                         ),
                     },
                 ],

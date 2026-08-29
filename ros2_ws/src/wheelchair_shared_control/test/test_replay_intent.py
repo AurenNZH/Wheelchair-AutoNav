@@ -137,6 +137,9 @@ class EnvelopeMonitorTests(unittest.TestCase):
 
         self.assertEqual(intent_signature(first), intent_signature(second))
         self.assertIn("[INTENT] FORWARD", format_intent(first))
+        second.max_steering_assist = 0.15
+        self.assertNotEqual(intent_signature(first), intent_signature(second))
+        second.max_steering_assist = 0.0
         second.deadman = False
         self.assertNotEqual(intent_signature(first), intent_signature(second))
         self.assertEqual(format_intent(second), "[INTENT] RELEASED")

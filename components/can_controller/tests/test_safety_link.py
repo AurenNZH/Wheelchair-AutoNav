@@ -221,7 +221,17 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(decoded.intent_sequence, packet.intent_sequence)
         self.assertEqual(decoded.permitted_forward, packet.permitted_forward)
 
-    def test_pi_v2_intent_is_wire_compatible_with_jetson_decoder(self):
+    def test_pi_decoder_rejects_mixed_v2_envelope(self):
+        packet = json.loads(
+            encode_envelope(
+                EnvelopePacket("session", 4, 1, 0.2, 0.0, "slow", 10.0)
+            )
+        )
+        packet["v"] = 2
+        with self.assertRaises(ValueError):
+            decode_envelope(json.dumps(packet).encode())
+
+    def test_pi_v3_intent_is_wire_compatible_with_jetson_decoder(self):
         udp = FakeSocket()
         link = SafetyLink(
             enabled=True,
@@ -235,7 +245,72 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertAlmostEqual(decoded.lateral, 0.14)
         self.assertAlmostEqual(decoded.longitudinal, 0.99)
         self.assertEqual(decoded.intent_class, 2)
+        self.assertEqual(decoded.max_steering_assist, 0.0)
         self.assertTrue(decoded.deadman)
+
+    def test_explicit_assist_allows_bounded_straight_steering(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            command_cap=0.20,
+            max_steering_assist=0.15,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+
+        self.assertEqual(link.apply(0, 100, True), (0, 0))
+        intent = json.loads(udp.sent[-1][0].decode())
+        self.assertEqual(intent["v"], 3)
+        self.assertEqual(intent["max_steering_assist"], 0.15)
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 1.0, 0.10,
+                        "nav2_avoidance_cost_clear", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(0, 100, True), (-2, 20))
+
+    def test_assist_over_advertised_authority_latches_fail_closed(self):
+        udp = FakeSocket()
+        clock = FakeClock()
+        link = SafetyLink(
+            enabled=True,
+            jetson_address="192.0.2.10",
+            required_clear_envelopes=1,
+            max_steering_assist=0.15,
+            udp_socket=udp,
+            monotonic_clock=clock,
+        )
+        link.apply(0, 100, True)
+        intent = json.loads(udp.sent[-1][0].decode())
+        udp.received.append(
+            (
+                encode_envelope(
+                    EnvelopePacket(
+                        intent["session"], intent["seq"], 2, 1.0, 0.16,
+                        "bad_assist", 10.0
+                    )
+                ),
+                ("192.0.2.10", 45451),
+            )
+        )
+        clock.advance(0.01)
+
+        self.assertEqual(link.apply(0, 100, True), (0, 0))
+        self.assertTrue(link.get_status()["stop_latched"])
+        self.assertEqual(
+            link.get_status()["reason"], "invalid_safety_envelope_limit"
+        )
 
     def test_operator_release_clears_stop_latch_but_does_not_move(self):
         udp = FakeSocket()

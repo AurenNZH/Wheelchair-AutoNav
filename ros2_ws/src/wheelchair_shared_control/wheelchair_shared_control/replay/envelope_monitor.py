@@ -63,7 +63,9 @@ def format_map_state(state: MapPipelineState) -> str:
     return "[MAP] STALE merged_costmap age=%.2fs" % state.age_s
 
 
-def intent_signature(msg: OperatorIntent) -> tuple[bool, int, float, float]:
+def intent_signature(
+    msg: OperatorIntent,
+) -> tuple[bool, int, float, float, float]:
     """Ignore timestamp and sequence heartbeats when identifying intent changes."""
 
     intent_class, lateral, longitudinal = _intent_view(msg)
@@ -72,6 +74,7 @@ def intent_signature(msg: OperatorIntent) -> tuple[bool, int, float, float]:
         intent_class,
         lateral,
         longitudinal,
+        float(msg.max_steering_assist),
     )
 
 
@@ -86,16 +89,20 @@ def format_intent(msg: OperatorIntent) -> str:
     heading_deg = math.degrees(
         math.atan2(lateral, longitudinal)
     )
-    return "[INTENT] %s lateral=%.3f longitudinal=%.3f angle=%.1fdeg" % (
+    return (
+        "[INTENT] %s lateral=%.3f longitudinal=%.3f angle=%.1fdeg "
+        "max_assist=%.3f"
+    ) % (
         label,
         lateral,
         longitudinal,
         heading_deg,
+        float(msg.max_steering_assist),
     )
 
 
 def _intent_view(msg: OperatorIntent) -> tuple[int, float, float]:
-    """Return v2 axes, deriving them for existing ROS-only publishers."""
+    """Return v3 axes, deriving them for existing ROS-only publishers."""
 
     intent_class = int(msg.intent_class)
     lateral = float(msg.lateral)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 
 from diagnostic_msgs.msg import DiagnosticArray
@@ -11,12 +12,22 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import Header
-from wheelchair_msgs.msg import OperatorIntent, SafetyEnvelope
+from wheelchair_msgs.msg import (
+    AvoidanceSuggestion,
+    OperatorIntent,
+    SafetyEnvelope,
+)
 from visualization_msgs.msg import MarkerArray
 
 from wheelchair_shared_control.corridor_visualization import (
     build_checked_corridor_markers,
     corridor_intent_view,
+)
+from wheelchair_shared_control.avoidance_arbitration import (
+    bound_current_assist,
+    candidate_is_no_worse,
+    suggestion_age_is_fresh,
+    suggestion_compatibility_reason,
 )
 from wheelchair_shared_control.diagnostics import (
     SafetyDiagnosticSnapshot,
@@ -38,6 +49,7 @@ from wheelchair_shared_control.models import (
     weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.safety_policy import (
+    evaluate_assisted_forward_safety,
     evaluate_safety,
     motion_configuration_decision,
     stop_decision,
@@ -95,6 +107,14 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("max_future_source_offset_s", 0.10)
         self.declare_parameter("slow_cost_threshold", 1)
         self.declare_parameter("stop_cost_threshold", 99)
+        self.declare_parameter("avoidance_mode", "disabled")
+        self.declare_parameter(
+            "avoidance_suggestion_topic",
+            "/shared_control/avoidance_suggestion",
+        )
+        self.declare_parameter("avoidance_suggestion_max_age_s", 0.25)
+        self.declare_parameter("avoidance_source_steering_tolerance", 0.05)
+        self.declare_parameter("maximum_steering_assist", 0.15)
 
         self._config = self._load_config()
         self._intent = None
@@ -106,6 +126,32 @@ class SafetySupervisorNode(Node):
         self._freshness_policy = self._load_freshness_policy()
         self._freshness_mode = self._freshness_policy.mode
         self._last_reason = None
+        self._avoidance_mode = str(
+            self.get_parameter("avoidance_mode").value
+        ).lower()
+        if self._avoidance_mode not in ("disabled", "shadow", "enforce"):
+            raise ValueError("avoidance_mode must be disabled, shadow, or enforce")
+        self._avoidance_max_age_s = float(
+            self.get_parameter("avoidance_suggestion_max_age_s").value
+        )
+        self._avoidance_source_tolerance = float(
+            self.get_parameter("avoidance_source_steering_tolerance").value
+        )
+        self._maximum_steering_assist = float(
+            self.get_parameter("maximum_steering_assist").value
+        )
+        if (
+            not math.isfinite(self._avoidance_max_age_s)
+            or self._avoidance_max_age_s <= 0.0
+            or not math.isfinite(self._avoidance_source_tolerance)
+            or self._avoidance_source_tolerance < 0.0
+            or not math.isfinite(self._maximum_steering_assist)
+            or not 0.0 <= self._maximum_steering_assist <= 1.0
+        ):
+            raise ValueError("invalid avoidance arbitration parameters")
+        self._avoidance_suggestion = None
+        self._avoidance_received_monotonic = 0.0
+        self._avoidance_status = "disabled"
 
         self._envelope_pub = self.create_publisher(
             SafetyEnvelope,
@@ -129,6 +175,12 @@ class SafetySupervisorNode(Node):
             OperatorIntent,
             self.get_parameter("operator_intent_topic").value,
             self._on_intent,
+            1,
+        )
+        self.create_subscription(
+            AvoidanceSuggestion,
+            self.get_parameter("avoidance_suggestion_topic").value,
+            self._on_avoidance_suggestion,
             1,
         )
         self.create_subscription(
@@ -164,6 +216,14 @@ class SafetySupervisorNode(Node):
                 self._config.stop_cost_threshold,
                 self._config.enable_motion,
                 self._config.geometry_calibrated,
+            )
+        )
+        self.get_logger().info(
+            "Local avoidance mode=%s suggestion_age<=%.3fs assist<=%.3f"
+            % (
+                self._avoidance_mode,
+                self._avoidance_max_age_s,
+                self._maximum_steering_assist,
             )
         )
 
@@ -240,6 +300,10 @@ class SafetySupervisorNode(Node):
     def _on_intent(self, msg: OperatorIntent) -> None:
         self._intent = msg
 
+    def _on_avoidance_suggestion(self, msg: AvoidanceSuggestion) -> None:
+        self._avoidance_suggestion = msg
+        self._avoidance_received_monotonic = time.monotonic()
+
     def _on_source_header(self, msg: Header) -> None:
         self._source_stamp_ns = Time.from_msg(msg.stamp).nanoseconds
 
@@ -311,6 +375,10 @@ class SafetySupervisorNode(Node):
         )
         if freshness.input_failure_reason is not None:
             decision = stop_decision(freshness.input_failure_reason)
+            if self._avoidance_mode != "disabled":
+                self._avoidance_status = "blocked_%s" % (
+                    freshness.input_failure_reason
+                )
         else:
             decision = motion_configuration_decision(self._config)
             if decision is None:
@@ -318,8 +386,14 @@ class SafetySupervisorNode(Node):
                     decision = stop_decision(
                         freshness.map_age_failure_reason
                     )
+                    if self._avoidance_mode != "disabled":
+                        self._avoidance_status = "blocked_%s" % (
+                            freshness.map_age_failure_reason
+                        )
                 else:
                     decision = self._evaluate_intent()
+            elif self._avoidance_mode != "disabled":
+                self._avoidance_status = "blocked_%s" % decision.reason
 
         envelope = SafetyEnvelope()
         envelope.header.stamp = now.to_msg()
@@ -400,11 +474,92 @@ class SafetySupervisorNode(Node):
             intent_class=intent_class,
             deadman=deadman,
         )
-        return evaluate_safety(
+        direct = evaluate_safety(
             intent,
             self._merged_costmap,
             self._config,
         )
+        assisted = self._assisted_decision(intent, direct)
+        return direct if assisted is None else assisted
+
+    def _assisted_decision(
+        self,
+        intent: OperatorIntentData,
+        direct: SafetyDecision,
+    ) -> SafetyDecision | None:
+        """Return an enforceable fresh suggestion, otherwise direct fallback."""
+
+        if self._avoidance_mode == "disabled":
+            self._avoidance_status = "disabled"
+            return None
+        suggestion = self._avoidance_suggestion
+        if suggestion is None:
+            self._avoidance_status = "no_suggestion"
+            return None
+        age_s = time.monotonic() - self._avoidance_received_monotonic
+        if not suggestion_age_is_fresh(age_s, self._avoidance_max_age_s):
+            self._avoidance_status = "stale_suggestion"
+            return None
+        advertised = float(self._intent.max_steering_assist)
+        source = float(suggestion.source_steering)
+        planned = float(suggestion.suggested_steering)
+        current = float(intent.lateral) / float(intent.longitudinal)
+        compatibility = suggestion_compatibility_reason(
+            current_session=intent.session_id,
+            current_sequence=intent.sequence,
+            current_intent_class=intent.intent_class,
+            current_steering=current,
+            suggestion_session=str(suggestion.session_id),
+            suggestion_sequence=int(suggestion.intent_sequence),
+            suggestion_intent_class=int(suggestion.intent_class),
+            source_steering=source,
+            suggested_steering=planned,
+            valid=bool(suggestion.valid),
+            source_tolerance=self._avoidance_source_tolerance,
+        )
+        if compatibility is not None:
+            self._avoidance_status = compatibility
+            return None
+        if not math.isfinite(advertised):
+            self._avoidance_status = "invalid_authority"
+            return None
+        authority = (
+            self._maximum_steering_assist
+            if self._avoidance_mode == "shadow"
+            else min(max(0.0, advertised), self._maximum_steering_assist)
+        )
+        bounded = bound_current_assist(
+            requested=current,
+            intent_class=intent.intent_class,
+            planned=planned,
+            authority=authority,
+            system_maximum=self._maximum_steering_assist,
+            minimum_steering=self._config.min_steering,
+            maximum_steering=self._config.max_steering,
+        )
+        if bounded is None:
+            self._avoidance_status = "outside_current_authority"
+            return None
+        if abs(bounded - current) < 0.02:
+            self._avoidance_status = "below_minimum_correction"
+            return None
+        candidate = evaluate_assisted_forward_safety(
+            intent,
+            bounded,
+            self._merged_costmap,
+            self._config,
+        )
+        if not candidate_is_no_worse(direct.decision, candidate.decision):
+            self._avoidance_status = "candidate_worse_than_direct"
+            return None
+        self._avoidance_status = (
+            "shadow_accepted"
+            if self._avoidance_mode == "shadow"
+            else "enforced"
+        )
+        if self._avoidance_mode != "enforce":
+            return None
+        return candidate
 
     def _publish_checked_corridor(
         self,
@@ -453,6 +608,8 @@ class SafetySupervisorNode(Node):
             map_age_basis=map_age_basis,
             source_age_ms=source_age_ms,
             left_source_age_ms=left_source_age_ms,
+            avoidance_mode=self._avoidance_mode,
+            avoidance_status=self._avoidance_status,
         )
         diagnostics = DiagnosticArray()
         diagnostics.header.stamp = self.get_clock().now().to_msg()

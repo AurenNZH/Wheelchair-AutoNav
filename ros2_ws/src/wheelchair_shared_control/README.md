@@ -5,7 +5,9 @@ successful-filter heartbeats to emit `/safety_envelope`. Forward trajectories
 retain the right-L2 heartbeat gate. Hard turns require both L2 heartbeats and
 check the costs in a 0.55 m pixelated disc centred on `base_link`. It owns
 STOP/SLOW/CLEAR interpretation, checked-region visualization, and the optional
-Jetson–Pi UDP safety link. It does not generate CAN frames or choose a route.
+Jetson–Pi UDP safety link. It does not generate CAN frames. When the optional
+obstacle-avoidance package is active, it may arbitrate a fresh bounded steering
+suggestion against the same current swept-path policy.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`; UDP also
 defaults off:
@@ -13,6 +15,12 @@ defaults off:
 ```bash
 ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
+
+Local avoidance has `disabled`, `shadow`, and `enforce` modes and defaults to
+`disabled`. Enforcement also requires each protocol-v3 physical intent to
+advertise non-zero `max_steering_assist`; keyboard teleoperation advertises
+zero and retains direct behavior. A missing, late, mismatched, unsafe, or
+planner-failed suggestion falls back to the direct STOP/SLOW/CLEAR decision.
 
 Live `nav2_live` freshness independently checks costmap receipt time and the
 original successful-filter sensor stamp. The weighted policy treats costs 1–98

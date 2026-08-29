@@ -95,6 +95,7 @@ class UdpBridgeNode(Node):
             msg.forward = max(0.0, packet.longitudinal)
             msg.lateral = packet.lateral
             msg.longitudinal = packet.longitudinal
+            msg.max_steering_assist = packet.max_steering_assist
             msg.intent_class = packet.intent_class
             msg.deadman = packet.deadman
             self._intent_pub.publish(msg)

@@ -26,6 +26,8 @@ class SafetyDiagnosticSnapshot:
     map_age_basis: str = "receipt_time"
     source_age_ms: float | None = None
     left_source_age_ms: float | None = None
+    avoidance_mode: str = "disabled"
+    avoidance_status: str = "disabled"
 
 
 def safety_diagnostic_values(
@@ -38,6 +40,8 @@ def safety_diagnostic_values(
     map_age_basis: str = "receipt_time",
     source_age_ms: float | None = None,
     left_source_age_ms: float | None = None,
+    avoidance_mode: str = "disabled",
+    avoidance_status: str = "disabled",
 ) -> list[KeyValue]:
     """Build stable, machine-readable evidence for one decision."""
 
@@ -60,6 +64,8 @@ def safety_diagnostic_values(
             ),
         ),
         KeyValue(key="processing_ms", value="%.3f" % processing_ms),
+        KeyValue(key="avoidance_mode", value=avoidance_mode),
+        KeyValue(key="avoidance_status", value=avoidance_status),
         KeyValue(key="enable_motion", value=str(config.enable_motion)),
         KeyValue(
             key="geometry_calibrated",
@@ -153,6 +159,8 @@ def build_safety_diagnostic_status(
         map_age_basis=snapshot.map_age_basis,
         source_age_ms=snapshot.source_age_ms,
         left_source_age_ms=snapshot.left_source_age_ms,
+        avoidance_mode=snapshot.avoidance_mode,
+        avoidance_status=snapshot.avoidance_status,
     )
     return status
 

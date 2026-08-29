@@ -23,11 +23,12 @@ from .operator_intent import (
 
 
 logger = logging.getLogger(__name__)
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
 CLEAR = 2
+MAX_STEERING_ASSIST = 0.15
 RECOVERABLE_OBSTACLE_STOP_REASONS = frozenset(
     ("nav2_cost_stop", "nav2_turn_cost_stop")
 )
@@ -91,6 +92,7 @@ class SafetyLink:
         turn_longitudinal_cap: float = 0.15,
         neutral_deadzone: int = 5,
         forward_cone_half_angle_deg: float = 30.0,
+        max_steering_assist: float = 0.0,
         auto_resume_obstacle_stops: bool = False,
         udp_socket=None,
         monotonic_clock=time.monotonic,
@@ -117,6 +119,7 @@ class SafetyLink:
         self.forward_cone_half_angle_deg = float(
             forward_cone_half_angle_deg
         )
+        self.max_steering_assist = float(max_steering_assist)
         self.auto_resume_obstacle_stops = bool(auto_resume_obstacle_stops)
         self.session_id = str(uuid.uuid4())
         self._socket = udp_socket
@@ -171,6 +174,10 @@ class SafetyLink:
             )
         if not 0.0 <= self.turn_longitudinal_cap <= 1.0:
             raise ValueError("turn_longitudinal_cap must be in [0, 1]")
+        if not math.isfinite(self.max_steering_assist) or not (
+            0.0 <= self.max_steering_assist <= MAX_STEERING_ASSIST
+        ):
+            raise ValueError("max_steering_assist must be in [0, 0.15]")
         classify_raw_axes(
             0,
             0,
@@ -303,10 +310,18 @@ class SafetyLink:
                 output_y = -output_y
             self._reason = envelope.reason
             return ros_steering_to_pi_x(permitted_lateral), output_y
-        permitted_steering = self._steering_inside_authorized_interval(
-            command.steering_ratio,
-            envelope.permitted_steering,
-        )
+        if self.max_steering_assist > 0.0:
+            if not self._forward_assist_is_valid(
+                envelope.permitted_steering, command
+            ):
+                self._reason = "assist_does_not_match_current_intent"
+                return 0, 0
+            permitted_steering = envelope.permitted_steering
+        else:
+            permitted_steering = self._steering_inside_authorized_interval(
+                command.steering_ratio,
+                envelope.permitted_steering,
+            )
         self._reason = envelope.reason
         output_magnitude = int(round(permitted_forward * 100.0))
         output_y = (
@@ -367,8 +382,8 @@ class SafetyLink:
             and sent_command.intent_class == current_command.intent_class
         )
 
-    @staticmethod
     def _envelope_limit_is_valid(
+        self,
         envelope: Envelope,
         sent_command: ClassifiedIntent,
     ) -> bool:
@@ -388,6 +403,8 @@ class SafetyLink:
             )
         requested = sent_command.steering_ratio
         permitted = envelope.permitted_steering
+        if sent_command.is_forward and self.max_steering_assist > 0.0:
+            return self._forward_assist_is_valid(permitted, sent_command)
         if permitted == 0.0:
             return True
         if requested == 0.0:
@@ -395,6 +412,31 @@ class SafetyLink:
         if math.copysign(1.0, permitted) != math.copysign(1.0, requested):
             return False
         return abs(permitted) <= abs(requested) + 1e-6
+
+    def _forward_assist_is_valid(
+        self,
+        permitted: float,
+        command: ClassifiedIntent,
+    ) -> bool:
+        """Validate planner steering against authority advertised by this Pi."""
+
+        if not command.is_forward or not math.isfinite(permitted):
+            return False
+        requested = command.steering_ratio
+        authority = self.max_steering_assist
+        if command.intent_class == FORWARD_CLASSES[0]:
+            return abs(permitted) <= authority + 1e-6
+        if requested > 0.0:
+            return (
+                -1e-6 <= permitted <= requested + 1e-6
+                and requested - permitted <= authority + 1e-6
+            )
+        if requested < 0.0:
+            return (
+                requested - 1e-6 <= permitted <= 1e-6
+                and permitted - requested <= authority + 1e-6
+            )
+        return abs(permitted) <= authority + 1e-6
 
     def _send_intent(self, command: ClassifiedIntent, now: float) -> None:
         self._sequence += 1
@@ -405,6 +447,7 @@ class SafetyLink:
             "seq": self._sequence,
             "lateral": command.lateral,
             "longitudinal": command.longitudinal,
+            "max_steering_assist": self.max_steering_assist,
             "intent_class": command.intent_class,
             "deadman": command.deadman,
         }
@@ -541,6 +584,7 @@ def decode_envelope(data: bytes) -> Envelope:
 __all__ = [
     "CLEAR",
     "Envelope",
+    "MAX_STEERING_ASSIST",
     "ProtocolError",
     "RECOVERABLE_OBSTACLE_STOP_REASONS",
     "SLOW",

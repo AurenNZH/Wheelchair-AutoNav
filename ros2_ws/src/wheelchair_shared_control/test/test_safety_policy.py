@@ -11,6 +11,7 @@ from wheelchair_shared_control.models import (
     weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.safety_policy import (
+    evaluate_assisted_forward_safety,
     evaluate_safety,
     motion_configuration_decision,
 )
@@ -207,6 +208,31 @@ class SafetyPolicyTests(unittest.TestCase):
 
         self.assertEqual(turn.decision, SLOW)
         self.assertEqual(straight.decision, CLEAR)
+
+    def test_assisted_forward_uses_current_swept_path_and_user_speed(self):
+        decision = evaluate_assisted_forward_safety(
+            self.intent,
+            -0.15,
+            self.empty,
+            self.enabled,
+        )
+
+        self.assertEqual(decision.decision, CLEAR)
+        self.assertEqual(decision.reason, "nav2_avoidance_cost_clear")
+        self.assertAlmostEqual(decision.permitted_forward, 0.5)
+        self.assertAlmostEqual(decision.permitted_steering, -0.15)
+
+    def test_assisted_forward_remains_fail_closed_on_cost(self):
+        decision = evaluate_assisted_forward_safety(
+            self.intent,
+            0.15,
+            self._costmap({(6, 40): 99}),
+            self.enabled,
+        )
+
+        self.assertEqual(decision.decision, STOP)
+        self.assertEqual(decision.permitted_forward, 0.0)
+        self.assertEqual(decision.permitted_steering, 0.0)
 
     def test_correction_includes_straight_path_union(self):
         correction = OperatorIntentData(

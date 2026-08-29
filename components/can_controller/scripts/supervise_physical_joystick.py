@@ -76,6 +76,13 @@ def _positive_float(text: str) -> float:
     return value
 
 
+def _nonnegative_float(text: str) -> float:
+    value = float(text)
+    if value < 0.0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return value
+
+
 def _arguments(argv=None):
     parser = argparse.ArgumentParser(
         description=(
@@ -119,6 +126,15 @@ def _arguments(argv=None):
     )
     parser.add_argument(
         "--required-clear-envelopes", type=_positive_integer, default=5
+    )
+    parser.add_argument(
+        "--max-assist-ratio",
+        type=_nonnegative_float,
+        default=0.0,
+        help=(
+            "maximum steering ratio delegated to Nav2 assistance "
+            "(default: 0, direct shared control)"
+        ),
     )
     parser.add_argument(
         "--require-release-after-obstacle-stop",
@@ -228,6 +244,8 @@ def main(argv=None) -> int:
             raise ValueError("turn-longitudinal-cap must be in [0, 100]")
         if args.forward_cone_deg >= 90.0:
             raise ValueError("forward-cone-deg must be less than 90")
+        if args.max_assist_ratio > 0.15:
+            raise ValueError("max-assist-ratio must be in [0, 0.15]")
     except ValueError as exc:
         print("Configuration error: %s" % exc, file=sys.stderr)
         return 2
@@ -261,6 +279,7 @@ def main(argv=None) -> int:
             turn_longitudinal_cap=args.turn_longitudinal_cap / 100.0,
             neutral_deadzone=args.deadzone,
             forward_cone_half_angle_deg=args.forward_cone_deg,
+            max_steering_assist=args.max_assist_ratio,
             auto_resume_obstacle_stops=args.auto_resume_obstacle_stops,
         )
         control = StraightPhysicalJsmControl(
@@ -286,7 +305,7 @@ def main(argv=None) -> int:
 
     print(
         "Physical shared control active: mode=%s JSM=%s controller=%s "
-        "frame=%08X#XxYy obstacle_auto_resume=%s"
+        "frame=%08X#XxYy obstacle_auto_resume=%s max_assist_ratio=%.3f"
         % (
             args.mode.upper(),
             args.gateway_interface,
@@ -297,6 +316,7 @@ def main(argv=None) -> int:
                 if not args.auto_resume_obstacle_stops
                 else "enabled"
             ),
+            args.max_assist_ratio,
         ),
         flush=True,
     )

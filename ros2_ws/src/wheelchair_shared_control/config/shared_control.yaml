@@ -43,6 +43,14 @@
     slow_cost_threshold: 1
     stop_cost_threshold: 99
 
+    # Planner assistance is opt-in twice: the supervisor must be in enforce
+    # mode and each physical intent packet must advertise a non-zero authority.
+    avoidance_mode: disabled
+    avoidance_suggestion_topic: /shared_control/avoidance_suggestion
+    avoidance_suggestion_max_age_s: 0.25
+    avoidance_source_steering_tolerance: 0.05
+    maximum_steering_assist: 0.15
+
     enable_udp: false
     bind_address: 0.0.0.0
     intent_port: 45450

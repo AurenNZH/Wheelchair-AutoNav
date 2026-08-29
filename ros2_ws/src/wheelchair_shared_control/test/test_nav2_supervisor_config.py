@@ -39,6 +39,10 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["forward_cone_half_angle_deg"] == 30.0
     assert parameters["enable_motion"] is False
     assert parameters["geometry_calibrated"] is False
+    assert parameters["avoidance_mode"] == "disabled"
+    assert parameters["avoidance_suggestion_max_age_s"] == 0.25
+    assert parameters["avoidance_source_steering_tolerance"] == 0.05
+    assert parameters["maximum_steering_assist"] == 0.15
 
 
 def test_launch_exposes_costmap_topic_and_thresholds():
@@ -58,6 +62,7 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"turn_clearance_radius_m", default_value="0.55"' in source
     assert '"clear_turn_limit", default_value="0.90"' in source
     assert '"slow_turn_limit", default_value="0.60"' in source
+    assert '"avoidance_mode", default_value="disabled"' in source
 
 
 def test_replay_uses_nav2_costmap_with_map_stamp_freshness():

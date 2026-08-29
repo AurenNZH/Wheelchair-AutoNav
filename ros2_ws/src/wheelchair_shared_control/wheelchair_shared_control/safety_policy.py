@@ -117,6 +117,67 @@ def evaluate_safety(
     )
 
 
+def evaluate_assisted_forward_safety(
+    intent: OperatorIntentData,
+    assisted_steering: float,
+    merged_costmap: WeightedCostmap,
+    config: SafetyConfig = SafetyConfig(),
+) -> SafetyDecision:
+    """Evaluate a bounded planner steering proposal on the current costmap.
+
+    Authority, session, sequence, and suggestion freshness are intentionally
+    checked by the supervisor before this pure geometric policy is called.
+    """
+
+    config_decision = motion_configuration_decision(config)
+    if config_decision is not None:
+        return config_decision
+    if intent.intent_class not in FORWARD_CLASSES or not intent.deadman:
+        return stop_decision("avoidance_ineligible_intent")
+    steering = float(assisted_steering)
+    if not math.isfinite(steering):
+        return stop_decision("invalid_avoidance_steering")
+    if steering < config.min_steering or steering > config.max_steering:
+        return stop_decision("avoidance_steering_limit_exceeded")
+
+    summary = swept_path_costs(merged_costmap, steering, config)
+    if not summary.valid:
+        return _stop_from_costs(
+            summary.failure_reason or "invalid_costmap", summary
+        )
+    if (
+        summary.nearest_stop_distance_m is not None
+        and summary.nearest_stop_distance_m <= config.stop_distance_m
+    ):
+        return _stop_from_costs("nav2_avoidance_cost_stop", summary)
+    if (
+        summary.nearest_slow_distance_m is not None
+        and summary.nearest_slow_distance_m <= config.slow_distance_m
+    ):
+        return SafetyDecision(
+            SLOW,
+            min(float(intent.longitudinal), config.slow_forward_limit),
+            steering,
+            "nav2_avoidance_cost_slow",
+            summary.nearest_slow_distance_m,
+            summary.maximum_cost,
+            summary.nearest_slow_distance_m,
+            summary.nearest_stop_distance_m,
+            True,
+        )
+    return SafetyDecision(
+        CLEAR,
+        float(intent.longitudinal),
+        steering,
+        "nav2_avoidance_cost_clear",
+        summary.nearest_slow_distance_m,
+        summary.maximum_cost,
+        summary.nearest_slow_distance_m,
+        summary.nearest_stop_distance_m,
+        True,
+    )
+
+
 def _turn_decision(
     intent: OperatorIntentData,
     merged_costmap: WeightedCostmap,
@@ -210,6 +271,7 @@ def _stop_from_costs(
 
 
 __all__ = [
+    "evaluate_assisted_forward_safety",
     "evaluate_safety",
     "motion_configuration_decision",
     "stop_decision",
