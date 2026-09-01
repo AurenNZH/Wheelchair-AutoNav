@@ -28,7 +28,7 @@ MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
 CLEAR = 2
-MAX_STEERING_ASSIST = 0.15
+MAX_STEERING_ASSIST = 0.30
 RECOVERABLE_OBSTACLE_STOP_REASONS = frozenset(
     ("nav2_cost_stop", "nav2_turn_cost_stop")
 )
@@ -177,7 +177,10 @@ class SafetyLink:
         if not math.isfinite(self.max_steering_assist) or not (
             0.0 <= self.max_steering_assist <= MAX_STEERING_ASSIST
         ):
-            raise ValueError("max_steering_assist must be in [0, 0.15]")
+            raise ValueError(
+                "max_steering_assist must be in [0, %.2f]"
+                % MAX_STEERING_ASSIST
+            )
         classify_raw_axes(
             0,
             0,
@@ -310,7 +313,7 @@ class SafetyLink:
                 output_y = -output_y
             self._reason = envelope.reason
             return ros_steering_to_pi_x(permitted_lateral), output_y
-        if self.max_steering_assist > 0.0:
+        if command.is_forward and self.max_steering_assist > 0.0:
             if not self._forward_assist_is_valid(
                 envelope.permitted_steering, command
             ):

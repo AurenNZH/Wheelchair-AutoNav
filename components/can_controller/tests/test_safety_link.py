@@ -256,7 +256,7 @@ class SafetyLinkTests(unittest.TestCase):
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
             command_cap=0.20,
-            max_steering_assist=0.15,
+            max_steering_assist=0.30,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -264,12 +264,12 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(link.apply(0, 100, True), (0, 0))
         intent = json.loads(udp.sent[-1][0].decode())
         self.assertEqual(intent["v"], 3)
-        self.assertEqual(intent["max_steering_assist"], 0.15)
+        self.assertEqual(intent["max_steering_assist"], 0.30)
         udp.received.append(
             (
                 encode_envelope(
                     EnvelopePacket(
-                        intent["session"], intent["seq"], 2, 1.0, 0.10,
+                        intent["session"], intent["seq"], 2, 1.0, 0.30,
                         "nav2_avoidance_cost_clear", 10.0
                     )
                 ),
@@ -278,7 +278,7 @@ class SafetyLinkTests(unittest.TestCase):
         )
         clock.advance(0.01)
 
-        self.assertEqual(link.apply(0, 100, True), (-2, 20))
+        self.assertEqual(link.apply(0, 100, True), (-6, 20))
 
     def test_assist_over_advertised_authority_latches_fail_closed(self):
         udp = FakeSocket()
@@ -287,7 +287,7 @@ class SafetyLinkTests(unittest.TestCase):
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            max_steering_assist=0.15,
+            max_steering_assist=0.30,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -297,7 +297,7 @@ class SafetyLinkTests(unittest.TestCase):
             (
                 encode_envelope(
                     EnvelopePacket(
-                        intent["session"], intent["seq"], 2, 1.0, 0.16,
+                        intent["session"], intent["seq"], 2, 1.0, 0.31,
                         "bad_assist", 10.0
                     )
                 ),
@@ -311,6 +311,15 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(
             link.get_status()["reason"], "invalid_safety_envelope_limit"
         )
+
+    def test_assist_configuration_above_supported_ceiling_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, r"\[0, 0\.30\]"):
+            SafetyLink(
+                enabled=True,
+                jetson_address="192.0.2.10",
+                max_steering_assist=0.31,
+                udp_socket=FakeSocket(),
+            )
 
     def test_operator_release_clears_stop_latch_but_does_not_move(self):
         udp = FakeSocket()
@@ -687,6 +696,7 @@ class SafetyLinkTests(unittest.TestCase):
             command_cap=0.90,
             slow_command_cap=0.60,
             reverse_command_cap=0.65,
+            max_steering_assist=0.30,
             udp_socket=udp,
             monotonic_clock=clock,
         )

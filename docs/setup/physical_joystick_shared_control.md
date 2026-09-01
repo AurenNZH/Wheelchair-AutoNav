@@ -15,7 +15,7 @@ STOP remains latched until joystick release.
 The Pi and Jetson use lockstep UDP protocol v3 over the isolated Ethernet
 router. Deploy and rebuild both sides before testing; a mixed v2/v3 enforce
 setup intentionally fails closed. The validated control addresses are
-`192.168.0.100` for the Pi and `192.168.0.102` for the Jetson. The separate
+`192.168.0.101` for the Pi and `192.168.0.102` for the Jetson. The separate
 `192.168.1.0/24` addresses remain dedicated to the dual-L2 path. The Pi's
 Wi-Fi address `10.0.0.253` is retained for recovery access, not for the UDP
 safety link.
@@ -24,12 +24,12 @@ Before launch, verify that both control routes use Ethernet:
 
 ```bash
 # Jetson
-ip route get 192.168.0.100
-ping -I 192.168.0.102 -c 4 192.168.0.100
+ip route get 192.168.0.101
+ping -I 192.168.0.102 -c 4 192.168.0.101
 
 # Raspberry Pi
 ip route get 192.168.0.102
-ping -I 192.168.0.100 -c 4 192.168.0.102
+ping -I 192.168.0.101 -c 4 192.168.0.102
 ```
 
 The route output must report `dev eth0`. `ROS_LOCALHOST_ONLY=1` may remain set
@@ -71,7 +71,7 @@ export ROS_LOCALHOST_ONLY=1
 ros2 launch wheelchair_shared_control shared_control.launch.py \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   bind_address:=192.168.0.102 \
-  pi_address:=192.168.0.100 allowed_pi_address:=192.168.0.100 \
+  pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101 \
   slow_forward_limit:=0.60 reverse_limit:=0.65 \
   turn_clearance_radius_m:=0.55 clear_turn_limit:=0.90 \
   slow_turn_limit:=0.60 turn_longitudinal_limit:=0.15 \
@@ -92,7 +92,7 @@ ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
   reactive_assistance_mode:=shadow nav2_waypoint_mode:=shadow \
   nav2_waypoint_rate_hz:=2.0 enable_udp:=true \
   bind_address:=192.168.0.102 \
-  pi_address:=192.168.0.100 allowed_pi_address:=192.168.0.100
+  pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101
 ```
 
 Do not enable motion during the shadow capture. Inspect
@@ -156,7 +156,9 @@ fixed on both machines.
 
 After shadow results pass, an unoccupied reactive-assistance enforce test uses
 `reactive_assistance_mode:=enforce` on the Jetson and explicitly delegates at
-most 0.15 on the physical gateway with `--max-assist-ratio 0.15`. Omitting that
+most 0.30 on the physical gateway with `--max-assist-ratio 0.30`. This is a
+normalized steering-ratio correction (about 16.7 degrees from straight, or up
+to 18 raw X counts at the SLOW Y cap of 60), not a wheel angle. Omitting that
 flag (or setting it to zero) prevents reactive steering in enforce mode.
 Reverse and hard turns retain the direct policy, direct STOP never attempts an
 escape, and an enforced correction retains the direct SLOW cap and reason.
@@ -215,7 +217,7 @@ python3 supervise_physical_joystick.py \
   --turn-clear-cap 90 --turn-slow-cap 60 \
   --turn-longitudinal-cap 15 \
   --deadzone 4 --forward-cone-deg 30 \
-  --max-assist-ratio 0.15 \
+  --max-assist-ratio 0.30 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
   --csv /tmp/physical_shared_enforce_01.csv
 ```

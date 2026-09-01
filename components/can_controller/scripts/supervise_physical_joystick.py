@@ -21,6 +21,7 @@ from wheelchair_teleop.physical_shared_control import (  # noqa: E402
 )
 from wheelchair_teleop.safety_link import (  # noqa: E402
     CLEAR,
+    MAX_STEERING_ASSIST,
     SLOW,
     STOP,
     SafetyLink,
@@ -244,8 +245,11 @@ def main(argv=None) -> int:
             raise ValueError("turn-longitudinal-cap must be in [0, 100]")
         if args.forward_cone_deg >= 90.0:
             raise ValueError("forward-cone-deg must be less than 90")
-        if args.max_assist_ratio > 0.15:
-            raise ValueError("max-assist-ratio must be in [0, 0.15]")
+        if args.max_assist_ratio > MAX_STEERING_ASSIST:
+            raise ValueError(
+                "max-assist-ratio must be in [0, %.2f]"
+                % MAX_STEERING_ASSIST
+            )
     except ValueError as exc:
         print("Configuration error: %s" % exc, file=sys.stderr)
         return 2

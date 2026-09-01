@@ -116,10 +116,10 @@ Reactive enforcement must remain an explicit later step:
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
   reactive_assistance_mode:=enforce nav2_waypoint_mode:=shadow \
-  enable_motion:=true geometry_calibrated:=true maximum_assist:=0.15
+  enable_motion:=true geometry_calibrated:=true maximum_assist:=0.30
 ```
 
-The physical gateway must also advertise `--max-assist-ratio 0.15`. Keyboard
+The physical gateway must also advertise `--max-assist-ratio 0.30`. Keyboard
 teleoperation advertises zero authority and retains direct behavior.
 
 ## Validation sequence

@@ -114,6 +114,7 @@ class EnforcedJsmPipeline:
         *,
         required_clear_envelopes=1,
         auto_resume_obstacle_stops=False,
+        max_steering_assist=0.0,
     ):
         self.clock = FakeClock()
         self.udp = FakeUdpSocket()
@@ -128,6 +129,7 @@ class EnforcedJsmPipeline:
             heartbeat_hz=20.0,
             envelope_timeout_s=0.20,
             neutral_deadzone=4,
+            max_steering_assist=max_steering_assist,
             auto_resume_obstacle_stops=auto_resume_obstacle_stops,
             udp_socket=self.udp,
             monotonic_clock=self.clock,
@@ -236,7 +238,8 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
 
     def test_reverse_correction_rewrites_signed_slot_two_axes(self):
         pipeline = EnforcedJsmPipeline(
-            (jsm_frame(20, -100), jsm_frame(20, -100))
+            (jsm_frame(20, -100), jsm_frame(20, -100)),
+            max_steering_assist=0.30,
         )
 
         pipeline.forward_once()
