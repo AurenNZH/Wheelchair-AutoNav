@@ -11,7 +11,7 @@ LAUNCH_DEFAULTS = {
     "use_right_artifact_filter": "true",
     "use_left_artifact_filter": "true",
     "use_inflation": "false",
-    "inflation_radius": "0.55",
+    "inflation_radius": "0.45",
     "cost_scaling_factor": "3.0",
     "publish_camera_tf": "false",
     "use_robot_model": "true",

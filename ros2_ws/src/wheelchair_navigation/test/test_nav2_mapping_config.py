@@ -49,7 +49,7 @@ def test_dual_l2_pipeline_has_symmetric_sources_and_optional_inflation():
         == "nav2_costmap_2d::InflationLayer"
     )
     assert parameters["inflation_layer.enabled"] is False
-    assert parameters["inflation_layer.inflation_radius"] == 0.55
+    assert parameters["inflation_layer.inflation_radius"] == 0.45
     assert parameters["inflation_layer.cost_scaling_factor"] == 3.0
     assert "denoise_layer" not in parameters
     assert "artifact_grid_mask_cells" not in parameters
@@ -161,6 +161,25 @@ def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
     assert displays["L2 left hard-rejected artifacts"]["Enabled"] is False
     merged = displays["Nav2 Merged Costmap (optional inflation)"]
     assert merged["Topic"]["Value"] == "/nav2_merged_costmap"
+    reactive = displays["Reactive steering candidates"]
+    raw_path = displays["Nav2 waypoint shadow raw path"]
+    accepted_path = displays["Nav2 waypoint shadow accepted path"]
+    goal = displays["Nav2 waypoint shadow temporary goal"]
+    footprint = displays["Nav2 merged costmap footprint"]
+    assert raw_path["Enabled"] is True
+    assert raw_path["Topic"]["Value"] == "/plan"
+    assert reactive["Enabled"] is True
+    assert reactive["Topic"]["Value"] == (
+        "/shared_control/reactive_candidates"
+    )
+    assert accepted_path["Enabled"] is True
+    assert accepted_path["Topic"]["Value"] == "/local_avoidance/path"
+    assert accepted_path["Line Width"] > raw_path["Line Width"]
+    assert accepted_path["Color"] != raw_path["Color"]
+    assert goal["Enabled"] is True
+    assert goal["Topic"]["Value"] == "/local_avoidance/goal"
+    assert footprint["Enabled"] is True
+    assert footprint["Topic"]["Value"] == "/nav2_merged_costmap_footprint"
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():
@@ -168,7 +187,7 @@ def test_launch_exposes_disabled_tunable_inflation_profile():
     source = path.read_text()
 
     assert '"use_inflation", default_value="false"' in source
-    assert '"inflation_radius", default_value="0.55"' in source
+    assert '"inflation_radius", default_value="0.45"' in source
     assert '"cost_scaling_factor", default_value="3.0"' in source
     assert "RewrittenYaml(" in source
     assert '"inflation_layer.enabled"' in source

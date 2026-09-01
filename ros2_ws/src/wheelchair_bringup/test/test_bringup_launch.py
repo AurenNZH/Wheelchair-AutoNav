@@ -13,6 +13,7 @@ def test_defaults_are_lidar_first_and_non_actuating():
     assert LAUNCH_DEFAULTS["use_mapping"] == "false"
     assert LAUNCH_DEFAULTS["use_rviz"] == "false"
     assert LAUNCH_DEFAULTS["use_robot_model"] == "true"
+    assert LAUNCH_DEFAULTS["inflation_radius"] == "0.45"
     assert LAUNCH_DEFAULTS["publish_lidar_tf"] == "true"
     assert LAUNCH_DEFAULTS["publish_left_lidar_tf"] == "true"
 

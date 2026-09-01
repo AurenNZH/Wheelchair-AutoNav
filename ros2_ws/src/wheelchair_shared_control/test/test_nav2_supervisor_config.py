@@ -39,10 +39,18 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["forward_cone_half_angle_deg"] == 30.0
     assert parameters["enable_motion"] is False
     assert parameters["geometry_calibrated"] is False
-    assert parameters["avoidance_mode"] == "disabled"
-    assert parameters["avoidance_suggestion_max_age_s"] == 0.25
-    assert parameters["avoidance_source_steering_tolerance"] == 0.05
+    assert parameters["reactive_assistance_mode"] == "disabled"
+    assert parameters["reactive_horizon_m"] == 1.2
+    assert parameters["reactive_path_sample_step_m"] == 0.05
+    assert parameters["reactive_steering_step"] == 0.05
+    assert parameters["reactive_minimum_correction"] == 0.02
+    assert parameters["reactive_minimum_cost_improvement"] == 5
+    assert parameters["reactive_confirmation_cycles"] == 2
+    assert parameters["reactive_intent_change_tolerance"] == 0.05
     assert parameters["maximum_steering_assist"] == 0.15
+    assert parameters["reactive_suggestion_topic"] == (
+        "/shared_control/reactive_suggestion"
+    )
 
 
 def test_launch_exposes_costmap_topic_and_thresholds():
@@ -62,7 +70,18 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert '"turn_clearance_radius_m", default_value="0.55"' in source
     assert '"clear_turn_limit", default_value="0.90"' in source
     assert '"slow_turn_limit", default_value="0.60"' in source
-    assert '"avoidance_mode", default_value="disabled"' in source
+    assert '"reactive_assistance_mode"' in source
+    assert 'choices=["disabled", "shadow", "enforce"]' in source
+    for parameter in (
+        "reactive_horizon_m",
+        "reactive_path_sample_step_m",
+        "reactive_steering_step",
+        "reactive_minimum_correction",
+        "reactive_minimum_cost_improvement",
+        "reactive_confirmation_cycles",
+        "reactive_intent_change_tolerance",
+    ):
+        assert '"%s"' % parameter in source
 
 
 def test_replay_uses_nav2_costmap_with_map_stamp_freshness():
@@ -88,3 +107,17 @@ def test_supervisor_retains_weighted_grid_values():
     costmap = SafetySupervisorNode._grid_costmap(msg)
 
     assert costmap.costs.tolist() == [[0, 50], [99, 100]]
+
+
+def test_supervisor_does_not_consume_nav2_waypoint_suggestions():
+    path = (
+        Path(__file__).parents[1]
+        / "wheelchair_shared_control"
+        / "supervisor_node.py"
+    )
+    source = path.read_text()
+
+    assert "_on_avoidance_suggestion" not in source
+    assert "avoidance_suggestion_topic" not in source
+    assert '"reactive_suggestion_topic"' in source
+    assert '"reactive_candidates_topic"' in source

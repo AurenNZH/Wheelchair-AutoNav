@@ -81,14 +81,16 @@ ros2 launch wheelchair_shared_control shared_control.launch.py \
 Both motion gates and UDP are explicit; they remain disabled in the normal
 launch defaults.
 
-For Nav2 route-assistance shadow validation, replace the separate mapping and
+For reactive-assistance shadow validation, replace the separate mapping and
 supervisor launches with the package-level launch below. It starts the same L2
-support filters, a planner-owned 5 m by 8 m inflated costmap, Smac Hybrid-A*,
-the suggestion node, and shared control. `disabled` remains the default mode.
+support filters, a planner-owned 5 m by 8 m inflated costmap, shared control,
+and the 2 Hz Nav2 waypoint research comparison. Reactive assistance remains
+disabled unless explicitly set to shadow or enforce.
 
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  avoidance_mode:=shadow enable_udp:=true \
+  reactive_assistance_mode:=shadow nav2_waypoint_mode:=shadow \
+  nav2_waypoint_rate_hz:=2.0 enable_udp:=true \
   bind_address:=192.168.0.102 \
   pi_address:=192.168.0.100 allowed_pi_address:=192.168.0.100
 ```
@@ -96,7 +98,10 @@ ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
 Do not enable motion during the shadow capture. Inspect
 `/local_avoidance/path`, `/local_avoidance/goal`,
 `/local_avoidance/diagnostics`, and
-`/shared_control/avoidance_suggestion` for latency and route-gate results.
+`/shared_control/nav2_waypoint_suggestion` for route-research results. Inspect
+`/shared_control/reactive_suggestion`,
+`/shared_control/reactive_candidates`, and the reactive diagnostic keys for
+the low-latency selector. Shadow mode never changes the envelope.
 
 ## 3. Pi CAN preparation
 
@@ -149,11 +154,12 @@ The four-count Pi deadzone is a temporary compatibility setting for the
 known float32 boundary mismatch; it must stay explicit until that issue is
 fixed on both machines.
 
-After shadow results pass, an unoccupied obstacle-avoidance enforce test uses
-`avoidance_mode:=enforce` on the Jetson and explicitly delegates at most 0.15
-on the physical gateway with `--max-assist-ratio 0.15`. Omitting that flag (or
-setting it to zero) prevents planner steering even if the Jetson is in enforce
-mode. Reverse and hard turns retain the direct policy.
+After shadow results pass, an unoccupied reactive-assistance enforce test uses
+`reactive_assistance_mode:=enforce` on the Jetson and explicitly delegates at
+most 0.15 on the physical gateway with `--max-assist-ratio 0.15`. Omitting that
+flag (or setting it to zero) prevents reactive steering in enforce mode.
+Reverse and hard turns retain the direct policy, direct STOP never attempts an
+escape, and an enforced correction retains the direct SLOW cap and reason.
 
 ## 5. Low-speed enforcement
 
@@ -171,12 +177,29 @@ source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 ros2 bag record -o /tmp/physical_shared_enforce_01 \
+  /lidar_right/points_filtered /lidar_left/points_filtered \
   /operator_intent /lidar_right/filter/source_header \
   /lidar_left/filter/source_header \
-  /nav2_merged_costmap /safety_envelope /shared_control/diagnostics \
-  /shared_control/checked_corridor /shared_control/avoidance_suggestion \
-  /local_avoidance/path /local_avoidance/diagnostics
+  /nav2_merged_costmap /nav2_merged_costmap_footprint \
+  /safety_envelope /shared_control/diagnostics \
+  /shared_control/checked_corridor /shared_control/reactive_candidates \
+  /shared_control/reactive_suggestion \
+  /shared_control/nav2_waypoint_suggestion \
+  /local_avoidance/goal /local_avoidance/path /plan \
+  /local_avoidance/diagnostics
 ```
+
+After stopping the recording, verify that every required topic was captured:
+
+```bash
+ros2 bag info /tmp/physical_shared_enforce_01
+```
+
+In RViz, orange `/plan` is Nav2's last successful raw route and can remain
+visible after an abort. Green `/local_avoidance/path` is the route accepted by
+the wheelchair planner client; it is cleared after an invalid or superseding
+result. The magenta arrow is the temporary goal and the cyan polygon is the
+planner footprint.
 
 Stop the shadow gateway, power-cycle the wheelchair if required by the R-Net
 communication fault, and start a single explicit enforcing gateway. The CSV

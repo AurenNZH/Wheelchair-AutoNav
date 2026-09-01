@@ -180,7 +180,7 @@ def generate_launch_description():
                 description="Apply the calibrated left-L2 box and halo",
             ),
             DeclareLaunchArgument("use_inflation", default_value="false"),
-            DeclareLaunchArgument("inflation_radius", default_value="0.55"),
+            DeclareLaunchArgument("inflation_radius", default_value="0.45"),
             DeclareLaunchArgument(
                 "cost_scaling_factor", default_value="3.0"
             ),

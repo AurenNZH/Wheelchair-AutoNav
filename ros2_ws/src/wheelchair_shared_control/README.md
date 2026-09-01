@@ -5,9 +5,9 @@ successful-filter heartbeats to emit `/safety_envelope`. Forward trajectories
 retain the right-L2 heartbeat gate. Hard turns require both L2 heartbeats and
 check the costs in a 0.55 m pixelated disc centred on `base_link`. It owns
 STOP/SLOW/CLEAR interpretation, checked-region visualization, and the optional
-Jetson–Pi UDP safety link. It does not generate CAN frames. When the optional
-obstacle-avoidance package is active, it may arbitrate a fresh bounded steering
-suggestion against the same current swept-path policy.
+Jetson–Pi UDP safety link. It does not generate CAN frames. Its optional
+reactive selector compares bounded individual arcs only when the direct policy
+returns `nav2_cost_slow`; it does not consume Nav2 waypoint suggestions.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`; UDP also
 defaults off:
@@ -16,11 +16,12 @@ defaults off:
 ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
 
-Local avoidance has `disabled`, `shadow`, and `enforce` modes and defaults to
-`disabled`. Enforcement also requires each protocol-v3 physical intent to
+`reactive_assistance_mode` has `disabled`, `shadow`, and `enforce` values and
+defaults to `disabled`. Shadow evaluates the 0.15 system range without packet
+authority. Enforcement also requires each protocol-v3 physical intent to
 advertise non-zero `max_steering_assist`; keyboard teleoperation advertises
-zero and retains direct behavior. A missing, late, mismatched, unsafe, or
-planner-failed suggestion falls back to the direct STOP/SLOW/CLEAR decision.
+zero and retains direct behavior. Direct STOP/CLEAR, reverse, hard turns,
+invalid evidence, and stale evidence reset assistance immediately.
 
 Live `nav2_live` freshness independently checks costmap receipt time and the
 original successful-filter sensor stamp. The weighted policy treats costs 1–98
@@ -55,5 +56,5 @@ For an older bag, remap its recorded `/nav2_front_costmap` directly to
 published.
 
 Follow the
-[shared-control validation checklist](../../../../docs/setup/shared_control_validation.md)
+[shared-control validation checklist](../../../docs/setup/shared_control_validation.md)
 before enabling any physical gate.

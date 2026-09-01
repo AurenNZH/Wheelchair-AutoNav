@@ -2,7 +2,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    LogInfo,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -24,12 +28,28 @@ def generate_launch_description():
     )
     configured_planner_parameters = RewrittenYaml(
         source_file=planner_parameters,
-        param_rewrites={"use_sim_time": LaunchConfiguration("use_sim_time")},
+        param_rewrites={
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
+            "max_planning_time_ms": LaunchConfiguration(
+                "planner_search_budget_ms"
+            ),
+        },
         convert_types=True,
     )
-    enabled = IfCondition(
+    costmap_enabled = IfCondition(
         PythonExpression(
-            ["'", LaunchConfiguration("avoidance_mode"), "' != 'disabled'"]
+            [
+                "'",
+                LaunchConfiguration("reactive_assistance_mode"),
+                "' != 'disabled' or '",
+                LaunchConfiguration("nav2_waypoint_mode"),
+                "' != 'disabled'",
+            ]
+        )
+    )
+    waypoint_enabled = IfCondition(
+        PythonExpression(
+            ["'", LaunchConfiguration("nav2_waypoint_mode"), "' == 'shadow'"]
         )
     )
 
@@ -43,7 +63,7 @@ def generate_launch_description():
             "start_costmap": "false",
             "use_inflation": "true",
         }.items(),
-        condition=enabled,
+        condition=costmap_enabled,
     )
     shared_control = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -53,7 +73,9 @@ def generate_launch_description():
         ),
         launch_arguments={
             "use_sim_time": LaunchConfiguration("use_sim_time"),
-            "avoidance_mode": LaunchConfiguration("avoidance_mode"),
+            "reactive_assistance_mode": LaunchConfiguration(
+                "reactive_assistance_mode"
+            ),
             "maximum_steering_assist": LaunchConfiguration(
                 "maximum_assist"
             ),
@@ -85,7 +107,7 @@ def generate_launch_description():
                 "/nav2_merged_costmap_footprint",
             ),
         ],
-        condition=enabled,
+        condition=costmap_enabled,
     )
     lifecycle_manager = Node(
         package="nav2_lifecycle_manager",
@@ -99,7 +121,7 @@ def generate_launch_description():
                 "node_names": ["nav2_planner"],
             }
         ],
-        condition=enabled,
+        condition=costmap_enabled,
     )
     planner_client = Node(
         package="wheelchair_obstacle_avoidance",
@@ -115,9 +137,20 @@ def generate_launch_description():
                 "discard_after_ms": ParameterValue(
                     LaunchConfiguration("discard_after_ms"), value_type=float
                 ),
+                "planner_search_budget_ms": ParameterValue(
+                    LaunchConfiguration("planner_search_budget_ms"),
+                    value_type=float,
+                ),
+                "planning_rate_hz": ParameterValue(
+                    LaunchConfiguration("nav2_waypoint_rate_hz"),
+                    value_type=float,
+                ),
+                "suggestion_topic": (
+                    "/shared_control/nav2_waypoint_suggestion"
+                ),
             }
         ],
-        condition=enabled,
+        condition=waypoint_enabled,
     )
 
     return LaunchDescription(
@@ -125,11 +158,31 @@ def generate_launch_description():
             DeclareLaunchArgument("use_sim_time", default_value="false"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument(
-                "avoidance_mode",
+                "reactive_assistance_mode",
                 default_value="disabled",
                 description="disabled, shadow, or enforce",
+                choices=["disabled", "shadow", "enforce"],
+            ),
+            DeclareLaunchArgument(
+                "nav2_waypoint_mode",
+                default_value="shadow",
+                description="disabled or shadow; waypoint enforcement is forbidden",
+                choices=["disabled", "shadow"],
+            ),
+            DeclareLaunchArgument(
+                "nav2_waypoint_rate_hz",
+                default_value="2.0",
+                description="Research-only Nav2 waypoint comparison rate",
             ),
             DeclareLaunchArgument("maximum_assist", default_value="0.15"),
+            DeclareLaunchArgument(
+                "planner_search_budget_ms",
+                default_value="30.0",
+                description=(
+                    "Smac internal search budget; also labels abort "
+                    "diagnostics"
+                ),
+            ),
             DeclareLaunchArgument(
                 "discard_after_ms",
                 default_value="300.0",
@@ -147,9 +200,13 @@ def generate_launch_description():
             DeclareLaunchArgument("allowed_pi_address", default_value=""),
             LogInfo(
                 msg=[
-                    "Local obstacle avoidance mode=",
-                    LaunchConfiguration("avoidance_mode"),
-                    ". Motion remains gated by shared control.",
+                    "Reactive assistance=",
+                    LaunchConfiguration("reactive_assistance_mode"),
+                    "; Nav2 waypoint assistance=",
+                    LaunchConfiguration("nav2_waypoint_mode"),
+                    " at ",
+                    LaunchConfiguration("nav2_waypoint_rate_hz"),
+                    " Hz (shadow only).",
                 ]
             ),
             filters,

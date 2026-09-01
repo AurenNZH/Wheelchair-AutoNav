@@ -38,7 +38,28 @@ def generate_launch_description():
             DeclareLaunchArgument("slow_cost_threshold", default_value="1"),
             DeclareLaunchArgument("stop_cost_threshold", default_value="99"),
             DeclareLaunchArgument(
-                "avoidance_mode", default_value="disabled"
+                "reactive_assistance_mode",
+                default_value="disabled",
+                choices=["disabled", "shadow", "enforce"],
+            ),
+            DeclareLaunchArgument("reactive_horizon_m", default_value="1.20"),
+            DeclareLaunchArgument(
+                "reactive_path_sample_step_m", default_value="0.05"
+            ),
+            DeclareLaunchArgument(
+                "reactive_steering_step", default_value="0.05"
+            ),
+            DeclareLaunchArgument(
+                "reactive_minimum_correction", default_value="0.02"
+            ),
+            DeclareLaunchArgument(
+                "reactive_minimum_cost_improvement", default_value="5"
+            ),
+            DeclareLaunchArgument(
+                "reactive_confirmation_cycles", default_value="2"
+            ),
+            DeclareLaunchArgument(
+                "reactive_intent_change_tolerance", default_value="0.05"
             ),
             DeclareLaunchArgument(
                 "maximum_steering_assist", default_value="0.15"
@@ -123,8 +144,33 @@ def generate_launch_description():
                         "stop_cost_threshold": LaunchConfiguration(
                             "stop_cost_threshold"
                         ),
-                        "avoidance_mode": LaunchConfiguration(
-                            "avoidance_mode"
+                        "reactive_assistance_mode": LaunchConfiguration(
+                            "reactive_assistance_mode"
+                        ),
+                        "reactive_horizon_m": LaunchConfiguration(
+                            "reactive_horizon_m"
+                        ),
+                        "reactive_path_sample_step_m": LaunchConfiguration(
+                            "reactive_path_sample_step_m"
+                        ),
+                        "reactive_steering_step": LaunchConfiguration(
+                            "reactive_steering_step"
+                        ),
+                        "reactive_minimum_correction": LaunchConfiguration(
+                            "reactive_minimum_correction"
+                        ),
+                        "reactive_minimum_cost_improvement": (
+                            LaunchConfiguration(
+                                "reactive_minimum_cost_improvement"
+                            )
+                        ),
+                        "reactive_confirmation_cycles": LaunchConfiguration(
+                            "reactive_confirmation_cycles"
+                        ),
+                        "reactive_intent_change_tolerance": (
+                            LaunchConfiguration(
+                                "reactive_intent_change_tolerance"
+                            )
                         ),
                         "maximum_steering_assist": LaunchConfiguration(
                             "maximum_steering_assist"

@@ -33,7 +33,7 @@ for weighted-cost testing.
 ```bash
 ros2 launch wheelchair_navigation nav2_mapping.launch.py use_rviz:=true
 ros2 launch wheelchair_navigation nav2_mapping.launch.py \
-  use_inflation:=true inflation_radius:=0.55 \
+  use_inflation:=true inflation_radius:=0.45 \
   cost_scaling_factor:=3.0 use_rviz:=true
 ```
 

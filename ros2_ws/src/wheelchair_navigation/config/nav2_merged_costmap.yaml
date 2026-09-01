@@ -71,5 +71,5 @@ costmap:
       # bool/float types while applying launch-time substitutions.
       inflation_layer.plugin: "nav2_costmap_2d::InflationLayer"
       inflation_layer.enabled: false
-      inflation_layer.inflation_radius: 0.55
+      inflation_layer.inflation_radius: 0.45
       inflation_layer.cost_scaling_factor: 3.0

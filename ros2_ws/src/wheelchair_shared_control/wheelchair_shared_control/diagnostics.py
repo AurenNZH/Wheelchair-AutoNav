@@ -26,8 +26,25 @@ class SafetyDiagnosticSnapshot:
     map_age_basis: str = "receipt_time"
     source_age_ms: float | None = None
     left_source_age_ms: float | None = None
-    avoidance_mode: str = "disabled"
-    avoidance_status: str = "disabled"
+    reactive_mode: str = "disabled"
+    reactive_status: str = "disabled"
+    intent_sequence: int = 0
+    requested_steering: float | None = None
+    selected_steering: float | None = None
+    advertised_authority: float = 0.0
+    applied_authority: float = 0.0
+    candidate_count: int = 0
+    rejected_candidate_count: int = 0
+    requested_maximum_cost: int | None = None
+    requested_accumulated_cost: int | None = None
+    selected_maximum_cost: int | None = None
+    selected_accumulated_cost: int | None = None
+    selected_first_inflated_distance_m: float | None = None
+    cost_improvement: int | None = None
+    confirmation_count: int = 0
+    reactive_processing_ms: float = 0.0
+    reactive_suggestions: int = 0
+    reactive_enforcements: int = 0
 
 
 def safety_diagnostic_values(
@@ -40,8 +57,25 @@ def safety_diagnostic_values(
     map_age_basis: str = "receipt_time",
     source_age_ms: float | None = None,
     left_source_age_ms: float | None = None,
-    avoidance_mode: str = "disabled",
-    avoidance_status: str = "disabled",
+    reactive_mode: str = "disabled",
+    reactive_status: str = "disabled",
+    intent_sequence: int = 0,
+    requested_steering: float | None = None,
+    selected_steering: float | None = None,
+    advertised_authority: float = 0.0,
+    applied_authority: float = 0.0,
+    candidate_count: int = 0,
+    rejected_candidate_count: int = 0,
+    requested_maximum_cost: int | None = None,
+    requested_accumulated_cost: int | None = None,
+    selected_maximum_cost: int | None = None,
+    selected_accumulated_cost: int | None = None,
+    selected_first_inflated_distance_m: float | None = None,
+    cost_improvement: int | None = None,
+    confirmation_count: int = 0,
+    reactive_processing_ms: float = 0.0,
+    reactive_suggestions: int = 0,
+    reactive_enforcements: int = 0,
 ) -> list[KeyValue]:
     """Build stable, machine-readable evidence for one decision."""
 
@@ -64,8 +98,65 @@ def safety_diagnostic_values(
             ),
         ),
         KeyValue(key="processing_ms", value="%.3f" % processing_ms),
-        KeyValue(key="avoidance_mode", value=avoidance_mode),
-        KeyValue(key="avoidance_status", value=avoidance_status),
+        KeyValue(key="reactive_assistance_mode", value=reactive_mode),
+        KeyValue(key="reactive_status", value=reactive_status),
+        KeyValue(key="intent_sequence", value=str(intent_sequence)),
+        KeyValue(
+            key="requested_steering",
+            value=_optional_float(requested_steering),
+        ),
+        KeyValue(
+            key="selected_steering",
+            value=_optional_float(selected_steering),
+        ),
+        KeyValue(
+            key="advertised_authority",
+            value="%.3f" % advertised_authority,
+        ),
+        KeyValue(
+            key="applied_authority", value="%.3f" % applied_authority
+        ),
+        KeyValue(key="candidate_count", value=str(candidate_count)),
+        KeyValue(
+            key="rejected_candidate_count",
+            value=str(rejected_candidate_count),
+        ),
+        KeyValue(
+            key="requested_maximum_cost",
+            value=_optional_int(requested_maximum_cost),
+        ),
+        KeyValue(
+            key="requested_accumulated_cost",
+            value=_optional_int(requested_accumulated_cost),
+        ),
+        KeyValue(
+            key="selected_maximum_cost",
+            value=_optional_int(selected_maximum_cost),
+        ),
+        KeyValue(
+            key="selected_accumulated_cost",
+            value=_optional_int(selected_accumulated_cost),
+        ),
+        KeyValue(
+            key="selected_first_inflated_distance_m",
+            value=_optional_float(selected_first_inflated_distance_m),
+        ),
+        KeyValue(
+            key="cost_improvement", value=_optional_int(cost_improvement)
+        ),
+        KeyValue(
+            key="confirmation_count", value=str(confirmation_count)
+        ),
+        KeyValue(
+            key="reactive_processing_ms",
+            value="%.3f" % reactive_processing_ms,
+        ),
+        KeyValue(
+            key="reactive_suggestions", value=str(reactive_suggestions)
+        ),
+        KeyValue(
+            key="reactive_enforcements", value=str(reactive_enforcements)
+        ),
         KeyValue(key="enable_motion", value=str(config.enable_motion)),
         KeyValue(
             key="geometry_calibrated",
@@ -159,10 +250,39 @@ def build_safety_diagnostic_status(
         map_age_basis=snapshot.map_age_basis,
         source_age_ms=snapshot.source_age_ms,
         left_source_age_ms=snapshot.left_source_age_ms,
-        avoidance_mode=snapshot.avoidance_mode,
-        avoidance_status=snapshot.avoidance_status,
+        reactive_mode=snapshot.reactive_mode,
+        reactive_status=snapshot.reactive_status,
+        intent_sequence=snapshot.intent_sequence,
+        requested_steering=snapshot.requested_steering,
+        selected_steering=snapshot.selected_steering,
+        advertised_authority=snapshot.advertised_authority,
+        applied_authority=snapshot.applied_authority,
+        candidate_count=snapshot.candidate_count,
+        rejected_candidate_count=snapshot.rejected_candidate_count,
+        requested_maximum_cost=snapshot.requested_maximum_cost,
+        requested_accumulated_cost=(
+            snapshot.requested_accumulated_cost
+        ),
+        selected_maximum_cost=snapshot.selected_maximum_cost,
+        selected_accumulated_cost=snapshot.selected_accumulated_cost,
+        selected_first_inflated_distance_m=(
+            snapshot.selected_first_inflated_distance_m
+        ),
+        cost_improvement=snapshot.cost_improvement,
+        confirmation_count=snapshot.confirmation_count,
+        reactive_processing_ms=snapshot.reactive_processing_ms,
+        reactive_suggestions=snapshot.reactive_suggestions,
+        reactive_enforcements=snapshot.reactive_enforcements,
     )
     return status
+
+
+def _optional_float(value: float | None) -> str:
+    return "none" if value is None else "%.3f" % value
+
+
+def _optional_int(value: int | None) -> str:
+    return "none" if value is None else str(value)
 
 
 def format_decision_transition(decision: SafetyDecision) -> str:

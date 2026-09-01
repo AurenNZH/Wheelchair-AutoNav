@@ -1,7 +1,7 @@
 nav2_planner:
   ros__parameters:
     use_sim_time: false
-    expected_planner_frequency: 10.0
+    expected_planner_frequency: 2.0
     planner_plugins: ["LocalAvoidance"]
     LocalAvoidance:
       plugin: "smac_planner/SmacPlanner"
@@ -77,5 +77,5 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
-        inflation_radius: 0.55
+        inflation_radius: 0.45
         cost_scaling_factor: 3.0

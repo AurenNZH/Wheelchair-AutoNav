@@ -11,7 +11,7 @@ def test_smac_hybrid_configuration_is_forward_only_and_latency_bounded():
     data = yaml.safe_load((PACKAGE / "config" / "local_planner.yaml").read_text())
     planner = data["nav2_planner"]["ros__parameters"]
     plugin = planner["LocalAvoidance"]
-    assert planner["expected_planner_frequency"] == 10.0
+    assert planner["expected_planner_frequency"] == 2.0
     assert plugin["plugin"] == "smac_planner/SmacPlanner"
     assert plugin["motion_model_for_search"] == "DUBIN"
     assert plugin["minimum_turning_radius"] == 1.2
@@ -50,7 +50,7 @@ def test_planner_costmap_is_small_robot_relative_and_inflated():
     assert cells == pytest.approx(4000)
     assert costmap["track_unknown_space"] is True
     assert costmap["inflation_layer"]["enabled"] is True
-    assert costmap["inflation_layer"]["inflation_radius"] == 0.55
+    assert costmap["inflation_layer"]["inflation_radius"] == 0.45
     assert costmap["inflation_layer"]["cost_scaling_factor"] == 3.0
 
 
@@ -82,6 +82,49 @@ def test_shadow_validation_accepts_results_up_to_300_ms():
     assert 'declare_parameter("discard_after_ms", 300.0)' in node_source
 
 
+def test_search_budget_is_shared_by_smac_and_abort_diagnostics():
+    launch_source = (
+        PACKAGE / "launch" / "obstacle_avoidance.launch.py"
+    ).read_text()
+    node_source = (
+        PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
+    ).read_text()
+
+    assert '"max_planning_time_ms": LaunchConfiguration(' in launch_source
+    assert '"planner_search_budget_ms": ParameterValue(' in launch_source
+    assert launch_source.count('"planner_search_budget_ms"') >= 3
+    assert 'default_value="30.0"' in launch_source
+    assert 'declare_parameter("planner_search_budget_ms", 30.0)' in node_source
+
+
+def test_waypoint_planner_is_shadow_only_at_two_hz():
+    launch_source = (
+        PACKAGE / "launch" / "obstacle_avoidance.launch.py"
+    ).read_text()
+    node_source = (
+        PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
+    ).read_text()
+
+    assert '"nav2_waypoint_mode"' in launch_source
+    assert 'default_value="shadow"' in launch_source
+    assert 'choices=["disabled", "shadow"]' in launch_source
+    assert '"nav2_waypoint_rate_hz"' in launch_source
+    assert 'default_value="2.0"' in launch_source
+    assert '"/shared_control/nav2_waypoint_suggestion"' in launch_source
+    assert 'declare_parameter("planning_rate_hz", 2.0)' in node_source
+    assert '"/shared_control/nav2_waypoint_suggestion"' in node_source
+
+
+def test_reactive_mode_is_separate_from_nav2_waypoint_mode():
+    launch_source = (
+        PACKAGE / "launch" / "obstacle_avoidance.launch.py"
+    ).read_text()
+
+    assert '"reactive_assistance_mode"' in launch_source
+    assert '"reactive_assistance_mode": LaunchConfiguration(' in launch_source
+    assert '"avoidance_mode"' not in launch_source
+
+
 def test_planner_diagnostics_separate_nav2_and_round_trip_timings():
     node_source = (
         PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
@@ -89,3 +132,30 @@ def test_planner_diagnostics_separate_nav2_and_round_trip_timings():
     assert 'key="planning_time_ms"' in node_source
     assert 'key="nav2_planning_time_ms"' in node_source
     assert 'key="planner_action_status"' in node_source
+    assert 'key="abort_hint"' in node_source
+    assert 'key="costmap_age_ms"' in node_source
+    assert 'key="start_footprint_state"' not in node_source
+    assert '_region_values("start_footprint", start)' in node_source
+    for counter in (
+        "received_intents",
+        "eligible_intents",
+        "coalesced_intents",
+        "submitted_requests",
+        "completed_requests",
+        "accepted_results",
+        "invalid_results",
+        "cleared_paths",
+    ):
+        assert '"%s"' % counter in node_source
+
+
+def test_accepted_path_is_cleared_only_while_visible():
+    node_source = (
+        PACKAGE / "wheelchair_obstacle_avoidance" / "planner_node.py"
+    ).read_text()
+
+    assert "def _clear_accepted_path(self)" in node_source
+    assert "if not self._accepted_path_visible:" in node_source
+    assert 'path.header.frame_id = "base_link"' in node_source
+    assert 'self._counters["cleared_paths"] += 1' in node_source
+    assert "self._clear_accepted_path()" in node_source

@@ -20,7 +20,14 @@ from wheelchair_shared_control.operator_intent import (
     RIGHT_TURN,
     classify_normalized_axes,
 )
-from wheelchair_shared_control.trajectory import trajectory_points
+from wheelchair_shared_control.reactive_assistance import (
+    ReactiveConfig,
+    ReactiveSelection,
+)
+from wheelchair_shared_control.trajectory import (
+    trajectory_points,
+    trajectory_points_for_horizon,
+)
 
 
 @dataclass(frozen=True)
@@ -153,8 +160,89 @@ def build_checked_corridor_markers(
     return MarkerArray(markers=markers)
 
 
+def build_reactive_candidate_markers(
+    *,
+    header: Header,
+    selection: ReactiveSelection | None,
+    confirmed_steering: float | None,
+    config: SafetyConfig,
+    reactive_config: ReactiveConfig,
+    status: str,
+) -> MarkerArray:
+    """Build the individual arcs considered by reactive assistance."""
+
+    delete = Marker()
+    delete.header = header
+    delete.action = Marker.DELETEALL
+    markers = [delete]
+    if selection is None:
+        return MarkerArray(markers=markers)
+
+    for marker_id, candidate in enumerate(selection.candidates):
+        path = Marker()
+        path.header = header
+        path.ns = "reactive_candidate"
+        path.id = marker_id
+        path.type = Marker.LINE_STRIP
+        path.action = Marker.ADD
+        path.pose.orientation.w = 1.0
+        path.scale.x = 0.025
+        selected = (
+            selection.selected_steering is not None
+            and abs(candidate.steering - selection.selected_steering) < 1e-6
+            and selection.valid
+        )
+        requested = abs(
+            candidate.steering - selection.requested_steering
+        ) < 1e-6
+        confirmed = (
+            confirmed_steering is not None
+            and abs(candidate.steering - confirmed_steering) < 1e-6
+        )
+        if not candidate.valid:
+            path.color = ColorRGBA(r=1.0, g=0.1, b=0.1, a=0.85)
+        elif confirmed:
+            path.color = ColorRGBA(r=0.0, g=0.9, b=1.0, a=1.0)
+            path.scale.x = 0.045
+        elif selected:
+            path.color = ColorRGBA(r=1.0, g=0.8, b=0.0, a=1.0)
+            path.scale.x = 0.04
+        elif requested:
+            path.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.95)
+            path.scale.x = 0.035
+        else:
+            path.color = ColorRGBA(r=0.55, g=0.55, b=0.55, a=0.65)
+        path.points = [
+            Point(x=x_m, y=y_m, z=0.10)
+            for x_m, y_m in trajectory_points_for_horizon(
+                candidate.steering,
+                config,
+                horizon_m=reactive_config.horizon_m,
+                sample_step_m=reactive_config.path_sample_step_m,
+            )
+        ]
+        markers.append(path)
+
+    text = Marker()
+    text.header = header
+    text.ns = "reactive_status"
+    text.id = 1000
+    text.type = Marker.TEXT_VIEW_FACING
+    text.action = Marker.ADD
+    text.pose.position.x = 0.25
+    text.pose.position.y = -0.75
+    text.pose.position.z = 0.35
+    text.pose.orientation.w = 1.0
+    text.scale.z = 0.14
+    text.color = ColorRGBA(r=0.0, g=0.9, b=1.0, a=1.0)
+    text.text = "reactive: %s" % status
+    markers.append(text)
+    return MarkerArray(markers=markers)
+
+
 __all__ = [
     "CorridorIntentView",
     "build_checked_corridor_markers",
+    "build_reactive_candidate_markers",
     "corridor_intent_view",
 ]

@@ -174,6 +174,74 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /shared_control/checked_corridor
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Reactive steering candidates
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /shared_control/reactive_candidates
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 145; 0
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.025
+      Name: Nav2 waypoint shadow raw path
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /plan
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 40; 255; 80
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.07
+      Name: Nav2 waypoint shadow accepted path
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_avoidance/path
+    - Alpha: 1
+      Axes Length: 0.35
+      Axes Radius: 0.03
+      Class: rviz_default_plugins/Pose
+      Color: 255; 0; 255
+      Enabled: true
+      Head Length: 0.25
+      Head Radius: 0.10
+      Name: Nav2 waypoint shadow temporary goal
+      Shaft Length: 0.35
+      Shaft Radius: 0.05
+      Shape: Arrow
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_avoidance/goal
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
+      Color: 0; 255; 255
+      Enabled: true
+      Name: Nav2 merged costmap footprint
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_merged_costmap_footprint
     - Alpha: 0.75
       Class: rviz_default_plugins/Map
       Color Scheme: costmap

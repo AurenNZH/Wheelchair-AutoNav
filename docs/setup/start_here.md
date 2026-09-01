@@ -53,3 +53,9 @@ coverage and latency, measure swept geometry, test network failures, calibrate
 weighted decisions, then use raised-wheel and lowest-speed controlled-area
 tests with an independent cutoff. Never jump directly from RViz to an
 obstacle-driving test.
+
+Before changing reactive-assistance, waypoint-planner, costmap, inflation,
+turning-radius, or footrest-filter parameters, follow the staged
+[reactive obstacle-assistance roadmap](obstacle_avoidance_roadmap.md). It
+records the enforced/shadow boundary, latency gates, geometry dependencies,
+and required order of implementation.
