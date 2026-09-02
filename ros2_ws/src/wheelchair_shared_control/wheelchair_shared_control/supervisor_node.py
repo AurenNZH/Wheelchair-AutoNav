@@ -93,7 +93,7 @@ class SafetySupervisorNode(Node):
             "/shared_control/reactive_candidates",
         )
         self.declare_parameter("decision_rate_hz", 20.0)
-        self.declare_parameter("max_intent_age_s", 0.20)
+        self.declare_parameter("max_intent_age_s", 1.00)
         self.declare_parameter("enable_motion", False)
         self.declare_parameter("geometry_calibrated", False)
         self.declare_parameter("stop_distance_m", 0.70)
@@ -103,7 +103,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("max_steering", 0.577350269)
         self.declare_parameter("slow_forward_limit", 0.60)
         self.declare_parameter("reverse_limit", 0.65)
-        self.declare_parameter("turn_clearance_radius_m", 0.55)
+        self.declare_parameter("turn_clearance_radius_m", 0.45)
         self.declare_parameter("clear_turn_limit", 0.90)
         self.declare_parameter("slow_turn_limit", 0.60)
         self.declare_parameter("turn_longitudinal_limit", 0.15)
@@ -124,7 +124,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("reactive_minimum_cost_improvement", 5)
         self.declare_parameter("reactive_confirmation_cycles", 2)
         self.declare_parameter("reactive_intent_change_tolerance", 0.05)
-        self.declare_parameter("maximum_steering_assist", 0.15)
+        self.declare_parameter("maximum_steering_assist", 0.30)
 
         self._config = self._load_config()
         self._intent = None
@@ -256,8 +256,7 @@ class SafetySupervisorNode(Node):
             )
         )
         self.get_logger().info(
-            "Reactive steering mode=%s horizon=%.2fm assist<=%.3f; "
-            "Nav2 waypoint suggestions are not consumed"
+            "Reactive steering mode=%s horizon=%.2fm assist<=%.3f"
             % (
                 self._reactive_mode,
                 self._reactive_config.horizon_m,

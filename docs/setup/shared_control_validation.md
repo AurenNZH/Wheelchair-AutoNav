@@ -151,7 +151,7 @@ configured 90-count CLEAR / 60-count SLOW caps.
    allow a measured safe opening without autonomous steering.
 5. Narrow pole and low block: repeat at multiple lateral offsets.
 6. Side/rear obstacles outside the forward trajectory remain diagnostic-only;
-   hard turns inspect only the 0.55 m pixelated disc and do not claim general
+   hard turns inspect only the 0.45 m pixelated disc and do not claim general
    full-surround protection.
 7. Defer moving-person tests until forward, shallow-correction, and hard-turn
    CLEAR/SLOW/STOP gates pass repeatably.

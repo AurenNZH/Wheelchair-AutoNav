@@ -1,79 +1,35 @@
 # Wheelchair Obstacle Avoidance
 
-This package launches the shared-control costmap and two separate experiments:
-the supervisor's low-latency reactive steering and the older Nav2 temporary
-waypoint planner. The reactive selector is the intended assistance model. Nav2
-is retained at 2 Hz in shadow mode for research evidence and cannot alter a
-`SafetyEnvelope`.
+This package is the top-level launcher for the deployed reactive shared-control
+pipeline. It starts the dual-L2 support/self filters, one standalone
+`base_link` Nav2 costmap with 0.45 m inflation, the safety supervisor, and—only
+when requested—the Jetson/Pi UDP bridge. It does not create temporary goals,
+request Nav2 paths, or own another costmap.
 
-The planner uses the current 5 m by 8 m `base_link` costmap (4,000 cells), a
-Dubins forward-only model, 1.2 m minimum turning radius, 36 heading bins, and a
-30 ms search budget. For initial shadow validation, end-to-end planner results
-arriving after 300 ms are discarded; this is a validation tolerance rather
-than the latency target. Paths must stay within 0.8 m of the joystick ray, be
-no longer than 1.25 times the direct route, make no reverse progress, and
-finish within 0.2 m of the goal.
-
-Reactive modes are `disabled` (default), `shadow`, and `enforce`.
-`nav2_waypoint_mode` accepts only `disabled` and `shadow`; its default is
-`shadow`. Start both shadow systems with:
+The package launch defaults to reactive enforcement, while the independent
+physical gates remain closed: `enable_motion`, `geometry_calibrated`, and
+`enable_udp` all default to `false`. Thus the default invocation calculates and
+visualizes decisions but cannot actuate the chair:
 
 ```bash
-sudo apt-get install ros-foxy-nav2-planner ros-foxy-smac-planner
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  reactive_assistance_mode:=shadow nav2_waypoint_mode:=shadow \
-  nav2_waypoint_rate_hz:=2.0 discard_after_ms:=300.0 \
-  planner_search_budget_ms:=30.0
+  use_rviz:=true
 ```
 
-To validate only the reactive latency path, set
-`nav2_waypoint_mode:=disabled`. The costmap still runs because it is the
-reactive selector's input.
+For non-actuating evaluation, select `reactive_assistance_mode:=shadow`.
+Reactive selection is eligible only for forward, forward-left, and
+forward-right intent after the direct policy returns `nav2_cost_slow`. It
+compares bounded 1.2 m arcs, requires two matching correction directions, and
+changes steering only. STOP, CLEAR, reverse, hard turns, speed caps, freshness,
+and invalid-evidence behavior remain under the direct fail-closed policy.
 
-`planner_search_budget_ms` is passed to both Smac's
-`max_planning_time_ms` setting and the diagnostic classifier. This keeps the
-reported budget aligned with the one Nav2 actually uses.
+The configured maximum correction is 0.30 normalized steering ratio. Physical
+enforcement also requires a protocol-v3 intent advertising authority (normally
+Pi option `--max-assist-ratio 0.30`), both Jetson motion gates, and UDP to be
+enabled explicitly. See
+[the deployment roadmap](../../../docs/setup/obstacle_avoidance_roadmap.md).
 
-Planner result diagnostics distinguish total ROS action latency from Nav2's
-reported computation time. `planning_time_ms` remains the monotonic interval
-from request submission to result receipt, while `nav2_planning_time_ms` is
-read from `ComputePathToPose.Result.planning_time` and is `none` when no result
-was returned. `planner_action_status` records the terminal action state.
-Aborted and cancelled actions, successful empty paths, and true frame errors
-are reported respectively as `planner_aborted`, `planner_canceled`,
-`planner_empty_path`, and `path_frame_mismatch`; an aborted default path is not
-misreported as a frame error.
-
-The suggestion reason remains `planner_aborted` because Foxy's
-`ComputePathToPose` result does not expose a reliable cause code. The separate
-`abort_hint` diagnostic reports request-time evidence in this precedence:
-unavailable costmap or footprint, start footprint outside/collision/unknown,
-goal footprint outside/collision/unknown, likely search-budget use, or
-`no_path_or_budget_unknown`. `search_budget_likely` is used only when Nav2's
-positive internal `planning_time` reaches 90% of the configured search budget;
-round-trip action latency is never used to infer this hint.
-
-Each diagnostic also freezes the goal pose, map timestamp and receipt age,
-goal-centre cost, start and transformed-goal footprint cell summaries, and
-cumulative intent/request/result/path-clear counters. Missing evidence is
-reported as `unavailable`, never as clear.
-
-The supplied RViz configuration shows the raw `/plan` in orange, the accepted
-`/local_avoidance/path` in green, the temporary goal in magenta, and the Nav2
-footprint in cyan. The accepted path is cleared with one empty `Path` after an
-invalid result, ineligible intent, or materially changed steering request.
-Nav2 owns `/plan`, so an abort cannot clear it; its orange path must be treated
-as the **last successful raw path**, not necessarily the current result.
-
-The reactive selector runs only after a direct `nav2_cost_slow` decision. It
-compares individual 1.2 m arcs, rejects unknown/outside/cost-99 paths, and
-requires two matching correction directions. Forward-left and forward-right
-may only reduce the requested correction toward straight. Direct STOP and
-CLEAR are never modified. Enforcement changes steering only and keeps the
-original SLOW cap, reason, and evidence.
-
-The operator gateway must advertise non-zero authority before reactive
-enforcement can alter steering. Shadow mode deliberately evaluates the 0.15
-system range even with zero advertised authority. See the
-[reactive roadmap](../../../docs/setup/obstacle_avoidance_roadmap.md) for
-topics, RViz colours, diagnostics, and validation order.
+The earlier temporary-waypoint/Smac experiment was removed. It competed for
+CPU and costmap ownership, retained stale path state after failures, and did
+not fit an odometry-free operator-led chair. Historical results remain in
+project history rather than in the runtime package.

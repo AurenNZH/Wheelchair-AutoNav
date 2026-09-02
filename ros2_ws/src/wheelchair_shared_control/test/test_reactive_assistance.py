@@ -252,10 +252,10 @@ def test_shadow_uses_system_authority_but_never_changes_envelope():
         path_cost_valid=True,
     )
 
-    assert available_reactive_authority("shadow", 0.0, REACTIVE) == 0.15
+    assert available_reactive_authority("shadow", 0.0, REACTIVE) == 0.30
     assert available_reactive_authority("enforce", 0.0, REACTIVE) == 0.0
     assert available_reactive_authority("enforce", 0.08, REACTIVE) == 0.08
-    assert available_reactive_authority("enforce", 0.50, REACTIVE) == 0.15
+    assert available_reactive_authority("enforce", 0.50, REACTIVE) == 0.30
     assert resolve_reactive_decision("shadow", direct, 0.10) is direct
     enforced = resolve_reactive_decision("enforce", direct, 0.10)
     assert enforced.permitted_steering == 0.10

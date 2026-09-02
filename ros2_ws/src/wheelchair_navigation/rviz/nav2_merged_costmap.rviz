@@ -15,10 +15,26 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
+    - Alpha: 0.65
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Enabled: true
+      Name: Wheelchair Model
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: Intensity
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: false
       Name: L2 right PointCloud2 (raw)
       Position Transformer: XYZ
@@ -28,13 +44,13 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_right/points
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color Transformer: Intensity
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: false
       Name: L2 left PointCloud2 (raw)
       Position Transformer: XYZ
@@ -44,14 +60,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_left/points
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 0; 220; 255
       Color Transformer: FlatColor
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: true
       Name: L2 right PointCloud2 (three-point filtered)
       Position Transformer: XYZ
@@ -61,14 +77,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_right/points_filtered
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 80; 220
       Color Transformer: FlatColor
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: true
       Name: L2 left PointCloud2 (three-point filtered)
       Position Transformer: XYZ
@@ -78,13 +94,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_left/points_filtered
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 220; 0
       Color Transformer: FlatColor
+      Decay Time: 0
       Enabled: false
       Name: L2 right low-support points
       Position Transformer: XYZ
@@ -94,13 +111,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_right/low_support_points
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 120; 0
       Color Transformer: FlatColor
+      Decay Time: 0
       Enabled: false
       Name: L2 left low-support points
       Position Transformer: XYZ
@@ -110,14 +128,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_left/low_support_points
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 40; 40
       Color Transformer: FlatColor
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: false
       Name: L2 right hard-rejected artifacts
       Position Transformer: XYZ
@@ -127,14 +145,14 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_right/artifact_rejected_points
       Use Fixed Frame: true
     - Alpha: 1
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 80; 80
       Color Transformer: FlatColor
-      Decay Time: 1.2
+      Decay Time: 0
       Enabled: false
       Name: L2 left hard-rejected artifacts
       Position Transformer: XYZ
@@ -144,7 +162,7 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /lidar_left/artifact_rejected_points
       Use Fixed Frame: true
     - Class: rviz_default_plugins/MarkerArray
@@ -184,54 +202,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /shared_control/reactive_candidates
     - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 255; 145; 0
-      Enabled: true
-      Line Style: Lines
-      Line Width: 0.025
-      Name: Nav2 waypoint shadow raw path
-      Pose Style: None
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /plan
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 40; 255; 80
-      Enabled: true
-      Line Style: Lines
-      Line Width: 0.07
-      Name: Nav2 waypoint shadow accepted path
-      Pose Style: None
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_avoidance/path
-    - Alpha: 1
-      Axes Length: 0.35
-      Axes Radius: 0.03
-      Class: rviz_default_plugins/Pose
-      Color: 255; 0; 255
-      Enabled: true
-      Head Length: 0.25
-      Head Radius: 0.10
-      Name: Nav2 waypoint shadow temporary goal
-      Shaft Length: 0.35
-      Shaft Radius: 0.05
-      Shape: Arrow
-      Topic:
-        Depth: 1
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /local_avoidance/goal
-    - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 0; 255; 255
       Enabled: true
@@ -246,7 +216,7 @@ Visualization Manager:
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Enabled: true
-      Name: Nav2 Merged Costmap (optional inflation)
+      Name: Nav2 Merged Costmap
       Topic:
         Depth: 1
         Durability Policy: Transient Local
@@ -257,7 +227,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: base_link
-    Frame Rate: 20
+    Frame Rate: 10
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact

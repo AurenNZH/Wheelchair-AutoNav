@@ -202,8 +202,8 @@ def generate_launch_description():
                     LaunchConfiguration("inflation_radius"),
                     " m, scaling=",
                     LaunchConfiguration("cost_scaling_factor"),
-                    "); publishing /nav2_merged_costmap; no supervisor or "
-                    "physical command process is launched.",
+                    "); publishing /nav2_merged_costmap. This mapping stage "
+                    "does not itself command motion.",
                 ]
             ),
             support_filter_right,

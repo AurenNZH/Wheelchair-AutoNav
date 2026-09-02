@@ -39,7 +39,6 @@ from wheelchair_navigation.costmap import (
 from wheelchair_navigation.mapping_diagnostics import MappingMetrics
 from wheelchair_navigation.point_cloud import (
     point_cloud_to_arrays,
-    select_point_cloud_records,
     transform_points,
     xyz_to_point_cloud,
 )
@@ -367,7 +366,12 @@ class PointSupportFilterNode(Node):
             )
             stage_ms["filter_ms"] = (time.perf_counter() - stage_started) * 1000.0
             stage_started = time.perf_counter()
-            filtered = select_point_cloud_records(msg, result.keep_mask)
+            output_header = Header()
+            output_header.stamp = msg.header.stamp
+            output_header.frame_id = target_frame
+            filtered = xyz_to_point_cloud(
+                points_base[result.keep_mask], output_header
+            )
             stage_ms["pack_ms"] = (time.perf_counter() - stage_started) * 1000.0
         except (TypeError, ValueError) as exc:
             self.get_logger().error(
@@ -382,11 +386,15 @@ class PointSupportFilterNode(Node):
         self._source_header_pub.publish(filtered.header)
         if self._low_support_pub.get_subscription_count() > 0:
             self._low_support_pub.publish(
-                xyz_to_point_cloud(cloud.xyz[result.low_support_mask], msg.header)
+                xyz_to_point_cloud(
+                    points_base[result.low_support_mask], output_header
+                )
             )
         if self._artifact_rejected_pub.get_subscription_count() > 0:
             self._artifact_rejected_pub.publish(
-                xyz_to_point_cloud(cloud.xyz[artifact_rejected], msg.header)
+                xyz_to_point_cloud(
+                    points_base[artifact_rejected], output_header
+                )
             )
         stage_ms["publish_ms"] = (time.perf_counter() - stage_started) * 1000.0
         self._published_clouds += 1

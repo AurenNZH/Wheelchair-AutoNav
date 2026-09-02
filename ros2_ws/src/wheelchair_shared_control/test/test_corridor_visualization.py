@@ -136,4 +136,5 @@ def test_hard_turn_view_draws_disc_without_checked_cell_cubes():
     )
     assert disc.type == Marker.LINE_STRIP
     assert len(disc.points) == 49
+    assert disc.points[0].x == 0.45
     assert all(marker.type != Marker.CUBE_LIST for marker in markers)

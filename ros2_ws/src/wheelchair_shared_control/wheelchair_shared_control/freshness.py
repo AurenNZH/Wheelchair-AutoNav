@@ -15,7 +15,7 @@ class FreshnessPolicy:
     """Timeouts and clock policy for one supervisor configuration."""
 
     mode: str = NAV2_LIVE
-    max_intent_age_s: float = 0.20
+    max_intent_age_s: float = 1.00
     max_map_age_s: float = 0.50
     max_source_age_s: float = 0.50
     max_future_source_offset_s: float = 0.10
@@ -71,6 +71,8 @@ def validate_freshness_policy(policy: FreshnessPolicy) -> None:
         raise ValueError(
             "freshness_mode must be one of %s" % ", ".join(FRESHNESS_MODES)
         )
+    if policy.max_intent_age_s <= 0.0:
+        raise ValueError("max_intent_age_s must be positive")
     if policy.max_source_age_s <= 0.0:
         raise ValueError("max_source_age_s must be positive")
     if policy.max_future_source_offset_s < 0.0:

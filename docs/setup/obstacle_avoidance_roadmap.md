@@ -1,176 +1,156 @@
-# Reactive Obstacle Assistance Roadmap
+# Reactive Obstacle Assistance: Deployment Roadmap
 
-This is the authoritative scope and deployment order for obstacle assistance.
-The primary feature is now bounded, reactive steering during an existing SLOW
-decision. Nav2 temporary-waypoint planning remains available at 2 Hz in shadow
-mode for research comparison, but it cannot alter a `SafetyEnvelope`.
+This document is the authoritative scope and deployment order for obstacle
+assistance. The deployed model is bounded reactive steering during an existing
+SLOW decision. The operator continues to choose direction and speed; the
+system does not infer a destination or follow a path.
 
-The design reflects the wheelchair's real strengths: the operator can make
-precise corrections and the chair is highly manoeuvrable, while deterministic
-odometry and repeatable caster state are unavailable. The system therefore
-does not guess a destination, follow a stored path, or steer around a STOP.
+The old temporary Nav2 waypoint experiment has been removed from the runtime.
+Its evidence remains available in version history, but it must not be launched
+beside this pipeline.
 
 ## Runtime pipeline
 
 ```text
-dual L2 clouds -> support/self filtering -> base_link Nav2 costmap
-                                              |
-physical joystick -> OperatorIntent -> direct arc/disc policy
-                                              |
-                           STOP --------> unchanged STOP
-                           CLEAR -------> unchanged CLEAR
-                           SLOW
-                             -> individual 1.2 m candidate arcs
-                             -> bounded rank + two-cycle confirmation
-                             -> shadow suggestion, or steering-only enforcement
-                                              |
-                  original SLOW cap/reason/evidence -> SafetyEnvelope -> Pi
-
-OperatorIntent -> 2 Hz temporary waypoint -> Nav2 path diagnostics
-                                           -> shadow suggestion only
+dual L2 clouds
+    -> support and fixed-artifact filtering
+    -> compact XYZ clouds stamped in base_link
+    -> one standalone 5 m x 8 m Nav2 costmap (0.1 m cells, 0.45 m inflation)
+    -> direct arc/disc STOP-SLOW-CLEAR policy at 20 Hz
+         STOP/CLEAR/reverse/hard turn -> unchanged direct decision
+         eligible forward SLOW -> bounded 1.2 m steering fan
+                              -> two-cycle confirmation
+                              -> shadow suggestion or steering-only enforcement
+    -> SafetyEnvelope -> optional UDP bridge -> Pi physical-JSM gateway
 ```
 
-The direct 20 Hz supervisor remains authoritative. Reverse and hard left/right
-never enter reactive selection. A direct STOP never triggers an escape search
-and a direct CLEAR is not modified. When assistance is enforced, only
-`permitted_steering` changes: the decision stays SLOW, its speed cap remains,
-and its reason remains exactly `nav2_cost_slow`.
+The supervisor remains authoritative. Reactive assistance never changes the
+longitudinal command, SLOW cap, policy reason, freshness checks, peer checks,
+or emergency behavior. Straight intent may inspect both sides. Forward-left
+and forward-right may only reduce the requested correction toward straight;
+they cannot cross zero or increase the turn. A STOP never initiates an escape
+search.
 
-## Implemented reactive model
+## Deployed configuration
 
-Reactive assistance is eligible only for forward, forward-left, and
-forward-right intent with fresh map/source evidence and a direct
-`nav2_cost_slow` result.
+- `reactive_assistance_mode`: `disabled`, `shadow`, or `enforce`. The
+  obstacle-avoidance launcher defaults to `enforce`; the generic shared-control
+  launcher remains `disabled` for compatibility.
+- `maximum_assist`: 0.30 normalized steering ratio.
+- Candidate horizon/sample step: 1.2 m / 0.05 m.
+- Candidate steering step/minimum correction: 0.05 / 0.02.
+- Minimum same-class cost improvement: 5.
+- Confirmation: two matching correction directions.
+- Inflation radius/cost scaling: 0.45 m / 3.0.
+- Hard-turn check radius: 0.45 m.
+- Maximum physical-intent age: 1.00 s; the Pi envelope timeout remains 0.20 s.
+- Costmap resolution and dimensions: 0.1 m, 5 m by 8 m, in `base_link`.
+- `enable_motion`, `geometry_calibrated`, and `enable_udp`: all `false` by
+  default. These gates are independent of the reactive-mode default.
+- The UDP bridge is not created unless `enable_udp:=true`; when enabled it
+  polls at 50 Hz.
 
-- Straight intent evaluates the current steering and both sides up to the
-  current authority.
-- Forward-left evaluates only from the requested left correction toward zero;
-  it cannot cross zero or increase the turn. Forward-right is symmetric.
-- The fan uses 0.05 steering increments and always includes the source and the
-  exact authority boundary. The system maximum correction is 0.15.
-- Each candidate is one individual 1.2 m arc sampled every 0.05 m. This is
-  intentionally separate from the swept union retained by the direct policy.
-- Unknown cells, leaving the map, or any cost of 99 or more anywhere on the
-  candidate rejects that candidate.
-- Candidates rank by CLEAR over SLOW, lower maximum cost, farther first
-  inflated cost, lower accumulated cost, smaller steering change, the previous
-  side, then left-positive as the deterministic straight-intent tie-break.
-- SLOW-to-CLEAR always qualifies. SLOW-to-SLOW requires at least a five-cost
-  reduction. Corrections below 0.02 are ignored.
-- The same correction direction must win for two consecutive supervisor
-  cycles. STOP, CLEAR, release, stale/invalid evidence, session/class changes,
-  or a steering change over 0.05 reset confirmation immediately.
+The full system maximum is evaluated in shadow. Enforce uses the smaller of
+the intent packet's advertised authority and the 0.30 system maximum. Keyboard
+teleoperation advertises zero and retains direct behavior.
 
-Shadow mode evaluates the full 0.15 system range even if packet authority is
-zero. Enforce mode uses the smaller of packet authority and the 0.15 system
-maximum. No acceleration or software steering ramp is added.
+## Legacy conflict audit and resolution
 
-## Modes, topics, and diagnostics
+| Legacy problem | Observable failure | Resolution |
+|---|---|---|
+| A planner server owned a second embedded costmap while mapping also had a standalone costmap | ambiguous publishers, frozen RViz map, lifecycle and remap sensitivity | one standalone costmap from `nav2_mapping.launch.py` |
+| Temporary goals and Smac actions continued at 2 Hz in shadow | CPU contention, planner late/abort churn, stale path displays | waypoint node, configuration, executable, topics, and dependencies removed |
+| RViz retained four clouds for 1.2 s and rendered at 20 Hz | high RViz CPU, old clouds, TF message-filter drops reported as `Unknown` | current-sample clouds, best-effort QoS, 10 Hz rendering, debug clouds disabled |
+| Filtered clouds preserved vendor records in LiDAR frames | larger messages and repeated timestamped TF work in every consumer | compact XYZ output transformed once into `base_link`, source stamp preserved |
+| Obstacle RViz profile omitted the robot model | misleading “robot model not parsed” diagnosis despite valid `robot_description` | explicit `/robot_description` RobotModel display |
+| UDP node existed while disabled and polled at 100 Hz when enabled | extra graph endpoint and avoidable executor/network work | conditional node and 50 Hz polling |
+| Reactive limits differed between launch/config/code documentation | surprising 0.15 versus 0.30 behavior | aligned defaults at 0.30 |
 
-The two assistance systems are deliberately named and configured separately:
-
-- `reactive_assistance_mode`: `disabled`, `shadow`, or `enforce`; default
-  `disabled`.
-- `nav2_waypoint_mode`: `disabled` or `shadow`; default `shadow` in the
-  obstacle-assistance launch. `enforce` is rejected during launch.
-- `/shared_control/reactive_suggestion`: current local selector output.
-- `/shared_control/nav2_waypoint_suggestion`: research waypoint output.
-- `/shared_control/reactive_candidates`: transient-local RViz markers.
-
-RViz renders the requested candidate in white, alternatives in grey, rejected
-arcs in red, a pending winner in yellow, and a confirmed winner in cyan. Nav2
-path and temporary-goal displays are labelled as waypoint shadow evidence.
-
-`/shared_control/diagnostics` includes the mode/status, intent sequence,
-requested and selected steering, advertised and applied authority, candidate
-and rejection counts, maximum and accumulated costs, first inflated distance,
-cost improvement, confirmation count, selector time, and cumulative suggestion
-and enforcement counters. Existing decision, cost, and freshness evidence is
-unchanged.
+These changes reduce graph ambiguity and stale visualization work. They do not
+claim to solve unstable LiDAR power, Ethernet addressing, DDS discovery, or
+actual missing static transforms.
 
 ## Launch profiles
 
-Research comparison with reactive shadow and Nav2 waypoint shadow:
+Non-actuating calculation and RViz (default motion/UDP gates remain closed):
 
 ```bash
 cd /home/jetson-xavier-wheelchair/Wheelchair-AutoNav
 source /opt/ros/foxy/setup.bash
 source ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
-
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  reactive_assistance_mode:=shadow nav2_waypoint_mode:=shadow \
-  nav2_waypoint_rate_hz:=2.0 use_rviz:=true
+  use_rviz:=true reactive_assistance_mode:=enforce
 ```
 
-Low-latency reactive shadow without Nav2 waypoint requests:
+Shadow comparison without envelope modification:
 
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  reactive_assistance_mode:=shadow nav2_waypoint_mode:=disabled \
-  use_rviz:=true
+  use_rviz:=true reactive_assistance_mode:=shadow
 ```
 
-Reactive enforcement must remain an explicit later step:
+Attended physical enforcement requires all gates and the isolated control
+addresses explicitly:
 
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  reactive_assistance_mode:=enforce nav2_waypoint_mode:=shadow \
-  enable_motion:=true geometry_calibrated:=true maximum_assist:=0.30
+  use_rviz:=true reactive_assistance_mode:=enforce maximum_assist:=0.30 \
+  enable_motion:=true geometry_calibrated:=true enable_udp:=true \
+  bind_address:=192.168.0.102 \
+  pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101
 ```
 
-The physical gateway must also advertise `--max-assist-ratio 0.30`. Keyboard
-teleoperation advertises zero authority and retains direct behavior.
+The physical gateway must advertise `--max-assist-ratio 0.30`. Use the
+attended, lowest-speed procedure in
+[physical_joystick_shared_control.md](physical_joystick_shared_control.md).
 
-## Validation sequence
+## Validation order
 
-1. Run package tests and confirm the selector p95 is below 10 ms and worst case
-   below 25 ms on the Jetson.
-2. Run reactive shadow in open space. Direct CLEAR must produce no correction.
-3. Approach an office chair until direct SLOW. Confirm candidate markers and a
-   stable suggested side after two cycles; the envelope must remain unchanged.
-4. Repeat with forward-left and forward-right. A suggestion may only reduce
-   the requested correction toward straight.
-5. Put the chair inside STOP distance. No reactive candidate may be applied or
-   used to escape STOP.
-6. Verify reverse and hard-turn envelopes are identical with reactive mode
-   disabled and shadow.
-7. Stop either filter/source stream and change session, class, and steering.
-   Each event must clear candidates and reset confirmation.
-8. Replay the same bags in enforce mode without a passenger, at the lowest
-   speed, with an attendant and physical cutoff. The applied envelope must
-   retain SLOW speed and reason, respect authority, and move only after two
-   matching cycles.
+1. Confirm both raw and filtered cloud rates, both successful-filter source
+   headers, TF from each LiDAR to `base_link`, and a refreshing inflated map.
+2. In open space, CLEAR must not receive a reactive correction.
+3. In shadow, place a soft chair at the edge of the requested trajectory.
+   SLOW should show candidate arcs and a stable winner after two cycles while
+   the envelope steering remains unchanged.
+4. Repeat forward-left and forward-right. Corrections may only move toward
+   straight. Move the obstacle across both sides to avoid confusing geometry
+   with a left/right software bias.
+5. Put the chair in STOP range. No candidate may escape or alter STOP.
+6. Verify reverse and hard turns match reactive-disabled behavior.
+7. Interrupt either source stream and change intent/session. Assistance must
+   clear immediately and the direct policy must fail closed where required.
+8. Run unoccupied physical enforcement at the lowest speed, with an attendant
+   and physical cutoff. Confirm steering stays inside advertised authority and
+   longitudinal output remains under the original SLOW cap.
 
-Record at least the intent, both source headers, merged costmap, safety
-envelope, shared-control diagnostics, checked corridor, reactive candidates,
-both suggestion topics, Nav2 goal/path, and planner diagnostics.
+Record `/operator_intent`, both filter source headers, both filtered clouds,
+`/nav2_merged_costmap`, `/safety_envelope`, `/shared_control/diagnostics`,
+`/shared_control/checked_corridor`, `/shared_control/reactive_candidates`, and
+`/shared_control/reactive_suggestion`.
 
-## Remaining work, in order
+## Remaining work
 
-1. **Footrest/self geometry:** measure the fixed footrest/leg cuboid, add it to
-   both L2 artifact filters, and include its XY projection in the footprint.
-2. **Caster-aware geometry:** use repeated low-speed floor/video measurements
-   to replace the nominal centreline assumption with a measured swept region.
-   No caster encoders or deterministic odometry are required.
-3. **Inflation replay:** the deployed default was reduced from 0.55 m to
-   0.45 m for reactive-assistance testing. Replay 0.55, 0.45, 0.40, and
-   0.35 m against identical doorway, narrow-pole, chair, and stopping-boundary
-   scenes after footprint and swept checks are calibrated. Do not select
-   0.20 m from subjective clearance alone.
-4. **Reactive tuning:** tune horizon, improvement threshold, and confirmation
-   only from shadow/replay evidence. Preserve direct STOP and SLOW semantics.
-5. **Nav2 research:** keep waypoint planning isolated at 2 Hz. Planner radius,
-   goal generation, unknown handling, and search optimisation may be studied,
-   but waypoint output must remain shadow-only unless a separate future scope
-   explicitly reintroduces autonomous destination selection and odometry.
+1. **Footrest/leg filtering (next, intentionally not started):** measure fixed
+   geometry with an occupied chair, add evidence-based cuboids to both artifact
+   filters, and verify real obstacles near the footrests are retained.
+2. **Turn-disc validation:** after self-filtering, replay and physically check
+   whether the reduced 0.45 m disc represents the intended turning clearance.
+3. **Caster-aware geometry:** measure repeated low-speed swept paths without
+   assuming deterministic caster state or adding encoders.
+4. **Inflation replay:** compare 0.55, 0.45, 0.40, and 0.35 m on identical
+   doorway, pole, chair, and stopping-boundary scenes only after self geometry
+   is calibrated.
+5. **Reactive tuning:** tune horizon, improvement threshold, steering step,
+   and confirmation from recorded evidence. Preserve STOP/SLOW semantics.
 
 ## Preserved boundaries
 
-- No ROS message, Pi/Jetson UDP protocol, peer check, emergency behavior,
-  speed-cap, or obstacle-STOP recovery change is part of this feature.
-- Reverse remains unmonitored and capped by the existing direct policy.
+- No ROS wire message, Jetson/Pi UDP protocol, obstacle policy, peer check,
+  emergency behavior, or speed-cap change is part of this cleanup.
+- Reverse remains unmonitored and capped by the direct policy.
 - Hard turns remain controlled by the base-centred cost disc.
-- The costmap remains at 0.1 m and the current inflation default is 0.45 m.
-- The feature never produces longitudinal motion, tracks a persistent path,
-  assumes caster state, or automatically manoeuvres around a direct STOP.
+- The system does not track a persistent route, assume caster position, add a
+  steering/acceleration ramp, or autonomously manoeuvre around STOP.
+- Footrest/leg filtering is deliberately deferred until the current runtime is
+  stable and its geometry can be measured.

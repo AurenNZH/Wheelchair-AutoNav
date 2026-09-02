@@ -56,7 +56,7 @@ class SafetyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(values["map_age_basis"], "receipt_time")
         self.assertEqual(values["source_age_ms"], "none")
         self.assertEqual(values["left_source_age_ms"], "none")
-        self.assertEqual(values["turn_clearance_radius_m"], "0.550")
+        self.assertEqual(values["turn_clearance_radius_m"], "0.450")
         self.assertEqual(values["clear_turn_limit"], "0.900")
         self.assertEqual(values["slow_turn_limit"], "0.600")
         self.assertEqual(values["turn_longitudinal_limit"], "0.150")

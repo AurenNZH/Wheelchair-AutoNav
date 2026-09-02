@@ -31,7 +31,7 @@ class ReactiveConfig:
     minimum_cost_improvement: int = 5
     confirmation_cycles: int = 2
     intent_change_tolerance: float = 0.05
-    maximum_steering_assist: float = 0.15
+    maximum_steering_assist: float = 0.30
 
 
 @dataclass(frozen=True)

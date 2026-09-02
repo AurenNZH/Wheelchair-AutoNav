@@ -8,10 +8,10 @@ l2_lidar_right_support_filter:
   ros__parameters:
     artifact_filter_frame: base_link
     artifact_box: [-0.20, 0.67, -0.60, 0.14, 0.61, 0.77]
-    # Physical JSM return measured in one 0.1 m XY costmap cell. Its lower
-    # face touches the top of artifact_box; keep this separate so the larger
-    # existing footprint is not extended upward.
-    artifact_additional_boxes: [0.50, 0.60, -0.30, -0.20, 0.77, 0.87]
+    # Elevated physical JSM return spanning two 0.1 m cells toward physical
+    # right (negative base_link Y). Its lower face touches artifact_box; keep
+    # this separate so the larger existing footprint is not extended upward.
+    artifact_additional_boxes: [0.50, 0.60, -0.40, -0.20, 0.77, 0.87]
     artifact_halo_bounds_xy: [-0.30, 0.77, -0.70, 0.61]
     artifact_halo_margin_m: 0.10
     artifact_halo_min_points_per_cell: 15

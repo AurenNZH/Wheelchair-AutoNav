@@ -32,7 +32,11 @@ base_link -> lidar_right_link: 0.330 -0.220 0.320 0.479965544 0 0
 Motion fails closed when required intent, map receipt, source timestamp,
 sequence, peer, session, or heartbeat data is invalid or stale. Forward motion
 retains the right-source freshness gate. Hard left/right turns additionally
-require a fresh left-source heartbeat and evaluate a 0.55 m pixelated disc
+require a fresh left-source heartbeat and evaluate a 0.45 m pixelated disc
 centred on `base_link`. Rear obstacle avoidance, drop-offs, steps, curbs, and
 hazards below the observed height remain outside the accepted scope. Reverse
 remains unmonitored and locally capped.
+
+The Jetson accepts physical intent up to 1.00 s old to tolerate scheduling and
+packet jitter. The check remains fail-closed and is separate from the Pi's
+0.20 s safety-envelope watchdog.

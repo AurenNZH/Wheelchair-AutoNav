@@ -54,7 +54,7 @@ weighted decisions, then use raised-wheel and lowest-speed controlled-area
 tests with an independent cutoff. Never jump directly from RViz to an
 obstacle-driving test.
 
-Before changing reactive-assistance, waypoint-planner, costmap, inflation,
+Before changing reactive-assistance, costmap, inflation,
 turning-radius, or footrest-filter parameters, follow the staged
 [reactive obstacle-assistance roadmap](obstacle_avoidance_roadmap.md). It
 records the enforced/shadow boundary, latency gates, geometry dependencies,

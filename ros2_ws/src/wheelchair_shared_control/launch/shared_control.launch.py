@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -30,6 +31,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "freshness_mode", default_value="nav2_live"
             ),
+            DeclareLaunchArgument("max_intent_age_s", default_value="1.00"),
             DeclareLaunchArgument("max_map_age_s", default_value="0.50"),
             DeclareLaunchArgument("max_source_age_s", default_value="0.50"),
             DeclareLaunchArgument(
@@ -62,12 +64,12 @@ def generate_launch_description():
                 "reactive_intent_change_tolerance", default_value="0.05"
             ),
             DeclareLaunchArgument(
-                "maximum_steering_assist", default_value="0.15"
+                "maximum_steering_assist", default_value="0.30"
             ),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.60"),
             DeclareLaunchArgument("reverse_limit", default_value="0.65"),
             DeclareLaunchArgument(
-                "turn_clearance_radius_m", default_value="0.55"
+                "turn_clearance_radius_m", default_value="0.45"
             ),
             DeclareLaunchArgument("clear_turn_limit", default_value="0.90"),
             DeclareLaunchArgument("slow_turn_limit", default_value="0.60"),
@@ -107,6 +109,9 @@ def generate_launch_description():
                         ),
                         "freshness_mode": LaunchConfiguration(
                             "freshness_mode"
+                        ),
+                        "max_intent_age_s": LaunchConfiguration(
+                            "max_intent_age_s"
                         ),
                         "max_map_age_s": LaunchConfiguration(
                             "max_map_age_s"
@@ -195,6 +200,7 @@ def generate_launch_description():
                         ),
                     },
                 ],
+                condition=IfCondition(LaunchConfiguration("enable_udp")),
             ),
         ]
     )

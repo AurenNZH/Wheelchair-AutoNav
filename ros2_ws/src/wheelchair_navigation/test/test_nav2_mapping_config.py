@@ -93,6 +93,16 @@ def test_launch_filters_both_l2_sources_symmetrically_before_nav2():
     assert "/nav2_front_costmap" not in source
     assert "/rslidar_points" not in source
 
+    node_source = (
+        Path(__file__).parents[1]
+        / "wheelchair_navigation"
+        / "point_support_filter_node.py"
+    ).read_text()
+    assert "output_header.stamp = msg.header.stamp" in node_source
+    assert "output_header.frame_id = target_frame" in node_source
+    assert "points_base[result.keep_mask], output_header" in node_source
+    assert "select_point_cloud_records" not in node_source
+
 
 def test_l2_artifact_rules_are_independent_and_active_by_default():
     root = Path(__file__).parents[1]
@@ -110,7 +120,7 @@ def test_l2_artifact_rules_are_independent_and_active_by_default():
     assert right["artifact_additional_boxes"] == [
         0.50,
         0.60,
-        -0.30,
+        -0.40,
         -0.20,
         0.77,
         0.87,
@@ -126,7 +136,7 @@ def test_l2_artifact_rules_are_independent_and_active_by_default():
     assert '"use_left_artifact_filter",\n                default_value="true"' in launch
 
 
-def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
+def test_rviz_is_lean_and_shows_reactive_pipeline():
     path = Path(__file__).parents[1] / "rviz" / "nav2_merged_costmap.rviz"
     document = yaml.safe_load(path.read_text())
     displays = {
@@ -144,42 +154,40 @@ def test_rviz_defaults_to_both_filtered_l2s_and_retains_raw_comparison():
 
     assert raw["Topic"]["Value"] == "/lidar_right/points"
     assert raw["Enabled"] is False
-    assert raw["Decay Time"] == 1.2
+    assert raw["Decay Time"] == 0
+    assert raw["Topic"]["Reliability Policy"] == "Best Effort"
     assert filtered["Topic"]["Value"] == "/lidar_right/points_filtered"
     assert filtered["Enabled"] is True
-    assert filtered["Decay Time"] == 1.2
+    assert filtered["Decay Time"] == 0
+    assert filtered["Topic"]["Reliability Policy"] == "Best Effort"
     assert raw_left["Topic"]["Value"] == "/lidar_left/points"
     assert raw_left["Enabled"] is False
-    assert raw_left["Decay Time"] == 1.2
+    assert raw_left["Decay Time"] == 0
+    assert raw_left["Topic"]["Reliability Policy"] == "Best Effort"
     assert filtered_left["Topic"]["Value"] == "/lidar_left/points_filtered"
     assert filtered_left["Enabled"] is True
-    assert filtered_left["Decay Time"] == 1.2
+    assert filtered_left["Decay Time"] == 0
+    assert filtered_left["Topic"]["Reliability Policy"] == "Best Effort"
     assert filtered["Color"] != filtered_left["Color"]
     assert displays["L2 right artifact box and halo"]["Enabled"] is True
     assert displays["L2 left artifact box and halo"]["Enabled"] is True
     assert displays["L2 right hard-rejected artifacts"]["Enabled"] is False
     assert displays["L2 left hard-rejected artifacts"]["Enabled"] is False
-    merged = displays["Nav2 Merged Costmap (optional inflation)"]
+    model = displays["Wheelchair Model"]
+    assert model["Enabled"] is True
+    assert model["Description Topic"]["Value"] == "/robot_description"
+    merged = displays["Nav2 Merged Costmap"]
     assert merged["Topic"]["Value"] == "/nav2_merged_costmap"
     reactive = displays["Reactive steering candidates"]
-    raw_path = displays["Nav2 waypoint shadow raw path"]
-    accepted_path = displays["Nav2 waypoint shadow accepted path"]
-    goal = displays["Nav2 waypoint shadow temporary goal"]
     footprint = displays["Nav2 merged costmap footprint"]
-    assert raw_path["Enabled"] is True
-    assert raw_path["Topic"]["Value"] == "/plan"
     assert reactive["Enabled"] is True
     assert reactive["Topic"]["Value"] == (
         "/shared_control/reactive_candidates"
     )
-    assert accepted_path["Enabled"] is True
-    assert accepted_path["Topic"]["Value"] == "/local_avoidance/path"
-    assert accepted_path["Line Width"] > raw_path["Line Width"]
-    assert accepted_path["Color"] != raw_path["Color"]
-    assert goal["Enabled"] is True
-    assert goal["Topic"]["Value"] == "/local_avoidance/goal"
+    assert not any("waypoint" in name.lower() for name in displays)
     assert footprint["Enabled"] is True
     assert footprint["Topic"]["Value"] == "/nav2_merged_costmap_footprint"
+    assert document["Visualization Manager"]["Global Options"]["Frame Rate"] == 10
 
 
 def test_launch_exposes_disabled_tunable_inflation_profile():

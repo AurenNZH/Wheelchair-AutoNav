@@ -3,11 +3,11 @@
 The supervisor combines `/operator_intent`, `/nav2_merged_costmap`, and the
 successful-filter heartbeats to emit `/safety_envelope`. Forward trajectories
 retain the right-L2 heartbeat gate. Hard turns require both L2 heartbeats and
-check the costs in a 0.55 m pixelated disc centred on `base_link`. It owns
+check the costs in a 0.45 m pixelated disc centred on `base_link`. It owns
 STOP/SLOW/CLEAR interpretation, checked-region visualization, and the optional
 Jetson–Pi UDP safety link. It does not generate CAN frames. Its optional
 reactive selector compares bounded individual arcs only when the direct policy
-returns `nav2_cost_slow`; it does not consume Nav2 waypoint suggestions.
+returns `nav2_cost_slow`; it does not run or consume a path planner.
 
 Both `enable_motion` and `geometry_calibrated` default to `false`; UDP also
 defaults off:
@@ -17,14 +17,16 @@ ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
 
 `reactive_assistance_mode` has `disabled`, `shadow`, and `enforce` values and
-defaults to `disabled`. Shadow evaluates the 0.15 system range without packet
+defaults to `disabled`. Shadow evaluates the 0.30 system range without packet
 authority. Enforcement also requires each protocol-v3 physical intent to
 advertise non-zero `max_steering_assist`; keyboard teleoperation advertises
 zero and retains direct behavior. Direct STOP/CLEAR, reverse, hard turns,
 invalid evidence, and stale evidence reset assistance immediately.
 
 Live `nav2_live` freshness independently checks costmap receipt time and the
-original successful-filter sensor stamp. The weighted policy treats costs 1–98
+original successful-filter sensor stamp. Physical intent may be at most 1.00 s
+old; this remains independent of the Pi's 0.20 s envelope watchdog. The
+weighted policy treats costs 1–98
 as SLOW and 99–100 as STOP; unknown or invalid geometry fails closed. Hard-turn
 CLEAR/SLOW lateral limits default to 0.90/0.60, with longitudinal adjustment
 limited to 0.15.

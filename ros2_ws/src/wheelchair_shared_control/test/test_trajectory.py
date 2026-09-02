@@ -86,8 +86,8 @@ class TrajectoryTests(unittest.TestCase):
         summary = turn_disc_costs(
             self.costmap(
                 {
-                    (10, 40): 50,  # Centre (0.45, 0.05), inside 0.55 m.
-                    (12, 40): 100,  # Centre (0.65, 0.05), outside.
+                    (9, 40): 50,  # Centre (0.35, 0.05), inside 0.45 m.
+                    (10, 40): 100,  # Centre (0.45, 0.05), outside.
                 },
                 width=50,
                 origin_x=-0.6,

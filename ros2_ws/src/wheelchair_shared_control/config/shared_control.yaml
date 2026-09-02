@@ -11,7 +11,7 @@
     reactive_suggestion_topic: /shared_control/reactive_suggestion
     reactive_candidates_topic: /shared_control/reactive_candidates
     decision_rate_hz: 20.0
-    max_intent_age_s: 0.20
+    max_intent_age_s: 1.00
 
     # Both gates remain false until physical calibration and elevated-wheel tests pass.
     enable_motion: false
@@ -27,7 +27,7 @@
     slow_forward_limit: 0.60
     reverse_limit: 0.65
     # Hard turns use a base-centred pixelated disc in the merged costmap.
-    turn_clearance_radius_m: 0.55
+    turn_clearance_radius_m: 0.45
     clear_turn_limit: 0.90
     slow_turn_limit: 0.60
     turn_longitudinal_limit: 0.15
@@ -55,7 +55,7 @@
     reactive_minimum_cost_improvement: 5
     reactive_confirmation_cycles: 2
     reactive_intent_change_tolerance: 0.05
-    maximum_steering_assist: 0.15
+    maximum_steering_assist: 0.30
 
     enable_udp: false
     bind_address: 0.0.0.0

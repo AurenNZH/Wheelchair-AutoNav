@@ -44,7 +44,7 @@ class FreshnessTests(unittest.TestCase):
             (None, "missing_intent"),
             (0, "invalid_intent_timestamp"),
             (10_100_000_000, "invalid_intent_timestamp"),
-            (9_700_000_000, "stale_intent"),
+            (8_900_000_000, "stale_intent"),
         )
         for stamp_ns, expected in fixtures:
             with self.subTest(stamp_ns=stamp_ns):
@@ -53,6 +53,13 @@ class FreshnessTests(unittest.TestCase):
                     map_available=False,
                 )
                 self.assertEqual(status.failure_reason, expected)
+
+    def test_one_second_intent_timeout_is_inclusive_at_boundary(self):
+        at_boundary = self.evaluate(intent_stamp_ns=9_000_000_000)
+        beyond_boundary = self.evaluate(intent_stamp_ns=8_999_999_999)
+
+        self.assertIsNone(at_boundary.failure_reason)
+        self.assertEqual(beyond_boundary.failure_reason, "stale_intent")
 
     def test_missing_map_follows_valid_intent(self):
         status = self.evaluate(map_available=False)
@@ -168,6 +175,7 @@ class FreshnessTests(unittest.TestCase):
         )
         invalid = (
             replace(self.policy, mode="unknown"),
+            replace(self.policy, max_intent_age_s=0.0),
             replace(self.policy, max_source_age_s=0.0),
             replace(self.policy, max_future_source_offset_s=-0.1),
         )

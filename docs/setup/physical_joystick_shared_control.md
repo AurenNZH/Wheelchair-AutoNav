@@ -6,7 +6,7 @@ are supported. Forward CLEAR is capped at 90 raw counts and SLOW at 60.
 Reverse is deliberately unmonitored by the supervisor and is always capped
 at SLOW 65 with reason `reverse_unmonitored_slow`. Correction X scales with
 the permitted Y magnitude so the input direction is preserved. Hard turns
-check a 0.55 m base-centred costmap disc and require both L2 filter heartbeats.
+check a 0.45 m base-centred costmap disc and require both L2 filter heartbeats.
 Their CLEAR/SLOW lateral caps are 90/60, with longitudinal adjustment capped
 at 15. The two obstacle STOP reasons can automatically resume held physical
 input after five fresh matching non-STOP envelopes; every other supervisor
@@ -73,32 +73,29 @@ ros2 launch wheelchair_shared_control shared_control.launch.py \
   bind_address:=192.168.0.102 \
   pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101 \
   slow_forward_limit:=0.60 reverse_limit:=0.65 \
-  turn_clearance_radius_m:=0.55 clear_turn_limit:=0.90 \
+  turn_clearance_radius_m:=0.45 max_intent_age_s:=1.00 \
+  clear_turn_limit:=0.90 \
   slow_turn_limit:=0.60 turn_longitudinal_limit:=0.15 \
   slow_cost_threshold:=1 stop_cost_threshold:=99
 ```
 
 Both motion gates and UDP are explicit; they remain disabled in the normal
-launch defaults.
+launch defaults. The Jetson intent-age watchdog allows 1.00 s, while the Pi's
+independent envelope watchdog remains at 0.20 s.
 
 For reactive-assistance shadow validation, replace the separate mapping and
 supervisor launches with the package-level launch below. It starts the same L2
-support filters, a planner-owned 5 m by 8 m inflated costmap, shared control,
-and the 2 Hz Nav2 waypoint research comparison. Reactive assistance remains
-disabled unless explicitly set to shadow or enforce.
+support filters, one standalone 5 m by 8 m inflated costmap, and shared
+control. The old temporary-waypoint planner has been removed.
 
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  reactive_assistance_mode:=shadow nav2_waypoint_mode:=shadow \
-  nav2_waypoint_rate_hz:=2.0 enable_udp:=true \
+  reactive_assistance_mode:=shadow enable_udp:=true \
   bind_address:=192.168.0.102 \
   pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101
 ```
 
 Do not enable motion during the shadow capture. Inspect
-`/local_avoidance/path`, `/local_avoidance/goal`,
-`/local_avoidance/diagnostics`, and
-`/shared_control/nav2_waypoint_suggestion` for route-research results. Inspect
 `/shared_control/reactive_suggestion`,
 `/shared_control/reactive_candidates`, and the reactive diagnostic keys for
 the low-latency selector. Shadow mode never changes the envelope.
@@ -185,10 +182,7 @@ ros2 bag record -o /tmp/physical_shared_enforce_01 \
   /nav2_merged_costmap /nav2_merged_costmap_footprint \
   /safety_envelope /shared_control/diagnostics \
   /shared_control/checked_corridor /shared_control/reactive_candidates \
-  /shared_control/reactive_suggestion \
-  /shared_control/nav2_waypoint_suggestion \
-  /local_avoidance/goal /local_avoidance/path /plan \
-  /local_avoidance/diagnostics
+  /shared_control/reactive_suggestion
 ```
 
 After stopping the recording, verify that every required topic was captured:
@@ -197,11 +191,10 @@ After stopping the recording, verify that every required topic was captured:
 ros2 bag info /tmp/physical_shared_enforce_01
 ```
 
-In RViz, orange `/plan` is Nav2's last successful raw route and can remain
-visible after an abort. Green `/local_avoidance/path` is the route accepted by
-the wheelchair planner client; it is cleared after an invalid or superseding
-result. The magenta arrow is the temporary goal and the cyan polygon is the
-planner footprint.
+In RViz, confirm the cyan footprint, current inflated costmap, both current
+filtered clouds, checked corridor, and reactive candidate fan all update. The
+wheelchair model comes from `/robot_description`; there are no path or
+temporary-goal displays in the reactive-only profile.
 
 Stop the shadow gateway, power-cycle the wheelchair if required by the R-Net
 communication fault, and start a single explicit enforcing gateway. The CSV

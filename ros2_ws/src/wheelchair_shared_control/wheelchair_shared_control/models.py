@@ -34,7 +34,7 @@ class SafetyConfig:
     max_steering: float = 0.577350269
     slow_forward_limit: float = 0.60
     reverse_limit: float = 0.65
-    turn_clearance_radius_m: float = 0.55
+    turn_clearance_radius_m: float = 0.45
     clear_turn_limit: float = 0.90
     slow_turn_limit: float = 0.60
     turn_longitudinal_limit: float = 0.15

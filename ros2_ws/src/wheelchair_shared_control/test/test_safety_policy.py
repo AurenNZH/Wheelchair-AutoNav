@@ -309,7 +309,7 @@ class SafetyPolicyTests(unittest.TestCase):
         )
         slow = evaluate_safety(
             intent,
-            self._costmap({(10, 40): 50}, width=50, origin_x=-0.6),
+            self._costmap({(9, 40): 50}, width=50, origin_x=-0.6),
             self.enabled,
         )
         stop = evaluate_safety(

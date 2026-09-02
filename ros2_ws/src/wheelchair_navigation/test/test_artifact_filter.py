@@ -45,15 +45,17 @@ class ArtifactFilterTests(unittest.TestCase):
     def test_additional_boxes_parse_flat_groups_and_reject_their_union(self):
         boxes = parse_artifact_boxes(
             [
-                0.50, 0.60, -0.30, -0.20, 0.77, 0.87,
+                0.50, 0.60, -0.40, -0.20, 0.77, 0.87,
                 -0.10, 0.00, 0.10, 0.20, 0.30, 0.40,
             ]
         )
         points = np.asarray(
             [
+                [0.55, -0.35, 0.82],
                 [0.55, -0.25, 0.82],
                 [-0.05, 0.15, 0.35],
                 [0.55, -0.25, 0.88],
+                [0.55, -0.45, 0.82],
                 [0.61, -0.25, 0.82],
             ],
             dtype=np.float32,
@@ -62,7 +64,7 @@ class ArtifactFilterTests(unittest.TestCase):
         self.assertEqual(len(boxes), 2)
         np.testing.assert_array_equal(
             points_in_artifact_boxes(points, boxes),
-            [True, True, False, False],
+            [True, True, True, False, False, False],
         )
         self.assertEqual(parse_artifact_boxes([]), ())
         with self.assertRaises(ValueError):

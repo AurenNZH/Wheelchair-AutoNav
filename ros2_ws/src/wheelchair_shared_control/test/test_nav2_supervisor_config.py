@@ -24,13 +24,14 @@ def test_production_defaults_to_weighted_nav2_costs():
         "/lidar_left/filter/source_header"
     )
     assert parameters["freshness_mode"] == NAV2_LIVE
+    assert parameters["max_intent_age_s"] == 1.0
     assert parameters["max_map_age_s"] == 0.5
     assert parameters["max_source_age_s"] == 0.5
     assert parameters["slow_cost_threshold"] == 1
     assert parameters["stop_cost_threshold"] == 99
     assert parameters["slow_forward_limit"] == 0.60
     assert parameters["reverse_limit"] == 0.65
-    assert parameters["turn_clearance_radius_m"] == 0.55
+    assert parameters["turn_clearance_radius_m"] == 0.45
     assert parameters["clear_turn_limit"] == 0.90
     assert parameters["slow_turn_limit"] == 0.60
     assert parameters["turn_longitudinal_limit"] == 0.15
@@ -47,7 +48,7 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["reactive_minimum_cost_improvement"] == 5
     assert parameters["reactive_confirmation_cycles"] == 2
     assert parameters["reactive_intent_change_tolerance"] == 0.05
-    assert parameters["maximum_steering_assist"] == 0.15
+    assert parameters["maximum_steering_assist"] == 0.30
     assert parameters["reactive_suggestion_topic"] == (
         "/shared_control/reactive_suggestion"
     )
@@ -62,12 +63,13 @@ def test_launch_exposes_costmap_topic_and_thresholds():
     assert 'default_value="/lidar_right/filter/source_header"' in source
     assert 'default_value="/lidar_left/filter/source_header"' in source
     assert '"freshness_mode", default_value="nav2_live"' in source
+    assert '"max_intent_age_s", default_value="1.00"' in source
     assert '"max_map_age_s", default_value="0.50"' in source
     assert '"max_source_age_s", default_value="0.50"' in source
     assert '"slow_cost_threshold", default_value="1"' in source
     assert '"stop_cost_threshold", default_value="99"' in source
     assert '"forward_cone_half_angle_deg", default_value="30.0"' in source
-    assert '"turn_clearance_radius_m", default_value="0.55"' in source
+    assert '"turn_clearance_radius_m", default_value="0.45"' in source
     assert '"clear_turn_limit", default_value="0.90"' in source
     assert '"slow_turn_limit", default_value="0.60"' in source
     assert '"reactive_assistance_mode"' in source
@@ -109,7 +111,7 @@ def test_supervisor_retains_weighted_grid_values():
     assert costmap.costs.tolist() == [[0, 50], [99, 100]]
 
 
-def test_supervisor_does_not_consume_nav2_waypoint_suggestions():
+def test_supervisor_consumes_only_reactive_steering_suggestions():
     path = (
         Path(__file__).parents[1]
         / "wheelchair_shared_control"
@@ -119,5 +121,17 @@ def test_supervisor_does_not_consume_nav2_waypoint_suggestions():
 
     assert "_on_avoidance_suggestion" not in source
     assert "avoidance_suggestion_topic" not in source
+    assert "nav2_waypoint" not in source
     assert '"reactive_suggestion_topic"' in source
     assert '"reactive_candidates_topic"' in source
+
+
+def test_udp_bridge_is_created_only_when_enabled_and_polls_at_50_hz():
+    package = Path(__file__).parents[1]
+    launch_source = (package / "launch" / "shared_control.launch.py").read_text()
+    bridge_source = (
+        package / "wheelchair_shared_control" / "udp_bridge_node.py"
+    ).read_text()
+
+    assert "condition=IfCondition(LaunchConfiguration(\"enable_udp\"))" in launch_source
+    assert "self.create_timer(0.02, self._poll_intents)" in bridge_source

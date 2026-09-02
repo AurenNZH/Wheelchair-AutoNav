@@ -51,7 +51,7 @@ class UdpBridgeNode(Node):
                     int(self.get_parameter("intent_port").value),
                 )
             )
-            self.create_timer(0.01, self._poll_intents)
+            self.create_timer(0.02, self._poll_intents)
             self.get_logger().warn(
                 "UDP shared-control bridge enabled; supervisor remains fail-closed "
                 "unless motion and calibrated geometry are explicitly enabled."
