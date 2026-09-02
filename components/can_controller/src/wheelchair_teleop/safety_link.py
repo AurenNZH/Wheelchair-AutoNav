@@ -28,7 +28,8 @@ MAX_PACKET_BYTES = 1024
 STOP = 0
 SLOW = 1
 CLEAR = 2
-MAX_STEERING_ASSIST = 0.30
+# tan(30 degrees), matching the configured forward steering cone.
+MAX_STEERING_ASSIST = 0.577350269
 RECOVERABLE_OBSTACLE_STOP_REASONS = frozenset(
     ("nav2_cost_stop", "nav2_turn_cost_stop")
 )
@@ -178,7 +179,7 @@ class SafetyLink:
             0.0 <= self.max_steering_assist <= MAX_STEERING_ASSIST
         ):
             raise ValueError(
-                "max_steering_assist must be in [0, %.2f]"
+                "max_steering_assist must be in [0, %.9f]"
                 % MAX_STEERING_ASSIST
             )
         classify_raw_axes(

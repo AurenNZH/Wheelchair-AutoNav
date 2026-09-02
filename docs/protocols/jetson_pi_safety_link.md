@@ -29,7 +29,10 @@ keyboard teleoperation. For straight forward intent, non-zero authority permits
 the supervisor to choose either side within the cap. For forward-left or
 forward-right, it permits only a reduction toward straight by at most the cap;
 it cannot cross zero or amplify the requested turn. Reverse and hard turns do
-not use path assistance. The Pi validates this contract independently.
+not use path assistance. The deployed physical maximum is 0.577350269
+(`tan(30 degrees)`), while smaller delegated values remain valid. The ratio is
+a commanded joystick-vector angle, not a guaranteed physical wheel angle. The
+Pi validates this contract independently.
 
 In live Nav2 mode, `map_age_ms` is monotonic costmap receipt age. Filtered
 LiDAR acquisition age remains a separate Jetson diagnostic and safety gate.

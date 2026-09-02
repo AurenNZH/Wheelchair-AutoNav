@@ -17,8 +17,9 @@ ros2 launch wheelchair_shared_control shared_control.launch.py
 ```
 
 `reactive_assistance_mode` has `disabled`, `shadow`, and `enforce` values and
-defaults to `disabled`. Shadow evaluates the 0.30 system range without packet
-authority. Enforcement also requires each protocol-v3 physical intent to
+defaults to `disabled`. Shadow evaluates the 0.577350269 system range
+(`tan(30 degrees)`) without packet authority. Enforcement also requires each
+protocol-v3 physical intent to
 advertise non-zero `max_steering_assist`; keyboard teleoperation advertises
 zero and retains direct behavior. Direct STOP/CLEAR, reverse, hard turns,
 invalid evidence, and stale evidence reset assistance immediately.

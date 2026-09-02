@@ -19,7 +19,10 @@ from wheelchair_shared_control.operator_intent import (
     FORWARD_LEFT,
     FORWARD_RIGHT,
 )
-from wheelchair_shared_control.trajectory import individual_path_costs
+from wheelchair_shared_control.trajectory import (
+    PathCostSummary,
+    individual_path_costs_batch,
+)
 
 
 @dataclass(frozen=True)
@@ -31,7 +34,7 @@ class ReactiveConfig:
     minimum_cost_improvement: int = 5
     confirmation_cycles: int = 2
     intent_change_tolerance: float = 0.05
-    maximum_steering_assist: float = 0.30
+    maximum_steering_assist: float = 0.577350269
 
 
 @dataclass(frozen=True)
@@ -191,9 +194,16 @@ def select_reactive_steering(
         config,
         safety_config,
     )
+    summaries = individual_path_costs_batch(
+        costmap,
+        steerings,
+        safety_config,
+        horizon_m=config.horizon_m,
+        sample_step_m=config.path_sample_step_m,
+    )
     candidates = tuple(
-        _score_candidate(costmap, steering, config, safety_config)
-        for steering in steerings
+        _candidate_from_summary(steering, summary)
+        for steering, summary in zip(steerings, summaries)
     )
     if not candidates:
         return _empty_selection(
@@ -404,19 +414,10 @@ def _unscored_candidate(steering: float) -> ReactiveCandidate:
     )
 
 
-def _score_candidate(
-    costmap: WeightedCostmap,
+def _candidate_from_summary(
     steering: float,
-    config: ReactiveConfig,
-    safety_config: SafetyConfig,
+    summary: PathCostSummary,
 ) -> ReactiveCandidate:
-    summary = individual_path_costs(
-        costmap,
-        steering,
-        safety_config,
-        horizon_m=config.horizon_m,
-        sample_step_m=config.path_sample_step_m,
-    )
     if not summary.valid:
         return ReactiveCandidate(
             steering,

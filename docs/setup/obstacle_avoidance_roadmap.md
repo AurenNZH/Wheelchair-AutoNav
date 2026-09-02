@@ -36,7 +36,7 @@ search.
 - `reactive_assistance_mode`: `disabled`, `shadow`, or `enforce`. The
   obstacle-avoidance launcher defaults to `enforce`; the generic shared-control
   launcher remains `disabled` for compatibility.
-- `maximum_assist`: 0.30 normalized steering ratio.
+- `maximum_assist`: 0.577350269 normalized steering ratio (`tan(30 degrees)`).
 - Candidate horizon/sample step: 1.2 m / 0.05 m.
 - Candidate steering step/minimum correction: 0.05 / 0.02.
 - Minimum same-class cost improvement: 5.
@@ -51,8 +51,8 @@ search.
   polls at 50 Hz.
 
 The full system maximum is evaluated in shadow. Enforce uses the smaller of
-the intent packet's advertised authority and the 0.30 system maximum. Keyboard
-teleoperation advertises zero and retains direct behavior.
+the intent packet's advertised authority and the 0.577350269 system maximum.
+Keyboard teleoperation advertises zero and retains direct behavior.
 
 ## Legacy conflict audit and resolution
 
@@ -64,7 +64,7 @@ teleoperation advertises zero and retains direct behavior.
 | Filtered clouds preserved vendor records in LiDAR frames | larger messages and repeated timestamped TF work in every consumer | compact XYZ output transformed once into `base_link`, source stamp preserved |
 | Obstacle RViz profile omitted the robot model | misleading “robot model not parsed” diagnosis despite valid `robot_description` | explicit `/robot_description` RobotModel display |
 | UDP node existed while disabled and polled at 100 Hz when enabled | extra graph endpoint and avoidable executor/network work | conditional node and 50 Hz polling |
-| Reactive limits differed between launch/config/code documentation | surprising 0.15 versus 0.30 behavior | aligned defaults at 0.30 |
+| Reactive limits differed between launch/config/code documentation | inconsistent steering authority | aligned defaults at 0.577350269 (`tan(30 degrees)`) |
 
 These changes reduce graph ambiguity and stale visualization work. They do not
 claim to solve unstable LiDAR power, Ethernet addressing, DDS discovery, or
@@ -95,13 +95,13 @@ addresses explicitly:
 
 ```bash
 ros2 launch wheelchair_obstacle_avoidance obstacle_avoidance.launch.py \
-  use_rviz:=true reactive_assistance_mode:=enforce maximum_assist:=0.30 \
+  use_rviz:=true reactive_assistance_mode:=enforce maximum_assist:=0.577350269 \
   enable_motion:=true geometry_calibrated:=true enable_udp:=true \
   bind_address:=192.168.0.102 \
   pi_address:=192.168.0.101 allowed_pi_address:=192.168.0.101
 ```
 
-The physical gateway must advertise `--max-assist-ratio 0.30`. Use the
+The physical gateway must advertise `--max-assist-ratio 0.577350269`. Use the
 attended, lowest-speed procedure in
 [physical_joystick_shared_control.md](physical_joystick_shared_control.md).
 

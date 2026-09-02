@@ -248,15 +248,16 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(decoded.max_steering_assist, 0.0)
         self.assertTrue(decoded.deadman)
 
-    def test_explicit_assist_allows_bounded_straight_steering(self):
+    def test_explicit_full_assist_allows_thirty_degree_slow_steering(self):
         udp = FakeSocket()
         clock = FakeClock()
         link = SafetyLink(
             enabled=True,
             jetson_address="192.0.2.10",
             required_clear_envelopes=1,
-            command_cap=0.20,
-            max_steering_assist=0.30,
+            command_cap=0.90,
+            slow_command_cap=0.60,
+            max_steering_assist=0.577350269,
             udp_socket=udp,
             monotonic_clock=clock,
         )
@@ -264,13 +265,13 @@ class SafetyLinkTests(unittest.TestCase):
         self.assertEqual(link.apply(0, 100, True), (0, 0))
         intent = json.loads(udp.sent[-1][0].decode())
         self.assertEqual(intent["v"], 3)
-        self.assertEqual(intent["max_steering_assist"], 0.30)
+        self.assertEqual(intent["max_steering_assist"], 0.577350269)
         udp.received.append(
             (
                 encode_envelope(
                     EnvelopePacket(
-                        intent["session"], intent["seq"], 2, 1.0, 0.30,
-                        "nav2_avoidance_cost_clear", 10.0
+                        intent["session"], intent["seq"], 1, 0.60,
+                        0.577350269, "nav2_cost_slow", 10.0
                     )
                 ),
                 ("192.0.2.10", 45451),
@@ -278,7 +279,7 @@ class SafetyLinkTests(unittest.TestCase):
         )
         clock.advance(0.01)
 
-        self.assertEqual(link.apply(0, 100, True), (-6, 20))
+        self.assertEqual(link.apply(0, 100, True), (-35, 60))
 
     def test_assist_over_advertised_authority_latches_fail_closed(self):
         udp = FakeSocket()
@@ -313,11 +314,11 @@ class SafetyLinkTests(unittest.TestCase):
         )
 
     def test_assist_configuration_above_supported_ceiling_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, r"\[0, 0\.30\]"):
+        with self.assertRaisesRegex(ValueError, r"\[0, 0\.577350269\]"):
             SafetyLink(
                 enabled=True,
                 jetson_address="192.0.2.10",
-                max_steering_assist=0.31,
+                max_steering_assist=0.58,
                 udp_socket=FakeSocket(),
             )
 

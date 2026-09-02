@@ -247,7 +247,7 @@ def main(argv=None) -> int:
             raise ValueError("forward-cone-deg must be less than 90")
         if args.max_assist_ratio > MAX_STEERING_ASSIST:
             raise ValueError(
-                "max-assist-ratio must be in [0, %.2f]"
+                "max-assist-ratio must be in [0, %.9f]"
                 % MAX_STEERING_ASSIST
             )
     except ValueError as exc:

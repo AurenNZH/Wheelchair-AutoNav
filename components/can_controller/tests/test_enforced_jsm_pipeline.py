@@ -236,6 +236,24 @@ class EnforcedJsmPipelineTests(unittest.TestCase):
         _, _, axes, _ = pipeline.forward_once()
         self.assertEqual(axes, (-13, 90))
 
+    def test_full_reactive_authority_rewrites_slow_forward_axes(self):
+        pipeline = EnforcedJsmPipeline(
+            (jsm_frame(0, 100), jsm_frame(0, 100)),
+            max_steering_assist=0.577350269,
+        )
+
+        pipeline.forward_once()
+        pipeline.queue_envelope(
+            SLOW,
+            0.60,
+            0.577350269,
+            "nav2_cost_slow",
+        )
+        pipeline.clock.advance(0.01)
+
+        _, _, axes, _ = pipeline.forward_once()
+        self.assertEqual(axes, (-35, 60))
+
     def test_reverse_correction_rewrites_signed_slot_two_axes(self):
         pipeline = EnforcedJsmPipeline(
             (jsm_frame(20, -100), jsm_frame(20, -100)),

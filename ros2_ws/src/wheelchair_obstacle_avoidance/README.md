@@ -23,10 +23,12 @@ compares bounded 1.2 m arcs, requires two matching correction directions, and
 changes steering only. STOP, CLEAR, reverse, hard turns, speed caps, freshness,
 and invalid-evidence behavior remain under the direct fail-closed policy.
 
-The configured maximum correction is 0.30 normalized steering ratio. Physical
-enforcement also requires a protocol-v3 intent advertising authority (normally
-Pi option `--max-assist-ratio 0.30`), both Jetson motion gates, and UDP to be
-enabled explicitly. See
+The configured maximum correction is 0.577350269 normalized steering ratio
+(`tan(30 degrees)`). Physical enforcement also requires a protocol-v3 intent
+advertising authority (normally Pi option
+`--max-assist-ratio 0.577350269`), both Jetson motion gates, and UDP to be
+enabled explicitly. The ratio describes the commanded joystick vector rather
+than a guaranteed physical wheel angle. See
 [the deployment roadmap](../../../docs/setup/obstacle_avoidance_roadmap.md).
 
 The earlier temporary-waypoint/Smac experiment was removed. It competed for

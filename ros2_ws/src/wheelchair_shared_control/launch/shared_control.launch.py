@@ -64,7 +64,7 @@ def generate_launch_description():
                 "reactive_intent_change_tolerance", default_value="0.05"
             ),
             DeclareLaunchArgument(
-                "maximum_steering_assist", default_value="0.30"
+                "maximum_steering_assist", default_value="0.577350269"
             ),
             DeclareLaunchArgument("slow_forward_limit", default_value="0.60"),
             DeclareLaunchArgument("reverse_limit", default_value="0.65"),

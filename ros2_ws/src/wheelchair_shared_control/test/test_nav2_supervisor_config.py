@@ -48,7 +48,7 @@ def test_production_defaults_to_weighted_nav2_costs():
     assert parameters["reactive_minimum_cost_improvement"] == 5
     assert parameters["reactive_confirmation_cycles"] == 2
     assert parameters["reactive_intent_change_tolerance"] == 0.05
-    assert parameters["maximum_steering_assist"] == 0.30
+    assert parameters["maximum_steering_assist"] == 0.577350269
     assert parameters["reactive_suggestion_topic"] == (
         "/shared_control/reactive_suggestion"
     )

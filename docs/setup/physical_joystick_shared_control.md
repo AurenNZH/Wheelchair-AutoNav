@@ -153,10 +153,11 @@ fixed on both machines.
 
 After shadow results pass, an unoccupied reactive-assistance enforce test uses
 `reactive_assistance_mode:=enforce` on the Jetson and explicitly delegates at
-most 0.30 on the physical gateway with `--max-assist-ratio 0.30`. This is a
-normalized steering-ratio correction (about 16.7 degrees from straight, or up
-to 18 raw X counts at the SLOW Y cap of 60), not a wheel angle. Omitting that
-flag (or setting it to zero) prevents reactive steering in enforce mode.
+most 0.577350269 on the physical gateway with
+`--max-assist-ratio 0.577350269`. This is a normalized steering-ratio
+correction (`tan(30 degrees)`, or approximately 35 raw X counts at the SLOW Y
+cap of 60), not a guaranteed physical wheel angle. Omitting that flag (or
+setting it to zero) prevents reactive steering in enforce mode.
 Reverse and hard turns retain the direct policy, direct STOP never attempts an
 escape, and an enforced correction retains the direct SLOW cap and reason.
 
@@ -210,7 +211,7 @@ python3 supervise_physical_joystick.py \
   --turn-clear-cap 90 --turn-slow-cap 60 \
   --turn-longitudinal-cap 15 \
   --deadzone 4 --forward-cone-deg 30 \
-  --max-assist-ratio 0.30 \
+  --max-assist-ratio 0.577350269 \
   --required-clear-envelopes 5 --envelope-timeout-s 0.20 \
   --csv /tmp/physical_shared_enforce_01.csv
 ```

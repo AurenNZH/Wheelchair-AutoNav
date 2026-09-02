@@ -41,8 +41,8 @@ class PhysicalJoystickArgumentsTests(unittest.TestCase):
         self.assertFalse(args.auto_resume_obstacle_stops)
 
     def test_assist_ratio_is_explicit(self):
-        args = self._parse("--max-assist-ratio", "0.30")
-        self.assertEqual(args.max_assist_ratio, 0.30)
+        args = self._parse("--max-assist-ratio", "0.577350269")
+        self.assertEqual(args.max_assist_ratio, 0.577350269)
 
 
 if __name__ == "__main__":

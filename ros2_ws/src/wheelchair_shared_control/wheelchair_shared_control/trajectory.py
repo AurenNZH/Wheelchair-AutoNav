@@ -226,6 +226,157 @@ def individual_path_costs(
     )
 
 
+def individual_path_costs_batch(
+    costmap: WeightedCostmap,
+    steerings,
+    config: SafetyConfig,
+    *,
+    horizon_m: float | None = None,
+    sample_step_m: float | None = None,
+) -> tuple[PathCostSummary, ...]:
+    """Sample multiple independent arcs with shared vectorized geometry."""
+
+    validate_safety_config(config)
+    horizon = (
+        float(config.slow_distance_m)
+        if horizon_m is None
+        else float(horizon_m)
+    )
+    step = (
+        float(config.path_sample_step_m)
+        if sample_step_m is None
+        else float(sample_step_m)
+    )
+    steering_values = np.asarray(tuple(steerings), dtype=np.float64)
+    if (
+        not math.isfinite(horizon)
+        or horizon <= 0.0
+        or not math.isfinite(step)
+        or step <= 0.0
+        or not np.all(np.isfinite(steering_values))
+    ):
+        raise ValueError("trajectory horizon, step, and steering must be valid")
+    if steering_values.size == 0:
+        return ()
+
+    samples = max(1, int(math.ceil(horizon / step)))
+    distances = np.linspace(0.0, horizon, samples + 1)
+    curvatures = (
+        steering_values[:, None] / float(config.min_turn_radius_m)
+    )
+    straight = np.abs(curvatures) < 1e-6
+    safe_curvatures = np.where(straight, 1.0, curvatures)
+    yaws = curvatures * distances[None, :]
+    xs = np.where(
+        straight,
+        distances[None, :],
+        np.sin(yaws) / safe_curvatures,
+    )
+    ys = np.where(
+        straight,
+        0.0,
+        (1.0 - np.cos(yaws)) / safe_curvatures,
+    )
+    cols = np.floor(
+        (xs - costmap.origin_x_m) / costmap.resolution_m
+    ).astype(np.int64)
+    rows = np.floor(
+        (ys - costmap.origin_y_m) / costmap.resolution_m
+    ).astype(np.int64)
+
+    in_bounds = (
+        (cols >= 0)
+        & (cols < costmap.width)
+        & (rows >= 0)
+        & (rows < costmap.height)
+    )
+    if np.all(in_bounds):
+        sampled_costs = costmap.costs[rows, cols]
+        if np.all(sampled_costs >= 0):
+            slow = sampled_costs >= config.slow_cost_threshold
+            stop = sampled_costs >= config.stop_cost_threshold
+            nearest_slow = np.min(
+                np.where(slow, distances[None, :], np.inf), axis=1
+            )
+            nearest_stop = np.min(
+                np.where(stop, distances[None, :], np.inf), axis=1
+            )
+            maximum_costs = np.max(sampled_costs, axis=1)
+            accumulated_costs = np.sum(sampled_costs, axis=1)
+            return tuple(
+                PathCostSummary(
+                    maximum_cost=int(maximum_cost),
+                    nearest_slow_distance_m=(
+                        None
+                        if not math.isfinite(float(slow_distance))
+                        else float(slow_distance)
+                    ),
+                    nearest_stop_distance_m=(
+                        None
+                        if not math.isfinite(float(stop_distance))
+                        else float(stop_distance)
+                    ),
+                    accumulated_cost=int(accumulated_cost),
+                    valid=True,
+                )
+                for maximum_cost, slow_distance, stop_distance, accumulated_cost
+                in zip(
+                    maximum_costs,
+                    nearest_slow,
+                    nearest_stop,
+                    accumulated_costs,
+                )
+            )
+
+    summaries = []
+    for candidate_cols, candidate_rows in zip(cols, rows):
+        candidate_in_bounds = (
+            (candidate_cols >= 0)
+            & (candidate_cols < costmap.width)
+            & (candidate_rows >= 0)
+            & (candidate_rows < costmap.height)
+        )
+        outside = np.flatnonzero(~candidate_in_bounds)
+        first_outside = (
+            int(outside[0]) if outside.size else len(distances)
+        )
+        checked_cols = candidate_cols[:first_outside]
+        checked_rows = candidate_rows[:first_outside]
+        costs = costmap.costs[checked_rows, checked_cols]
+        unknown = np.flatnonzero(costs < 0)
+        first_unknown = int(unknown[0]) if unknown.size else len(costs)
+        valid_costs = costs[:first_unknown]
+        valid_distances = distances[:first_unknown]
+        slow = np.flatnonzero(
+            valid_costs >= config.slow_cost_threshold
+        )
+        stop = np.flatnonzero(
+            valid_costs >= config.stop_cost_threshold
+        )
+        failure_reason = None
+        if first_unknown < len(costs):
+            failure_reason = "unknown_nav2_cost"
+        elif first_outside < len(distances):
+            failure_reason = "trajectory_outside_costmap"
+        summaries.append(
+            PathCostSummary(
+                maximum_cost=(
+                    int(np.max(valid_costs)) if valid_costs.size else None
+                ),
+                nearest_slow_distance_m=(
+                    float(valid_distances[slow[0]]) if slow.size else None
+                ),
+                nearest_stop_distance_m=(
+                    float(valid_distances[stop[0]]) if stop.size else None
+                ),
+                accumulated_cost=int(np.sum(valid_costs)),
+                valid=failure_reason is None,
+                failure_reason=failure_reason,
+            )
+        )
+    return tuple(summaries)
+
+
 def trajectory_points(
     steering: float,
     config: SafetyConfig,
@@ -295,6 +446,7 @@ def _maximum(first: int | None, second: int | None) -> int | None:
 __all__ = [
     "PathCostSummary",
     "individual_path_costs",
+    "individual_path_costs_batch",
     "swept_path_costs",
     "trajectory_points",
     "trajectory_points_for_horizon",

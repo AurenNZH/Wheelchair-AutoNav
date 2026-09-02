@@ -7,6 +7,8 @@ from wheelchair_shared_control.models import (
     weighted_costmap_from_grid,
 )
 from wheelchair_shared_control.trajectory import (
+    individual_path_costs,
+    individual_path_costs_batch,
     swept_path_costs,
     trajectory_points,
     turn_disc_costs,
@@ -81,6 +83,40 @@ class TrajectoryTests(unittest.TestCase):
             outside.failure_reason,
             "trajectory_outside_costmap",
         )
+
+    def test_batched_paths_match_individual_cost_evidence(self):
+        costmap = self.costmap(
+            {
+                (5, 40): -1,
+                (9, 38): 50,
+                (10, 42): 99,
+            }
+        )
+        steerings = (-0.577350269, -0.15, 0.0, 0.15, 0.577350269)
+
+        individual = tuple(
+            individual_path_costs(costmap, steering, self.config)
+            for steering in steerings
+        )
+        batched = individual_path_costs_batch(
+            costmap, steerings, self.config
+        )
+
+        self.assertEqual(batched, individual)
+
+    def test_batched_out_of_bounds_evidence_matches_individual_paths(self):
+        costmap = self.costmap({}, width=5)
+        steerings = (-0.577350269, 0.0, 0.577350269)
+
+        individual = tuple(
+            individual_path_costs(costmap, steering, self.config)
+            for steering in steerings
+        )
+        batched = individual_path_costs_batch(
+            costmap, steerings, self.config
+        )
+
+        self.assertEqual(batched, individual)
 
     def test_turn_disc_uses_cell_centres_and_weighted_costs(self):
         summary = turn_disc_costs(

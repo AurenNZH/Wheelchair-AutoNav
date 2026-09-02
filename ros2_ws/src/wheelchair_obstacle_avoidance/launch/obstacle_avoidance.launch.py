@@ -65,7 +65,9 @@ def generate_launch_description():
                 description="disabled, shadow, or enforce",
                 choices=["disabled", "shadow", "enforce"],
             ),
-            DeclareLaunchArgument("maximum_assist", default_value="0.30"),
+            DeclareLaunchArgument(
+                "maximum_assist", default_value="0.577350269"
+            ),
             DeclareLaunchArgument(
                 "turn_clearance_radius_m", default_value="0.45"
             ),
@@ -82,6 +84,8 @@ def generate_launch_description():
                 msg=[
                     "Reactive obstacle assistance=",
                     LaunchConfiguration("reactive_assistance_mode"),
+                    "; maximum assist ratio=",
+                    LaunchConfiguration("maximum_assist"),
                     "; turn disc=",
                     LaunchConfiguration("turn_clearance_radius_m"),
                     " m; intent timeout=",

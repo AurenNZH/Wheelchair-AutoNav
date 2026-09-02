@@ -17,7 +17,8 @@ def test_launch_is_reactive_only_and_uses_one_standalone_costmap():
     assert '"reactive_assistance_mode"' in source
     assert 'default_value="enforce"' in source
     assert 'choices=["disabled", "shadow", "enforce"]' in source
-    assert 'DeclareLaunchArgument("maximum_assist", default_value="0.30")' in source
+    assert '"maximum_assist", default_value="0.577350269"' in source
+    assert '"; maximum assist ratio="' in source
     assert '"turn_clearance_radius_m", default_value="0.45"' in source
     assert 'DeclareLaunchArgument("max_intent_age_s", default_value="1.00")' in source
     assert '"turn_clearance_radius_m": LaunchConfiguration(' in source

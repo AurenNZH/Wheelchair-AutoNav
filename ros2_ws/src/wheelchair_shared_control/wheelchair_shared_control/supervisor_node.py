@@ -124,7 +124,7 @@ class SafetySupervisorNode(Node):
         self.declare_parameter("reactive_minimum_cost_improvement", 5)
         self.declare_parameter("reactive_confirmation_cycles", 2)
         self.declare_parameter("reactive_intent_change_tolerance", 0.05)
-        self.declare_parameter("maximum_steering_assist", 0.30)
+        self.declare_parameter("maximum_steering_assist", 0.577350269)
 
         self._config = self._load_config()
         self._intent = None

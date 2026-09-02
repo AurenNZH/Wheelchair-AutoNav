@@ -95,6 +95,26 @@ def test_candidate_fans_include_exact_boundaries_and_do_not_cross_zero():
     assert all(value <= 0.0 for value in right)
 
 
+def test_full_authority_fan_reaches_thirty_degree_bounds():
+    authority = 0.577350269
+    straight = generate_candidate_steering(
+        0.0, FORWARD, authority, REACTIVE, SAFETY
+    )
+    left = generate_candidate_steering(
+        0.50, FORWARD_LEFT, authority, REACTIVE, SAFETY
+    )
+    right = generate_candidate_steering(
+        -0.50, FORWARD_RIGHT, authority, REACTIVE, SAFETY
+    )
+
+    assert straight[0] == -authority
+    assert straight[-1] == authority
+    assert left[0] == 0.0 and left[-1] == 0.50
+    assert right[0] == -0.50 and right[-1] == 0.0
+    assert all(value >= 0.0 for value in left)
+    assert all(value <= 0.0 for value in right)
+
+
 def test_slow_to_clear_selects_left_deterministically_and_keeps_direct_cap():
     costmap = _costmap(((0.74, 0.86, -0.021, 0.021, 50),))
     direct = _direct(costmap)
@@ -252,10 +272,14 @@ def test_shadow_uses_system_authority_but_never_changes_envelope():
         path_cost_valid=True,
     )
 
-    assert available_reactive_authority("shadow", 0.0, REACTIVE) == 0.30
+    assert available_reactive_authority("shadow", 0.0, REACTIVE) == 0.577350269
     assert available_reactive_authority("enforce", 0.0, REACTIVE) == 0.0
     assert available_reactive_authority("enforce", 0.08, REACTIVE) == 0.08
-    assert available_reactive_authority("enforce", 0.50, REACTIVE) == 0.30
+    assert available_reactive_authority("enforce", 0.50, REACTIVE) == 0.50
+    assert (
+        available_reactive_authority("enforce", 0.80, REACTIVE)
+        == 0.577350269
+    )
     assert resolve_reactive_decision("shadow", direct, 0.10) is direct
     enforced = resolve_reactive_decision("enforce", direct, 0.10)
     assert enforced.permitted_steering == 0.10
@@ -273,7 +297,7 @@ def test_selector_latency_budget_on_representative_jetson_grid():
             costmap=costmap,
             requested_steering=0.0,
             intent_class=FORWARD,
-            authority=0.15,
+            authority=REACTIVE.maximum_steering_assist,
             direct=direct,
             config=REACTIVE,
             safety_config=SAFETY,

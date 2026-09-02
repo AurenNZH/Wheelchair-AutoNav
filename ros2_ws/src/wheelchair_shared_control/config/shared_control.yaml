@@ -55,7 +55,7 @@
     reactive_minimum_cost_improvement: 5
     reactive_confirmation_cycles: 2
     reactive_intent_change_tolerance: 0.05
-    maximum_steering_assist: 0.30
+    maximum_steering_assist: 0.577350269
 
     enable_udp: false
     bind_address: 0.0.0.0
