@@ -23,6 +23,8 @@ from wheelchair_shared_control.protocol import (
     encode_envelope,
 )
 from wheelchair_teleop.safety_link import (
+    CLEAR,
+    STOP,
     SafetyLink,
     decode_envelope,
     pi_x_to_ros_steering,
@@ -423,6 +425,48 @@ class SafetyLinkTests(unittest.TestCase):
             output = link.apply(0, 100, True)
             self.assertEqual(output, (0, 90) if index == 4 else (0, 0))
 
+    def test_transient_source_stop_auto_resumes_after_five_envelopes(self):
+        for source_reason in ("stale_source", "stale_left_source"):
+            with self.subTest(source_reason=source_reason):
+                udp = FakeSocket()
+                clock = FakeClock()
+                link = SafetyLink(
+                    enabled=True,
+                    jetson_address="192.0.2.10",
+                    required_clear_envelopes=5,
+                    command_cap=0.90,
+                    heartbeat_hz=20.0,
+                    auto_resume_obstacle_stops=True,
+                    udp_socket=udp,
+                    monotonic_clock=clock,
+                )
+
+                link.apply(0, 100, True)
+                queue_latest_envelope(
+                    udp, link, STOP, 0.0, 0.0, source_reason
+                )
+                clock.advance(0.01)
+                self.assertEqual(link.apply(0, 100, True), (0, 0))
+                self.assertFalse(link.get_status()["stop_latched"])
+                self.assertEqual(link.get_status()["clear_count"], 0)
+
+                for index in range(5):
+                    clock.advance(0.05)
+                    self.assertEqual(link.apply(0, 100, True), (0, 0))
+                    queue_latest_envelope(
+                        udp,
+                        link,
+                        CLEAR,
+                        1.0,
+                        0.0,
+                        "nav2_cost_clear",
+                    )
+                    clock.advance(0.01)
+                    output = link.apply(0, 100, True)
+                    self.assertEqual(
+                        output, (0, 90) if index == 4 else (0, 0)
+                    )
+
     def test_obstacle_resume_uses_current_forward_input_and_slow_caps(self):
         udp = FakeSocket()
         clock = FakeClock()
@@ -523,7 +567,7 @@ class SafetyLinkTests(unittest.TestCase):
 
     def test_auto_resume_allowlist_keeps_other_stops_latched(self):
         for reason in (
-            "stale_source",
+            "stale_map",
             "missing_intent",
             "invalid_intent",
             "intent_class_mismatch",
@@ -558,21 +602,23 @@ class SafetyLinkTests(unittest.TestCase):
                 self.assertFalse(link.get_status()["stop_latched"])
 
     def test_disabled_auto_resume_requires_release_for_keyboard_and_rollback(self):
-        udp = FakeSocket()
-        clock = FakeClock()
-        link = SafetyLink(
-            enabled=True,
-            jetson_address="192.0.2.10",
-            required_clear_envelopes=1,
-            auto_resume_obstacle_stops=False,
-            udp_socket=udp,
-            monotonic_clock=clock,
-        )
-        link.apply(0, 50, True)
-        queue_latest_envelope(udp, link, 0, 0.0, 0.0, "nav2_cost_stop")
-        clock.advance(0.01)
-        self.assertEqual(link.apply(0, 50, True), (0, 0))
-        self.assertTrue(link.get_status()["stop_latched"])
+        for reason in ("nav2_cost_stop", "stale_source"):
+            with self.subTest(reason=reason):
+                udp = FakeSocket()
+                clock = FakeClock()
+                link = SafetyLink(
+                    enabled=True,
+                    jetson_address="192.0.2.10",
+                    required_clear_envelopes=1,
+                    auto_resume_obstacle_stops=False,
+                    udp_socket=udp,
+                    monotonic_clock=clock,
+                )
+                link.apply(0, 50, True)
+                queue_latest_envelope(udp, link, 0, 0.0, 0.0, reason)
+                clock.advance(0.01)
+                self.assertEqual(link.apply(0, 50, True), (0, 0))
+                self.assertTrue(link.get_status()["stop_latched"])
 
     def test_slow_has_distinct_local_cap(self):
         udp = FakeSocket()

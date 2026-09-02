@@ -33,6 +33,9 @@ MAX_STEERING_ASSIST = 0.577350269
 RECOVERABLE_OBSTACLE_STOP_REASONS = frozenset(
     ("nav2_cost_stop", "nav2_turn_cost_stop")
 )
+RECOVERABLE_TRANSIENT_SOURCE_STOP_REASONS = frozenset(
+    ("stale_source", "stale_left_source")
+)
 
 
 def pi_x_to_ros_steering(x_pos: int | float) -> float:
@@ -252,7 +255,11 @@ class SafetyLink:
         if envelope.decision == STOP:
             self._stop_latched = not (
                 self.auto_resume_obstacle_stops
-                and envelope.reason in RECOVERABLE_OBSTACLE_STOP_REASONS
+                and envelope.reason
+                in (
+                    RECOVERABLE_OBSTACLE_STOP_REASONS
+                    | RECOVERABLE_TRANSIENT_SOURCE_STOP_REASONS
+                )
             )
             self._clear_count = 0
             self._last_counted_intent_sequence = envelope.intent_sequence
@@ -591,6 +598,7 @@ __all__ = [
     "MAX_STEERING_ASSIST",
     "ProtocolError",
     "RECOVERABLE_OBSTACLE_STOP_REASONS",
+    "RECOVERABLE_TRANSIENT_SOURCE_STOP_REASONS",
     "SLOW",
     "STOP",
     "SafetyLink",

@@ -79,12 +79,14 @@ magnitude so the joystick direction is preserved. Hard turns use the Jetson's
 merged-costmap disc decision, with local CLEAR/SLOW lateral caps of 90/60 and a
 15-count longitudinal cap. Every STOP and every link failure is centred.
 For this physical-JSM workflow only, `nav2_cost_stop` and
-`nav2_turn_cost_stop` automatically recover while the joystick remains held:
+`nav2_turn_cost_stop`, plus the transient source-age faults `stale_source` and
+`stale_left_source`, automatically recover while the joystick remains held:
 motion resumes from the current joystick position only after five fresh,
 distinct, matching SLOW or CLEAR envelopes. Any intervening STOP restarts the
-count. Other STOP reasons still latch until joystick release. Pass
-`--require-release-after-obstacle-stop` to restore release-required obstacle
-STOP behavior. Keyboard shared control is unchanged.
+count. Missing, invalid, semantic, emergency, and other STOP reasons still
+latch until joystick release. Pass
+`--require-release-after-obstacle-stop` to restore release-required behavior
+for all automatically recoverable STOPs. Keyboard shared control is unchanged.
 
 ```bash
 python scripts/supervise_physical_joystick.py \
